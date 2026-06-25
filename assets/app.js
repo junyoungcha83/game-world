@@ -281,18 +281,22 @@ function showReg() {
   regPhotoData = '';
   const ov = document.getElementById('regOverlay');
   const ex = document.getElementById('regExisting');
+  const divider = document.getElementById('regDivider');
   document.getElementById('regName').value = '';
   setAvatar('regAvatarImg', 'regAvatarFallback', null);
   if (state.users.length) {
+    // 기존 사용자 카드 + 새 등록 폼을 처음부터 함께 노출
     document.getElementById('regTitle').textContent = '누구로 할까요?';
-    document.getElementById('regSub').textContent = '기존 사용자를 고르거나 새로 만드세요.';
+    document.getElementById('regSub').textContent = '기존 사용자를 고르거나 새로 등록하세요.';
     ex.classList.remove('hidden');
     ex.innerHTML = state.users.map(u => `<button class="reg-user" data-id="${u.id}">${avatarInner(u)}<span>${escapeHtml(u.name)}</span></button>`).join('');
     ex.querySelectorAll('.reg-user').forEach(b => b.onclick = () => { setCurrentUser(b.dataset.id); ov.classList.add('hidden'); showView('hub'); });
+    divider.classList.remove('hidden');
   } else {
     document.getElementById('regTitle').textContent = '사용자 등록';
     document.getElementById('regSub').textContent = '이름을 입력하면 그 이름으로 게임을 즐길 수 있어요.';
     ex.classList.add('hidden'); ex.innerHTML = '';
+    divider.classList.add('hidden');
   }
   ov.classList.remove('hidden');
 }

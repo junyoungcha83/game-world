@@ -79,14 +79,17 @@
     <h2 id="regTitle">사용자 등록</h2>
     <p class="muted" id="regSub">이름을 입력하면 그 이름으로 게임을 즐길 수 있어요.</p>
     <div class="reg-existing hidden" id="regExisting"></div>
-    <label class="avatar-edit small" id="regAvatarWrap">
-      <img id="regAvatarImg" alt="" />
-      <span class="avatar-fallback" id="regAvatarFallback">＋</span>
-      <span class="avatar-cam">📷</span>
-      <input type="file" id="regPhoto" accept="image/*" hidden />
-    </label>
-    <input type="text" id="regName" maxlength="20" placeholder="이름 (예: 승호)" autocomplete="off" />
-    <button class="btn primary block" id="regCreate">시작하기</button>
+    <div class="reg-divider hidden" id="regDivider">또는 새로 등록</div>
+    <div class="reg-new-form" id="regNewForm">
+      <label class="avatar-edit small" id="regAvatarWrap">
+        <img id="regAvatarImg" alt="" />
+        <span class="avatar-fallback" id="regAvatarFallback">＋</span>
+        <span class="avatar-cam">📷</span>
+        <input type="file" id="regPhoto" accept="image/*" hidden />
+      </label>
+      <input type="text" id="regName" maxlength="20" placeholder="이름 (예: 승호)" autocomplete="off" />
+      <button class="btn primary block" id="regCreate">시작하기</button>
+    </div>
   </div>
 </div>
 
