@@ -1,10 +1,17 @@
 // 앱 셸 오프라인 캐시. 캐시 이름 바꾸면 옛 캐시 자동 폐기.
-const CACHE = 'game-world-v10';
+const CACHE = 'game-world-v11';
 self.addEventListener('message', (e) => { if (e.data === 'skip-waiting') self.skipWaiting(); });
 const ASSETS = ['./', './index.html', './assets/app.css', './assets/app.js', './manifest.webmanifest', './assets/icon.svg'];
+// 지도 맞히기용 국가 실루엣 — 완전 오프라인 위해 프리캐시
+const MAP_CODES = ['kr','jp','cn','us','gb','fr','de','it','es','pt','ca','br','ar','mx','au','in','ru','th','vn','id','ph','tr','eg','za','nl','se','no','ch','gr'];
+const MAP_ASSETS = MAP_CODES.map(c => `./assets/maps/${c}.svg`);
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(() => {}));
+  e.waitUntil(caches.open(CACHE).then(async (c) => {
+    await c.addAll(ASSETS).catch(() => {});
+    // 지도는 개별 캐시(일부 실패해도 설치는 진행)
+    await Promise.all(MAP_ASSETS.map(u => c.add(u).catch(() => {})));
+  }));
   self.skipWaiting();
 });
 self.addEventListener('activate', (e) => {
