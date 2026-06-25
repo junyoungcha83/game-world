@@ -1,0 +1,12 @@
+name = "game-world-api"
+main = "src/index.js"
+compatibility_date = "2025-05-01"
+
+# KV — 다음으로 생성 후 id 채우기:
+#   npx wrangler kv namespace create GAMEWORLD
+[[kv_namespaces]]
+binding = "GAMEWORLD"
+id = "dfa249bc39d8401796a683cfaac7da23"
+
+# 편집 비밀번호:
+#   npx wrangler secret put EDIT_TOKEN

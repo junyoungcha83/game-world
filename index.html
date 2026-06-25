@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>게임 월드</title>
+<link rel="stylesheet" href="assets/app.css" />
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#0b1020" />
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="게임월드" />
+<link rel="apple-touch-icon" href="assets/icon.svg" />
+</head>
+<body>
+
+<header class="app-header">
+  <strong class="brand">🎮 게임 월드</strong>
+  <span class="sync-status" id="syncStatus"></span>
+</header>
+
+<main class="app-main">
+  <!-- 허브: 중앙 아바타 + 방사형 게임 메뉴 -->
+  <section class="view" id="hubView">
+    <div class="hub" id="hub"><!-- JS가 아바타+게임 버튼 배치 --></div>
+    <p class="hub-hint" id="hubHint"></p>
+  </section>
+
+  <!-- 게임 화면 -->
+  <section class="view hidden" id="gameView">
+    <div class="game-bar">
+      <button class="back-btn" id="gameBack">‹ 뒤로</button>
+      <strong id="gameTitle">게임</strong>
+      <span class="game-best" id="gameBest"></span>
+    </div>
+    <div class="game-screen" id="gameScreen"></div>
+  </section>
+
+  <!-- 프로필 -->
+  <section class="view hidden" id="profileView">
+    <div class="profile-card">
+      <label class="avatar-edit" id="profAvatarWrap">
+        <img id="profAvatarImg" alt="프로필" />
+        <span class="avatar-fallback" id="profAvatarFallback"></span>
+        <span class="avatar-cam">📷</span>
+        <input type="file" id="profPhoto" accept="image/*" hidden />
+      </label>
+      <label class="field">이름
+        <input type="text" id="profName" maxlength="20" placeholder="이름" />
+      </label>
+      <div class="prof-actions">
+        <button class="btn primary" id="profSave">저장</button>
+        <button class="btn ghost" id="profSwitch">사용자 전환</button>
+      </div>
+      <div class="prof-sync">
+        <button class="btn small ghost" id="profToken">🔒 동기화 비밀번호</button>
+        <span class="muted small" id="syncHint"></span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 하단 탭 -->
+<nav class="tab-bar">
+  <button class="tab-btn active" data-view="hub"><span>🏠</span><span class="tl">홈</span></button>
+  <button class="tab-btn" data-view="profile"><span>👤</span><span class="tl">프로필</span></button>
+</nav>
+
+<!-- 사용자 등록/선택 오버레이 -->
+<div class="overlay hidden" id="regOverlay">
+  <div class="reg-card">
+    <h2 id="regTitle">사용자 등록</h2>
+    <p class="muted" id="regSub">이름을 입력하면 그 이름으로 게임을 즐길 수 있어요.</p>
+    <div class="reg-existing hidden" id="regExisting"></div>
+    <label class="avatar-edit small" id="regAvatarWrap">
+      <img id="regAvatarImg" alt="" />
+      <span class="avatar-fallback" id="regAvatarFallback">＋</span>
+      <span class="avatar-cam">📷</span>
+      <input type="file" id="regPhoto" accept="image/*" hidden />
+    </label>
+    <input type="text" id="regName" maxlength="20" placeholder="이름 (예: 승호)" autocomplete="off" />
+    <button class="btn primary block" id="regCreate">시작하기</button>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+</script>
+</body>
+</html>

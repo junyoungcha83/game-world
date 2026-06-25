@@ -1,0 +1,14 @@
+{
+  "name": "게임 월드",
+  "short_name": "게임월드",
+  "description": "사용자별 게임 허브 — 가운데 프로필 둘레로 게임이 모이는 곳",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
