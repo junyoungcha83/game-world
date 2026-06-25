@@ -102,7 +102,23 @@
 <script src="assets/app.js"></script>
 <script>
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-    addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    addEventListener('load', async () => {
+      try {
+        const reg = await navigator.serviceWorker.register('sw.js');
+        reg.update();                                  // 열 때마다 새 SW 확인
+        // 새 버전이 활성화되면 자동으로 한 번 새로고침
+        let reloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (reloaded) return; reloaded = true; location.reload();
+        });
+        reg.addEventListener('updatefound', () => {
+          const sw = reg.installing;
+          sw && sw.addEventListener('statechange', () => {
+            if (sw.state === 'installed' && navigator.serviceWorker.controller) sw.postMessage('skip-waiting');
+          });
+        });
+      } catch {}
+    });
   }
 </script>
 </body>
