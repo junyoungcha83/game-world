@@ -4,6 +4,7 @@ const API_BASE   = 'https://game-world-api.junyoung-cha83.workers.dev';  // 배�
 const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
+const BUILD = 'b6';   // 화면 우상단에 표시 — 어떤 코드가 도는지 확인용
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
 let state = DEFAULT_STATE();
@@ -315,6 +316,10 @@ function showReg() {
 
 // ── 부트 ──────────────────────────────────────────────
 async function bootstrap() {
+  const verEl = document.getElementById('ver'); if (verEl) verEl.textContent = BUILD;
+  // 저장소가 비워지지 않도록 영구 저장 요청(지원 브라우저)
+  try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch {}
+
   document.querySelectorAll('.tab-btn').forEach(b => b.onclick = () => showView(b.dataset.view));
   document.getElementById('gameBack').onclick = () => showView('hub');
 

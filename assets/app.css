@@ -19,6 +19,7 @@ body {
   padding: 0 16px; padding-top: env(safe-area-inset-top);
 }
 .brand { font-size: 1.05rem; letter-spacing: .3px; }
+.ver { font-size: .6rem; color: var(--muted); font-weight: 700; vertical-align: super; }
 .sync-status { margin-left: auto; font-size: .72rem; color: var(--muted); }
 
 .app-main { flex: 1 1 auto; overflow-y: auto; padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom)); }
