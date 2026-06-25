@@ -106,6 +106,21 @@ body {
 .rec-game { font-weight: 700; font-size: .9rem; }
 .rec-stat { color: var(--primary2); font-size: .82rem; font-weight: 700; text-align: right; }
 
+/* ── 기록(순위) 탭 ── */
+.board-wrap { max-width: 480px; margin: 16px auto 0; padding: 0 14px; display: flex; flex-direction: column; gap: 18px; }
+.board { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px; }
+.board-title { margin: 0 0 10px; font-size: 1rem; }
+.board-row { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-top: 1px solid var(--border); }
+.board-row:first-of-type { border-top: none; }
+.board-row.me { background: rgba(124,92,255,.14); border-radius: 10px; }
+.board-row .rank { width: 26px; text-align: center; font-weight: 800; font-size: .95rem; }
+.board-row img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
+.board-row .ini { width: 30px; height: 30px; border-radius: 50%; background: var(--border); display: flex;
+  align-items: center; justify-content: center; font-weight: 800; font-size: .85rem; }
+.bname { font-weight: 700; font-size: .9rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bstat { color: var(--primary2); font-size: .78rem; font-weight: 700; text-align: right; }
+.board-empty { color: var(--muted); font-size: .85rem; padding: 6px; }
+
 /* ── 버튼 ── */
 .btn { border: 1px solid var(--border); background: var(--bg2); color: var(--text); border-radius: 12px;
   padding: 11px 16px; font-size: .95rem; font-weight: 700; cursor: pointer; }
