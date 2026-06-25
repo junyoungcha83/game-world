@@ -101,6 +101,8 @@ const GAMES = [
     fmtStat: s => s ? `${s.plays}판 · 최고 ${s.best != null ? s.best + '번만에' : '-'}` : '아직 기록 없음', start: startGuess },
   { id: 'ttt',   name: '틱택토',     emoji: '⭕', color: '#34d399', best: 'high',
     fmtStat: s => s ? `${s.plays}판 · ${s.wins}승 ${s.losses}패 ${s.draws}무` : '아직 기록 없음', start: startTTT },
+  { id: 'flags', name: '국기 맞히기', emoji: '🚩', color: '#fbbf24', best: 'high',
+    fmtStat: s => s ? `${s.plays}판·${s.wins}정답 · 최고 ${s.best || 0}연속` : '아직 기록 없음', start: startFlags },
 ];
 
 // ── 허브(방사형) ──────────────────────────────────────
@@ -214,6 +216,43 @@ function startTTT(el) {
   };
   document.getElementById('tReset').onclick = () => startTTT(el);
   draw();
+}
+
+// ── 미니게임: 국기 맞히기 ─────────────────────────────
+const COUNTRIES = [
+  ['🇰🇷','대한민국'],['🇯🇵','일본'],['🇨🇳','중국'],['🇺🇸','미국'],['🇬🇧','영국'],
+  ['🇫🇷','프랑스'],['🇩🇪','독일'],['🇮🇹','이탈리아'],['🇪🇸','스페인'],['🇵🇹','포르투갈'],
+  ['🇨🇦','캐나다'],['🇧🇷','브라질'],['🇦🇷','아르헨티나'],['🇲🇽','멕시코'],['🇦🇺','호주'],
+  ['🇮🇳','인도'],['🇷🇺','러시아'],['🇹🇭','태국'],['🇻🇳','베트남'],['🇮🇩','인도네시아'],
+  ['🇵🇭','필리핀'],['🇸🇬','싱가포르'],['🇹🇷','튀르키예'],['🇪🇬','이집트'],['🇿🇦','남아공'],
+  ['🇳🇱','네덜란드'],['🇸🇪','스웨덴'],['🇳🇴','노르웨이'],['🇨🇭','스위스'],['🇬🇷','그리스'],
+];
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+function startFlags(el) {
+  let streak = 0;
+  const round = () => {
+    const correct = COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)];
+    const opts = shuffle([correct, ...shuffle(COUNTRIES.filter(c => c !== correct)).slice(0, 3)]);
+    el.innerHTML = `<div class="mg flags">
+      <div class="mg-msg" id="fMsg">이 국기는 어느 나라일까요?</div>
+      <div class="flag-big">${correct[0]}</div>
+      <div class="flag-opts">${opts.map(o => `<button data-name="${escapeHtml(o[1])}">${escapeHtml(o[1])}</button>`).join('')}</div>
+      <div class="mg-score">연속 정답 <b id="fStreak">${streak}</b></div>
+    </div>`;
+    const msg = document.getElementById('fMsg');
+    el.querySelectorAll('.flag-opts button').forEach(b => b.onclick = () => {
+      el.querySelectorAll('.flag-opts button').forEach(x => { x.disabled = true; if (x.dataset.name === correct[1]) x.classList.add('correct'); });
+      if (b.dataset.name === correct[1]) {
+        streak++; msg.textContent = '정답! 🎉'; recordStat('flags', { result: 'win', best: streak });
+      } else {
+        b.classList.add('wrong'); msg.textContent = `아쉬워요 😢 정답은 ${correct[1]}`; streak = 0; recordStat('flags', { result: 'loss' });
+      }
+      document.getElementById('fStreak').textContent = streak;
+      setTimeout(round, 1100);
+    });
+  };
+  round();
 }
 
 // ── 프로필 ────────────────────────────────────────────

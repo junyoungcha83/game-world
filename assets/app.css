@@ -69,6 +69,13 @@ body {
 .ttt-grid button { font-size: 2.2rem; font-weight: 800; border-radius: 12px; border: 1px solid var(--border);
   background: var(--bg2); color: var(--text); cursor: pointer; }
 .ttt-grid button:disabled { cursor: default; opacity: .95; }
+.flag-big { font-size: 5rem; line-height: 1.1; }
+.flag-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.flag-opts button { padding: 14px 8px; border-radius: 12px; border: 1px solid var(--border);
+  background: var(--bg2); color: var(--text); font-size: .95rem; font-weight: 700; cursor: pointer; }
+.flag-opts button.correct { background: #16a34a; border-color: #16a34a; color: #fff; }
+.flag-opts button.wrong { background: #dc2626; border-color: #dc2626; color: #fff; }
+.flag-opts button:disabled { cursor: default; }
 
 /* ── 프로필 ── */
 .profile-card { max-width: 420px; margin: 6vh auto 0; background: var(--card); border: 1px solid var(--border);
