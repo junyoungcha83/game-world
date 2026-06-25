@@ -71,6 +71,7 @@ body {
   background: var(--bg2); color: var(--text); cursor: pointer; }
 .ttt-grid button:disabled { cursor: default; opacity: .95; }
 .flag-big { font-size: 5rem; line-height: 1.1; }
+.quiz-country { font-size: 1.7rem; font-weight: 800; }
 .flag-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
 .flag-opts button { padding: 14px 8px; border-radius: 12px; border: 1px solid var(--border);
   background: var(--bg2); color: var(--text); font-size: .95rem; font-weight: 700; cursor: pointer; }

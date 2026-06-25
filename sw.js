@@ -1,5 +1,5 @@
 // 앱 셸 오프라인 캐시. 캐시 이름 바꾸면 옛 캐시 자동 폐기.
-const CACHE = 'game-world-v8';
+const CACHE = 'game-world-v9';
 self.addEventListener('message', (e) => { if (e.data === 'skip-waiting') self.skipWaiting(); });
 const ASSETS = ['./', './index.html', './assets/app.css', './assets/app.js', './manifest.webmanifest', './assets/icon.svg'];
 
