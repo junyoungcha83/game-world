@@ -41,12 +41,24 @@ async function pushToServer() {
     setSync(r.ok ? '✓ 동기화됨' : (r.status === 401 ? '비번 오류' : '동기화 실패'));
   } catch { setSync('오프라인'); }
 }
+// 로컬 우선으로 사용자/점수 병합 — 빈 원격이 로컬을 덮어쓰지 않게 함
+function mergeStates(a, b) {
+  if (!a) return b; if (!b) return a;
+  const byId = {};
+  for (const u of a.users) byId[u.id] = u;
+  for (const u of b.users) if (!byId[u.id]) byId[u.id] = u;
+  return { version: 1, users: Object.values(byId), scores: Object.assign({}, b.scores, a.scores) };
+}
 async function loadInitial() {
-  const remote = await fetchFromServer();
-  if (remote) { state = migrate(remote); saveLocalRaw(); setSync('✓ 동기화됨'); return; }
   const local = loadLocal();
-  if (local) { state = migrate(local); setSync(getToken() ? '오프라인(로컬)' : ''); return; }
-  state = DEFAULT_STATE(); setSync('');
+  const remote = await fetchFromServer();
+  if (local || remote) {
+    state = migrate(mergeStates(local, remote));   // 로컬 우선 병합 → 빈 원격이 로컬 사용자를 지우지 않음
+    saveLocalRaw();
+    setSync(remote ? '✓ 동기화됨' : (getToken() ? '오프라인(로컬)' : ''));
+  } else {
+    state = DEFAULT_STATE(); setSync('');
+  }
 }
 
 // ── 사용자 ────────────────────────────────────────────
