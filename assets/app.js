@@ -78,21 +78,29 @@ function resizePhoto(file, size = 256) {
 }
 
 // ── 점수 ──────────────────────────────────────────────
-function getScore(gid) { const u = getCurrentUser(); if (!u) return null; return (state.scores[u.id] && state.scores[u.id][gid] != null) ? state.scores[u.id][gid] : null; }
-function setScore(gid, val) { const u = getCurrentUser(); if (!u) return; state.scores[u.id] = state.scores[u.id] || {}; state.scores[u.id][gid] = val; save(); }
-function recordScore(gid, val) {
-  const g = GAMES.find(x => x.id === gid), cur = getScore(gid);
-  const better = cur == null || (g.best === 'high' ? val > cur : val < cur);
-  if (better) setScore(gid, val);
+// 사용자(이름)별 게임 누적 통계: { plays, wins, losses, draws, best }
+function getStat(gid, u) { u = u || getCurrentUser(); if (!u) return null; const s = state.scores[u.id] && state.scores[u.id][gid]; return s || null; }
+function normStat(s) { s = (s && typeof s === 'object') ? s : {}; for (const k of ['plays','wins','losses','draws']) s[k] = s[k] || 0; if (s.best === undefined) s.best = null; return s; }
+function recordStat(gid, opt) {
+  opt = opt || {};
+  const u = getCurrentUser(); if (!u) return;
+  state.scores[u.id] = state.scores[u.id] || {};
+  const s = state.scores[u.id][gid] = normStat(state.scores[u.id][gid]);
+  s.plays++;
+  if (opt.result === 'win') s.wins++; else if (opt.result === 'loss') s.losses++; else if (opt.result === 'draw') s.draws++;
+  if (opt.best != null) { const g = GAMES.find(x => x.id === gid); if (s.best == null || (g.best === 'high' ? opt.best > s.best : opt.best < s.best)) s.best = opt.best; }
+  save(); refreshStat(gid);
 }
-function bestText(gid) { const g = GAMES.find(x => x.id === gid), v = getScore(gid); return v == null ? '-' : g.bestLabel(v); }
-function refreshBest(gid) { const el = document.getElementById('gameBest'); if (el) el.textContent = '최고 ' + bestText(gid); }
+function refreshStat(gid) { const el = document.getElementById('gameBest'); if (el) { const g = GAMES.find(x => x.id === gid); el.textContent = g.fmtStat(getStat(gid)); } }
 
 // ── 게임 레지스트리 (여기에 추가만 하면 방사형 메뉴 자동 반영) ──
 const GAMES = [
-  { id: 'rps',   name: '가위바위보', emoji: '✊', color: '#f472b6', best: 'high', bestLabel: n => `${n}연승`,     start: startRPS },
-  { id: 'guess', name: '숫자 맞히기', emoji: '🔢', color: '#60a5fa', best: 'low',  bestLabel: n => `${n}번 만에`, start: startGuess },
-  { id: 'ttt',   name: '틱택토',     emoji: '⭕', color: '#34d399', best: 'high', bestLabel: n => `${n}승`,       start: startTTT },
+  { id: 'rps',   name: '가위바위보', emoji: '✊', color: '#f472b6', best: 'high',
+    fmtStat: s => s ? `${s.plays}판·${s.wins}승 · 최고 ${s.best || 0}연승` : '아직 기록 없음', start: startRPS },
+  { id: 'guess', name: '숫자 맞히기', emoji: '🔢', color: '#60a5fa', best: 'low',
+    fmtStat: s => s ? `${s.plays}판 · 최고 ${s.best != null ? s.best + '번만에' : '-'}` : '아직 기록 없음', start: startGuess },
+  { id: 'ttt',   name: '틱택토',     emoji: '⭕', color: '#34d399', best: 'high',
+    fmtStat: s => s ? `${s.plays}판 · ${s.wins}승 ${s.losses}패 ${s.draws}무` : '아직 기록 없음', start: startTTT },
 ];
 
 // ── 허브(방사형) ──────────────────────────────────────
@@ -125,7 +133,7 @@ function showView(name) {
 function openGame(id) {
   const g = GAMES.find(x => x.id === id); if (!g) return;
   document.getElementById('gameTitle').textContent = g.emoji + ' ' + g.name;
-  document.getElementById('gameBest').textContent = '최고 ' + bestText(id);
+  document.getElementById('gameBest').textContent = g.fmtStat(getStat(id));
   showView('game');
   g.start(document.getElementById('gameScreen'));
 }
@@ -145,9 +153,9 @@ function startRPS(el) {
     let r = (me === cpu) ? '무' : ((me + 1) % 3 === cpu ? '승' : '패');   // me가 (me+1)%3 을 이김
     document.getElementById('rpsVs').textContent = `나 ${R[me][0]}  vs  ${R[cpu][0]} 컴퓨터`;
     const msg = document.getElementById('rpsMsg');
-    if (r === '승') { streak++; msg.textContent = '이겼다! 🎉'; recordScore('rps', streak); refreshBest('rps'); }
-    else if (r === '패') { streak = 0; msg.textContent = '졌어요 😢'; }
-    else { msg.textContent = '비겼네요 😐'; }
+    if (r === '승') { streak++; msg.textContent = '이겼다! 🎉'; recordStat('rps', { result: 'win', best: streak }); }
+    else if (r === '패') { streak = 0; msg.textContent = '졌어요 😢'; recordStat('rps', { result: 'loss' }); }
+    else { msg.textContent = '비겼네요 😐'; recordStat('rps', { result: 'draw' }); }
     document.getElementById('rpsStreak').textContent = streak;
   });
 }
@@ -167,7 +175,7 @@ function startGuess(el) {
     if (!(v >= 1 && v <= 100)) return;
     tries++; document.getElementById('gTries').textContent = tries;
     const m = document.getElementById('gMsg');
-    if (v === target) { done = true; m.textContent = `정답! 🎉 ${tries}번 만에 맞혔어요`; recordScore('guess', tries); refreshBest('guess'); document.getElementById('gReset').hidden = false; }
+    if (v === target) { done = true; m.textContent = `정답! 🎉 ${tries}번 만에 맞혔어요`; recordStat('guess', { result: 'win', best: tries }); document.getElementById('gReset').hidden = false; }
     else m.textContent = v < target ? '⬆️ 더 큰 수예요' : '⬇️ 더 작은 수예요';
     const inp = document.getElementById('gIn'); inp.value = ''; inp.focus();
   };
@@ -201,7 +209,7 @@ function startTTT(el) {
     }
     over = !!w || !b.includes('');
     document.getElementById('tMsg').textContent = w === 'O' ? '이겼어요! 🎉' : w === 'X' ? '졌어요 😢' : over ? '무승부 😐' : '당신(O) 차례';
-    if (w === 'O') { setScore('ttt', (getScore('ttt') || 0) + 1); refreshBest('ttt'); }
+    if (over) recordStat('ttt', { result: w === 'O' ? 'win' : w === 'X' ? 'loss' : 'draw' });
     draw();
   };
   document.getElementById('tReset').onclick = () => startTTT(el);
@@ -214,6 +222,18 @@ function renderProfile() {
   document.getElementById('profName').value = u.name;
   setAvatar('profAvatarImg', 'profAvatarFallback', u);
   document.getElementById('syncHint').textContent = getToken() ? '동기화 켜짐' : '동기화하려면 비밀번호 설정';
+  renderRecords(u);
+}
+
+// ── 프로필: 이름별 누적 기록 ──────────────────────────
+function renderRecords(u) {
+  u = u || getCurrentUser();
+  const nameEl = document.getElementById('recName'); if (nameEl) nameEl.textContent = u ? `· ${u.name}` : '';
+  const box = document.getElementById('profRecords'); if (!box) return;
+  box.innerHTML = GAMES.map(g => {
+    const s = getStat(g.id, u);
+    return `<div class="record-row"><span class="rec-game">${g.emoji} ${escapeHtml(g.name)}</span><span class="rec-stat">${g.fmtStat(s)}</span></div>`;
+  }).join('');
 }
 
 // ── 사용자 등록/선택 오버레이 ─────────────────────────

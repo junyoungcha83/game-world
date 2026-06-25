@@ -89,6 +89,15 @@ body {
 .prof-actions .btn { flex: 1; }
 .prof-sync { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 
+/* ── 프로필 기록 ── */
+.records-block { width: 100%; border-top: 1px solid var(--border); padding-top: 14px; }
+.records-title { margin: 0 0 10px; font-size: 1rem; display: flex; align-items: center; gap: 6px; }
+.records { display: flex; flex-direction: column; gap: 8px; }
+.record-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+.rec-game { font-weight: 700; font-size: .9rem; }
+.rec-stat { color: var(--primary2); font-size: .82rem; font-weight: 700; text-align: right; }
+
 /* ── 버튼 ── */
 .btn { border: 1px solid var(--border); background: var(--bg2); color: var(--text); border-radius: 12px;
   padding: 11px 16px; font-size: .95rem; font-weight: 700; cursor: pointer; }
