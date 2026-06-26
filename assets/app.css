@@ -62,6 +62,9 @@ body {
 .rps-choices button { width: 76px; height: 76px; font-size: 2.2rem; border-radius: 18px;
   border: 1px solid var(--border); background: var(--bg2); cursor: pointer; }
 .rps-choices button:active { background: #243152; }
+.rps-choices button:disabled { opacity: .4; cursor: default; }
+.mg-vs .rps-count { font-size: 2.8rem; font-weight: 800; color: var(--primary2); display: inline-block; animation: rpsPop .25s ease; }
+@keyframes rpsPop { from { transform: scale(.5); opacity: .3; } to { transform: scale(1); opacity: 1; } }
 .guess-in { display: flex; gap: 8px; }
 .guess-in input { width: 120px; font-size: 1.4rem; text-align: center; padding: 10px; border-radius: 12px;
   border: 1px solid var(--border); background: var(--bg2); color: var(--text); }
