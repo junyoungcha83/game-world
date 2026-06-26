@@ -78,6 +78,19 @@ body {
 .map-shape { width: 100%; height: 190px; display: flex; align-items: center; justify-content: center;
   color: var(--muted); font-size: .85rem; }
 .map-shape svg { width: auto; height: 100%; max-width: 100%; display: block; }
+.mg.bb { gap: 12px; width: 100%; max-width: 320px; }
+.bb-outs { color: var(--muted); font-weight: 700; font-size: 1.1rem; letter-spacing: .15em; }
+.bb-outs .o-on { color: #f87171; } .bb-outs .o-off { color: var(--border); }
+.bb-in { display: flex; gap: 8px; width: 100%; }
+.bb-in input { flex: 1; min-width: 0; padding: 10px 12px; font-size: 1.5rem; letter-spacing: .35em;
+  text-align: center; border-radius: 12px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); }
+.bb-in button { padding: 0 18px; border-radius: 12px; border: none; background: var(--primary); color: #fff; font-weight: 700; cursor: pointer; }
+.bb-log { display: flex; flex-direction: column; gap: 6px; width: 100%; max-height: 230px; overflow-y: auto; }
+.bb-row { display: flex; justify-content: space-between; align-items: center; background: var(--bg2);
+  border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; }
+.bb-g { font-size: 1.15rem; font-weight: 700; letter-spacing: .25em; }
+.bb-r { font-weight: 800; color: var(--primary2); }
+.bb-r.win { color: #34d399; } .bb-r.out { color: #f87171; }
 .flag-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
 .flag-opts button { padding: 14px 8px; border-radius: 12px; border: 1px solid var(--border);
   background: var(--bg2); color: var(--text); font-size: .95rem; font-weight: 700; cursor: pointer; }
