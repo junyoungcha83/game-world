@@ -124,6 +124,10 @@ body {
 .color-palette .sw { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; padding: 0; }
 .color-palette .sw.sel { border-color: var(--primary2); box-shadow: 0 0 0 2px var(--primary2); transform: scale(1.12); }
 .color-btns { display: flex; gap: 8px; }
+.mg.timer10 { gap: 18px; }
+.t10-display { font-size: 2.6rem; font-weight: 800; color: var(--muted); min-height: 1.3em;
+  font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.t10-display.reveal { color: var(--primary2); animation: rpsPop .25s ease; }
 .flag-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
 .flag-opts button { padding: 14px 8px; border-radius: 12px; border: 1px solid var(--border);
   background: var(--bg2); color: var(--text); font-size: .95rem; font-weight: 700; cursor: pointer; }
