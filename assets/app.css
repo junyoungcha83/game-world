@@ -91,6 +91,15 @@ body {
 .bb-g { font-size: 1.15rem; font-weight: 700; letter-spacing: .25em; }
 .bb-r { font-weight: 800; color: var(--primary2); }
 .bb-r.win { color: #34d399; } .bb-r.out { color: #f87171; }
+.mg.omok { gap: 12px; width: 100%; }
+.omok-grid { display: grid; grid-auto-rows: 1fr; width: min(92vw, 360px); aspect-ratio: 1;
+  background: #c9a36a; border: 2px solid #8a6d3b; border-radius: 6px; }
+.om-cell { position: relative; border: none; background: transparent; padding: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.35); }
+.om-cell .stone { width: 80%; height: 80%; border-radius: 50%; transform: scale(0); transition: transform .12s; }
+.om-cell.me .stone  { background: radial-gradient(circle at 35% 30%, #555, #000); transform: scale(1); }
+.om-cell.cpu .stone { background: radial-gradient(circle at 35% 30%, #fff, #b8b8b8); transform: scale(1); }
+.om-cell:disabled { cursor: default; }
 .flag-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
 .flag-opts button { padding: 14px 8px; border-radius: 12px; border: 1px solid var(--border);
   background: var(--bg2); color: var(--text); font-size: .95rem; font-weight: 700; cursor: pointer; }
