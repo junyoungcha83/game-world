@@ -92,11 +92,11 @@ body {
 .bb-r { font-weight: 800; color: var(--primary2); }
 .bb-r.win { color: #34d399; } .bb-r.out { color: #f87171; }
 .mg.omok { gap: 12px; width: 100%; }
-.omok-grid { display: grid; grid-auto-rows: 1fr; width: min(92vw, 360px); aspect-ratio: 1;
+.omok-grid { display: grid; grid-auto-rows: 1fr; width: min(96vw, 460px); aspect-ratio: 1;
   background: #c9a36a; border: 2px solid #8a6d3b; border-radius: 6px; }
 .om-cell { position: relative; border: none; background: transparent; padding: 0; cursor: pointer;
   display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.35); }
-.om-cell .stone { width: 80%; height: 80%; border-radius: 50%; transform: scale(0); transition: transform .12s; }
+.om-cell .stone { width: 88%; height: 88%; border-radius: 50%; transform: scale(0); transition: transform .1s; }
 .om-cell.me .stone  { background: radial-gradient(circle at 35% 30%, #555, #000); transform: scale(1); }
 .om-cell.cpu .stone { background: radial-gradient(circle at 35% 30%, #fff, #b8b8b8); transform: scale(1); }
 .om-cell:disabled { cursor: default; }
