@@ -107,6 +107,10 @@
       try {
         const reg = await navigator.serviceWorker.register('sw.js');
         reg.update();                                  // 열 때마다 새 SW 확인
+        // 앱이 다시 보일 때마다 + 주기적으로 업데이트 확인 (PWA 재개 시에도 갱신되도록)
+        const check = () => { try { reg.update(); } catch {} };
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+        setInterval(check, 60000);
         // 새 버전이 활성화되면 자동으로 한 번 새로고침
         let reloaded = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
