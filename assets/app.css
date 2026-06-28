@@ -115,22 +115,25 @@ body {
 .omok-levels button small { font-size: .75rem; font-weight: 600; color: var(--muted); }
 .omok-levels button:active { background: #243152; }
 .mg.janggi { gap: 10px; width: 100%; }
-.jg-board { display: grid; grid-template-columns: repeat(9, 1fr); grid-auto-rows: 1fr;
-  width: min(94vw, 380px); aspect-ratio: 9 / 10; background: #e3b96f; border: 2px solid #8a6d3b; border-radius: 6px; }
-.jg-pt { position: relative; border: none; background: transparent; padding: 0; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 0.5px rgba(80,50,10,.55); }
+/* 실제 장기판 — 선의 교차점(점)에 말이 놓임. 9열×10행 점, 궁성 대각선 포함 */
+.jg-board { width: min(92vw, 360px); padding: 5.5%; box-sizing: border-box;
+  background: #e3b96f; border: 2px solid #8a6d3b; border-radius: 6px; }
+.jg-inner { position: relative; width: 100%; aspect-ratio: 8 / 9; }   /* 점이 모서리~모서리(8칸×9칸) */
+.jg-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.jg-lines line { stroke: #6b4a23; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.jg-pt { position: absolute; transform: translate(-50%, -50%); width: 12.4%; aspect-ratio: 1;
+  display: flex; align-items: center; justify-content: center; border: none; background: transparent; padding: 0; cursor: pointer; }
+.jg-pt.sel::after { content: ''; position: absolute; inset: 3%; border: 2.5px solid #fbbf24; border-radius: 50%; }
+.jg-pt.tgt::after { content: ''; position: absolute; inset: 12%; border: 2.5px solid #22c55e; border-radius: 50%; }
 /* 실제 장기알 느낌 — 팔각형 나무알 + 한자(진영은 글자색으로 구분) */
-.jg-piece { width: 90%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
-  font-family: "Apple SD Gothic Neo", "Nanum Myeongjo", "Times New Roman", serif; font-weight: 800; font-size: 1.05rem; line-height: 1;
+.jg-piece { width: 92%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  font-family: "Apple SD Gothic Neo", "Nanum Myeongjo", "Times New Roman", serif; font-weight: 800; font-size: 1rem; line-height: 1;
   clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
   background: radial-gradient(circle at 38% 30%, #f6e1b4 0%, #e7c489 55%, #cda25f 100%);
-  filter: drop-shadow(0 2px 2px rgba(0,0,0,.4)); }
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); position: relative; z-index: 1; }
 .jg-piece.b { color: #b0140f; text-shadow: 0 0 1px rgba(176,20,15,.4); }   /* 漢 — 빨강 글자 */
 .jg-piece.t { color: #0e5c2a; text-shadow: 0 0 1px rgba(14,92,42,.4); }     /* 楚 — 초록 글자 */
-.jg-piece.gen { width: 98%; font-size: 1.2rem; }                            /* 장(궁)은 더 크게 */
-.jg-pt.sel { box-shadow: inset 0 0 0 2px #fbbf24; }
-.jg-pt.tgt { box-shadow: inset 0 0 0 2px #22c55e; }
-.jg-pt.tgt::after { content: ''; position: absolute; width: 22%; height: 22%; border-radius: 50%; background: rgba(34,197,94,.6); }
+.jg-piece.gen { width: 100%; font-size: 1.18rem; }                          /* 장(궁)은 더 크게 */
 .mg.spot { gap: 10px; width: 100%; }
 .spot-grids { display: flex; flex-direction: column; gap: 8px; width: min(92vw, 340px); }
 .spot-tag { color: var(--muted); font-size: .72rem; text-align: center; }
