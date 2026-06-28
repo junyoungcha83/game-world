@@ -4,7 +4,7 @@ const API_BASE   = 'https://game-world-api.junyoung-cha83.workers.dev';  // 배�
 const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
-const BUILD = 'b30';  // 화면 우상단에 표시 — 어떤 코드가 도는지 확인용
+const BUILD = 'b31';  // 화면 우상단에 표시 — 어떤 코드가 도는지 확인용
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -836,18 +836,23 @@ function startColor(el) {
       <div class="color-palette" id="colorPal">${COLOR_PALETTE.map(c => `<button class="sw" data-c="${c}" style="background:${c}"></button>`).join('')}</div>
       <div class="color-btns">
         <button class="btn ghost small" id="colorPrev">◀ 이전</button>
-        <button class="btn ghost small" id="colorClear">지우기</button>
+        <button class="btn ghost small" id="colorUndo">지우기</button>
+        <button class="btn ghost small" id="colorClear">전부삭제</button>
         <button class="btn ghost small" id="colorNext">다음 ▶</button>
       </div>
     </div>`;
-    const svg = el.querySelector('#colorSvg'), pal = el.querySelector('#colorPal');
-    svg.querySelectorAll('.cregion').forEach(r => r.addEventListener('click', () => r.setAttribute('fill', selected)));
+    const svg = el.querySelector('#colorSvg'), pal = el.querySelector('#colorPal'), history = [];
+    svg.querySelectorAll('.cregion').forEach(r => r.addEventListener('click', () => {
+      history.push({ el: r, fill: r.getAttribute('fill') });   // 되돌리기용 이전 색 기록
+      r.setAttribute('fill', selected);
+    }));
     const marks = () => pal.querySelectorAll('.sw').forEach(s => s.classList.toggle('sel', s.dataset.c === selected));
     pal.querySelectorAll('.sw').forEach(s => s.onclick = () => { selected = s.dataset.c; marks(); });
     marks();
     el.querySelector('#colorPrev').onclick = () => { pic = (pic - 1 + COLOR_PICS.length) % COLOR_PICS.length; render(); };
     el.querySelector('#colorNext').onclick = () => { pic = (pic + 1) % COLOR_PICS.length; render(); };
-    el.querySelector('#colorClear').onclick = () => svg.querySelectorAll('.cregion').forEach(r => r.setAttribute('fill', '#ffffff'));
+    el.querySelector('#colorUndo').onclick = () => { const last = history.pop(); if (last) last.el.setAttribute('fill', last.fill); };
+    el.querySelector('#colorClear').onclick = () => { svg.querySelectorAll('.cregion').forEach(r => r.setAttribute('fill', '#ffffff')); history.length = 0; };
   };
   render();
 }
@@ -868,7 +873,8 @@ function startBrush(el) {
       <div class="brush-sizes" id="brushSizes">${SIZES.map(s => `<button class="bsz" data-s="${s}"><span style="width:${s}px;height:${s}px"></span></button>`).join('')}</div>
       <div class="color-btns">
         <button class="btn ghost small" id="brushPrev">◀ 이전</button>
-        <button class="btn ghost small" id="brushClear">지우기</button>
+        <button class="btn ghost small" id="brushUndo">지우기</button>
+        <button class="btn ghost small" id="brushClear">전부삭제</button>
         <button class="btn ghost small" id="brushNext">다음 ▶</button>
       </div>
     </div>`;
@@ -877,9 +883,11 @@ function startBrush(el) {
     const ctx = cv.getContext('2d');
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     let drawing = false, lastX = 0, lastY = 0;
+    const history = [], HMAX = 20;   // 붓질 단위 되돌리기(스냅샷)
     const pos = (e) => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * (cv.width / r.width), y: (e.clientY - r.top) * (cv.height / r.height) }; };
     cv.addEventListener('pointerdown', (e) => {
       e.preventDefault(); drawing = true; cv.setPointerCapture(e.pointerId);
+      history.push(ctx.getImageData(0, 0, RES, RES)); if (history.length > HMAX) history.shift();   // 붓질 직전 상태 저장
       const p = pos(e); lastX = p.x; lastY = p.y;
       ctx.fillStyle = color; ctx.beginPath(); ctx.arc(p.x, p.y, size * SCALE / 2, 0, Math.PI * 2); ctx.fill();
     });
@@ -901,7 +909,8 @@ function startBrush(el) {
     markS();
     el.querySelector('#brushPrev').onclick = () => { pic = (pic - 1 + COLOR_PICS.length) % COLOR_PICS.length; render(); };
     el.querySelector('#brushNext').onclick = () => { pic = (pic + 1) % COLOR_PICS.length; render(); };
-    el.querySelector('#brushClear').onclick = () => ctx.clearRect(0, 0, cv.width, cv.height);
+    el.querySelector('#brushUndo').onclick = () => { const s = history.pop(); if (s) ctx.putImageData(s, 0, 0); };
+    el.querySelector('#brushClear').onclick = () => { ctx.clearRect(0, 0, cv.width, cv.height); history.length = 0; };
   };
   render();
 }
