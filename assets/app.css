@@ -119,13 +119,18 @@ body {
   width: min(94vw, 380px); aspect-ratio: 9 / 10; background: #e3b96f; border: 2px solid #8a6d3b; border-radius: 6px; }
 .jg-pt { position: relative; border: none; background: transparent; padding: 0; cursor: pointer;
   display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 0.5px rgba(80,50,10,.55); }
-.jg-piece { width: 86%; aspect-ratio: 1; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  font-weight: 800; font-size: 1rem; border: 1.5px solid; box-shadow: 0 2px 5px rgba(0,0,0,.3); }
-.jg-piece.b { background: #fff3f3; color: #c0392b; border-color: #c0392b; }
-.jg-piece.t { background: #eef6ff; color: #1d6f42; border-color: #1d6f42; }
+/* 실제 장기알 느낌 — 팔각형 나무알 + 한자(진영은 글자색으로 구분) */
+.jg-piece { width: 90%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  font-family: "Apple SD Gothic Neo", "Nanum Myeongjo", "Times New Roman", serif; font-weight: 800; font-size: 1.05rem; line-height: 1;
+  clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+  background: radial-gradient(circle at 38% 30%, #f6e1b4 0%, #e7c489 55%, #cda25f 100%);
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,.4)); }
+.jg-piece.b { color: #b0140f; text-shadow: 0 0 1px rgba(176,20,15,.4); }   /* 漢 — 빨강 글자 */
+.jg-piece.t { color: #0e5c2a; text-shadow: 0 0 1px rgba(14,92,42,.4); }     /* 楚 — 초록 글자 */
+.jg-piece.gen { width: 98%; font-size: 1.2rem; }                            /* 장(궁)은 더 크게 */
 .jg-pt.sel { box-shadow: inset 0 0 0 2px #fbbf24; }
-.jg-pt.tgt::after { content: ''; position: absolute; width: 26%; height: 26%; border-radius: 50%; background: rgba(34,197,94,.65); }
-.jg-pt.tgt .jg-piece { box-shadow: 0 0 0 2px #22c55e, 0 2px 5px rgba(0,0,0,.3); }
+.jg-pt.tgt { box-shadow: inset 0 0 0 2px #22c55e; }
+.jg-pt.tgt::after { content: ''; position: absolute; width: 22%; height: 22%; border-radius: 50%; background: rgba(34,197,94,.6); }
 .mg.spot { gap: 10px; width: 100%; }
 .spot-grids { display: flex; flex-direction: column; gap: 8px; width: min(92vw, 340px); }
 .spot-tag { color: var(--muted); font-size: .72rem; text-align: center; }
