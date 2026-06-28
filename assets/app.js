@@ -4,7 +4,7 @@ const API_BASE   = 'https://game-world-api.junyoung-cha83.workers.dev';  // 배�
 const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
-const BUILD = 'b38';  // 화면 우상단에 표시 — 어떤 코드가 도는지 확인용
+const BUILD = 'b39';  // 화면 우상단에 표시 — 어떤 코드가 도는지 확인용
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -1130,6 +1130,8 @@ function startJanggi(el) {
 }
 function runJanggi(el, mode) {
   let board = jgInit(), turn = 'B', over = false, selR = null, selC = null, targets = [], resultMsg = '';
+  const history = [];            // {fr,fc,tr,tc,cap,side} — 무르기용
+  let recorded = false, busy = false;   // 결과 1회만 기록 / CPU 생각 중 입력 차단
 
   const updateMsg = () => {
     const m = el.querySelector('#jgMsg'); if (!m) return;
@@ -1143,6 +1145,7 @@ function runJanggi(el, mode) {
       <div class="mg-msg" id="jgMsg"></div>
       <div class="jg-board" id="jgBoard"></div>
       <div class="omok-btns">
+        <button class="btn ghost small" id="jgUndo">한 수 무르기</button>
         <button class="btn ghost small" id="jgNew">새 게임</button>
         <button class="btn ghost small" id="jgMode">상대 변경</button>
       </div>
@@ -1157,6 +1160,7 @@ function runJanggi(el, mode) {
     }
     const bd = el.querySelector('#jgBoard'); bd.innerHTML = html;
     bd.querySelectorAll('.jg-pt').forEach(b => b.onclick = () => onTap(+b.dataset.r, +b.dataset.c));
+    const ub = el.querySelector('#jgUndo'); ub.onclick = undo; ub.disabled = busy || history.length === 0;
     el.querySelector('#jgNew').onclick = () => runJanggi(el, mode);
     el.querySelector('#jgMode').onclick = () => startJanggi(el);
     updateMsg();
@@ -1166,23 +1170,39 @@ function runJanggi(el, mode) {
     if (jgAllLegal(board, turn).length === 0) {     // 둘 수 없음 → 그 측 패배(외통)
       over = true; const winner = turn === 'B' ? 'T' : 'B';
       if (mode === 'cpu') {
-        if (winner === 'B') { resultMsg = '이겼어요! 🎉 (외통)'; recordStat('janggi', { result:'win' }); }
-        else { resultMsg = '졌어요 😢 (외통)'; recordStat('janggi', { result:'loss' }); }
+        resultMsg = winner === 'B' ? '이겼어요! 🎉 (외통)' : '졌어요 😢 (외통)';
+        if (!recorded) { recorded = true; recordStat('janggi', { result: winner === 'B' ? 'win' : 'loss' }); }   // 1회만
       } else resultMsg = (winner === 'B' ? '한(빨강)' : '초(초록)') + ' 승리! 🎉 (외통)';
       render(); return;
     }
     render();
-    if (mode === 'cpu' && turn === 'T') setTimeout(() => {
+    if (mode === 'cpu' && turn === 'T') { busy = true; setTimeout(() => {
       if (!el.querySelector('.janggi')) return;     // 화면 이탈
-      const m = jgCpuMove(board); if (m) { jgApply(board, m.fr, m.fc, m.tr, m.tc); afterMove(); }
-    }, 350);
+      const m = jgCpuMove(board);
+      if (m) { const cap = jgApply(board, m.fr, m.fc, m.tr, m.tc); history.push({ fr:m.fr, fc:m.fc, tr:m.tr, tc:m.tc, cap, side:'T' }); }
+      busy = false; afterMove();
+    }, 350); }
+  };
+  // 한 수 무르기 — 2인: 직전 1수 / vs컴퓨터: 컴퓨터 응수 + 내 수를 함께 되돌려 내 차례로
+  const undo = () => {
+    if (busy || !history.length) return;
+    if (mode === 'cpu') {
+      const m1 = history.pop(); jgUndo(board, m1.fr, m1.fc, m1.tr, m1.tc, m1.cap);
+      if (m1.side === 'T' && history.length) { const m2 = history.pop(); jgUndo(board, m2.fr, m2.fc, m2.tr, m2.tc, m2.cap); }
+      turn = 'B';
+    } else {
+      const m1 = history.pop(); jgUndo(board, m1.fr, m1.fc, m1.tr, m1.tc, m1.cap); turn = m1.side;
+    }
+    over = false; selR = selC = null; targets = []; render();
   };
   const onTap = (r, c) => {
-    if (over) return;
+    if (over || busy) return;
     if (mode === 'cpu' && turn === 'T') return;
     const p = board[r][c];
     if (selR !== null && targets.some(t => t[0]===r && t[1]===c)) {
-      jgApply(board, selR, selC, r, c); selR = selC = null; targets = []; afterMove(); return;
+      const cap = jgApply(board, selR, selC, r, c);
+      history.push({ fr:selR, fc:selC, tr:r, tc:c, cap, side: turn });
+      selR = selC = null; targets = []; afterMove(); return;
     }
     if (p && p.side === turn) { selR = r; selC = c; targets = jgLegalFrom(board, r, c); render(); }
     else { selR = selC = null; targets = []; render(); }
