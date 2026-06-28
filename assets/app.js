@@ -4,7 +4,7 @@ const API_BASE   = 'https://game-world-api.junyoung-cha83.workers.dev';  // 배�
 const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
-const BUILD = 'b29';  // 화면 우상단에 표시 — 어떤 코드가 도는지 확인용
+const BUILD = 'b30';  // 화면 우상단에 표시 — 어떤 코드가 도는지 확인용
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -775,6 +775,55 @@ const COLOR_PICS = [
     <ellipse class="cregion" cx="76" cy="132" rx="24" ry="20" fill="#fff" stroke="#333" stroke-width="2"/>
     <ellipse class="cregion" cx="124" cy="132" rx="24" ry="20" fill="#fff" stroke="#333" stroke-width="2"/>
     <ellipse class="cregion" cx="100" cy="105" rx="9" ry="44" fill="#fff" stroke="#333" stroke-width="2"/>` },
+  { name: '자동차', svg: `
+    <circle class="cregion" cx="62" cy="142" r="18" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle class="cregion" cx="140" cy="142" r="18" fill="#fff" stroke="#333" stroke-width="2"/>
+    <rect class="cregion" x="28" y="102" width="146" height="38" rx="12" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path class="cregion" d="M60 102 L80 72 L126 72 L146 102 Z" fill="#fff" stroke="#333" stroke-width="2"/>
+    <rect class="cregion" x="84" y="78" width="18" height="22" fill="#fff" stroke="#333" stroke-width="2"/>
+    <rect class="cregion" x="106" y="78" width="18" height="22" fill="#fff" stroke="#333" stroke-width="2"/>` },
+  { name: '강아지', svg: `
+    <ellipse class="cregion" cx="54" cy="76" rx="16" ry="30" fill="#fff" stroke="#333" stroke-width="2" transform="rotate(-20 54 76)"/>
+    <ellipse class="cregion" cx="146" cy="76" rx="16" ry="30" fill="#fff" stroke="#333" stroke-width="2" transform="rotate(20 146 76)"/>
+    <circle class="cregion" cx="100" cy="106" r="54" fill="#fff" stroke="#333" stroke-width="2"/>
+    <ellipse class="cregion" cx="100" cy="126" rx="34" ry="26" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle cx="80" cy="96" r="5" fill="#333"/>
+    <circle cx="120" cy="96" r="5" fill="#333"/>
+    <ellipse class="cregion" cx="100" cy="116" rx="9" ry="7" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path d="M100 123 V135 M100 135 Q88 141 82 133 M100 135 Q112 141 118 133" fill="none" stroke="#333" stroke-width="2"/>` },
+  { name: '고양이', svg: `
+    <path class="cregion" d="M58 72 L52 34 L88 60 Z" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path class="cregion" d="M142 72 L148 34 L112 60 Z" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle class="cregion" cx="100" cy="112" r="52" fill="#fff" stroke="#333" stroke-width="2"/>
+    <ellipse cx="80" cy="104" rx="6" ry="9" fill="#333"/>
+    <ellipse cx="120" cy="104" rx="6" ry="9" fill="#333"/>
+    <path class="cregion" d="M94 120 L106 120 L100 128 Z" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path d="M100 124 V132 M70 116 H40 M70 126 H42 M130 116 H160 M130 126 H158" fill="none" stroke="#333" stroke-width="2"/>` },
+  { name: '케이크', svg: `
+    <ellipse class="cregion" cx="100" cy="162" rx="70" ry="10" fill="#fff" stroke="#333" stroke-width="2"/>
+    <rect class="cregion" x="44" y="112" width="112" height="46" rx="6" fill="#fff" stroke="#333" stroke-width="2"/>
+    <rect class="cregion" x="60" y="80" width="80" height="34" rx="6" fill="#fff" stroke="#333" stroke-width="2"/>
+    <rect class="cregion" x="96" y="56" width="8" height="24" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path class="cregion" d="M100 38 Q109 50 100 56 Q91 50 100 38 Z" fill="#fff" stroke="#333" stroke-width="2"/>` },
+  { name: '로켓', svg: `
+    <path class="cregion" d="M100 28 Q130 60 130 122 L70 122 Q70 60 100 28 Z" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle class="cregion" cx="100" cy="80" r="14" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path class="cregion" d="M70 102 L48 142 L70 124 Z" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path class="cregion" d="M130 102 L152 142 L130 124 Z" fill="#fff" stroke="#333" stroke-width="2"/>
+    <rect class="cregion" x="70" y="122" width="60" height="14" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path class="cregion" d="M84 136 Q100 182 116 136 Z" fill="#fff" stroke="#333" stroke-width="2"/>` },
+  { name: '나무', svg: `
+    <rect class="cregion" x="90" y="118" width="20" height="62" rx="4" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle class="cregion" cx="66" cy="100" r="30" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle class="cregion" cx="134" cy="100" r="30" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle class="cregion" cx="100" cy="70" r="36" fill="#fff" stroke="#333" stroke-width="2"/>` },
+  { name: '공룡', svg: `
+    <rect class="cregion" x="80" y="142" width="16" height="34" rx="4" fill="#fff" stroke="#333" stroke-width="2"/>
+    <rect class="cregion" x="116" y="142" width="16" height="34" rx="4" fill="#fff" stroke="#333" stroke-width="2"/>
+    <ellipse class="cregion" cx="106" cy="120" rx="48" ry="28" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path class="cregion" d="M72 112 Q40 102 46 64 Q48 48 64 50 Q76 52 72 68 Q68 94 98 106 Z" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path class="cregion" d="M150 120 Q182 110 190 134 Q172 128 150 132 Z" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle cx="58" cy="64" r="3.5" fill="#333"/>` },
 ];
 const COLOR_PALETTE = ['#ef4444','#f97316','#facc15','#34d399','#22d3ee','#60a5fa','#a78bfa','#f472b6','#8b5a2b','#9ca3af','#000000','#ffffff'];
 
