@@ -4,7 +4,7 @@ const API_BASE   = 'https://game-world-api.junyoung-cha83.workers.dev';  // 배�
 const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
-const BUILD = 'b39';  // 화면 우상단에 표시 — 어떤 코드가 도는지 확인용
+const BUILD = 'b40';  // 화면 우상단에 표시 — 어떤 코드가 도는지 확인용
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -163,7 +163,7 @@ const GAMES = [
   { id: 'omok', name: '오목', emoji: '⚫', color: '#a78bfa', best: 'high',
     fmtStat: () => omokAggFmt(), start: startOmok },
   { id: 'janggi', name: '장기', emoji: '♟️', color: '#ef4444', best: 'high',
-    fmtStat: s => s ? `${s.plays}판 · ${s.wins}승 ${s.losses}패 (vs컴)` : '아직 기록 없음', start: startJanggi },
+    fmtStat: () => janggiAggFmt(), start: startJanggi },
   { id: 'spot', name: '틀린그림찾기', emoji: '🔍', color: '#e879f9', best: 'high',
     fmtStat: s => s ? `${s.plays}판·${s.wins}클리어 · 최고 ${s.best || 0}연속` : '아직 기록 없음', start: startSpot },
   { id: 'color', name: '색칠하기', emoji: '🎨', color: '#fb7185', best: 'high',
@@ -186,12 +186,26 @@ function omokAggFmt() {
   const parts = OMOK_LEVELS.map(l => { const s = getStat(l.key, u); return s && s.plays ? `${l.label} ${s.wins}승` : null; }).filter(Boolean);
   return parts.length ? parts.join(' · ') : '아직 기록 없음';
 }
-// 기록판에 쓸 게임 목록 — 오목은 급수 3개로 펼침
+// 장기 난이도(vs컴퓨터) — 급수별 기록
+const JANGGI_LEVELS = [
+  { key: 'janggi_easy', label: '초급', ai: 'easy', desc: '쉬움' },
+  { key: 'janggi_mid',  label: '중급', ai: 'mid',  desc: '보통' },
+  { key: 'janggi_adv',  label: '고급', ai: 'adv',  desc: '어려움' },
+  { key: 'janggi_pro',  label: '프로', ai: 'pro',  desc: '매우 어려움' },
+];
+const janggiFmt = s => s ? `${s.plays}판 · ${s.wins}승 ${s.losses}패` : '아직 기록 없음';
+function janggiAggFmt() {
+  const u = getCurrentUser(); if (!u) return '아직 기록 없음';
+  const parts = JANGGI_LEVELS.map(l => { const s = getStat(l.key, u); return s && s.plays ? `${l.label} ${s.wins}승` : null; }).filter(Boolean);
+  return parts.length ? parts.join(' · ') : '아직 기록 없음';
+}
+// 기록판에 쓸 게임 목록 — 오목·장기는 급수로 펼침
 function boardGames() {
   const out = [];
   for (const g of GAMES) {
     if (g.id === 'color' || g.id === 'brush') continue;   // 기록 없는 게임 → 순위판 제외
     if (g.id === 'omok') for (const l of OMOK_LEVELS) out.push({ id: l.key, emoji: '⚫', name: `오목 ${l.label}`, best: 'high', fmtStat: omokFmt });
+    else if (g.id === 'janggi') for (const l of JANGGI_LEVELS) out.push({ id: l.key, emoji: '♟️', name: `장기 ${l.label}`, best: 'high', fmtStat: janggiFmt });
     else out.push(g);
   }
   return out;
@@ -1101,19 +1115,43 @@ function jgAllLegal(board, side) {
   return out;
 }
 // 간단 AI (T측): 잡기 가치 + 장군 - 상대 최선 반격
-function jgCpuMove(board) {
+function jgEval(b) {   // T(컴퓨터) 관점 기물 가치 합
+  let s = 0;
+  for (let r=0;r<10;r++) for (let c=0;c<9;c++) { const p=b[r][c]; if (p) s += (p.side==='T' ? 1 : -1) * JG_VALUE[p.type]; }
+  return s;
+}
+function jgNegamax(b, side, depth, alpha, beta) {
+  if (depth === 0) return (side==='T' ? 1 : -1) * jgEval(b);
+  const moves = jgAllLegal(b, side); if (!moves.length) return -100000;   // 둘 수 없음 = 자기 패배
+  moves.sort((x,y) => (y.cap?JG_VALUE[y.cap.type]:0) - (x.cap?JG_VALUE[x.cap.type]:0));   // 잡기 우선(가지치기 효율)
+  let best = -Infinity;
+  for (const m of moves) {
+    const cap = jgApply(b, m.fr, m.fc, m.tr, m.tc);
+    const val = -jgNegamax(b, side==='T'?'B':'T', depth-1, -beta, -alpha);
+    jgUndo(b, m.fr, m.fc, m.tr, m.tc, cap);
+    if (val > best) best = val;
+    if (best > alpha) alpha = best;
+    if (alpha >= beta) break;
+  }
+  return best;
+}
+// 레벨별 AI (T측). ai: 'easy'|'mid'|'adv'|'pro'
+function jgBestMove(board, ai) {
   const moves = jgAllLegal(board, 'T'); if (!moves.length) return null;
+  if (ai === 'easy') {   // 초급: 절반 이상 랜덤 + 약한 잡기 선호
+    if (Math.random() < 0.55) return moves[Math.random() * moves.length | 0];
+    let best = null, bv = -Infinity;
+    for (const m of moves) { const v = (m.cap ? JG_VALUE[m.cap.type] : 0) + Math.random()*0.5; if (v > bv) { bv = v; best = m; } }
+    return best;
+  }
+  const depth = ai === 'pro' ? 4 : ai === 'adv' ? 3 : 2;   // 중급2·고급3·프로4 수 탐색
+  moves.sort((x,y) => (y.cap?JG_VALUE[y.cap.type]:0) - (x.cap?JG_VALUE[x.cap.type]:0));
   let best = null, bv = -Infinity;
   for (const m of moves) {
-    const capV = m.cap ? JG_VALUE[m.cap.type] : 0;
     const cap = jgApply(board, m.fr, m.fc, m.tr, m.tc);
-    const chk = jgInCheck(board, 'B') ? 1 : 0;
-    let oppCap = 0;
-    for (let r=0;r<10;r++) for (let c=0;c<9;c++) { const p=board[r][c];
-      if (p && p.side==='B') for (const [tr,tc] of jgPseudo(board,r,c)) { const q=board[tr][tc]; if (q && q.side==='T') { const v=JG_VALUE[q.type]; if (v>oppCap) oppCap=v; } } }
+    const val = -jgNegamax(board, 'B', depth-1, -Infinity, Infinity) + Math.random()*0.01;
     jgUndo(board, m.fr, m.fc, m.tr, m.tc, cap);
-    const score = capV + chk*0.6 - oppCap*0.85 + Math.random()*0.1;
-    if (score > bv) { bv = score; best = m; }
+    if (val > bv) { bv = val; best = m; }
   }
   return best;
 }
@@ -1122,13 +1160,16 @@ function startJanggi(el) {
   el.innerHTML = `<div class="mg jg-pick">
     <div class="mg-msg">상대를 골라요 ♟️</div>
     <div class="omok-levels">
-      <button data-m="cpu">vs 컴퓨터<small>혼자 두기</small></button>
-      <button data-m="two">2인 대국<small>번갈아 두기</small></button>
+      ${JANGGI_LEVELS.map(l => `<button data-k="${l.key}">vs 컴퓨터 · ${l.label}<small>${l.desc}</small></button>`).join('')}
+      <button data-k="two">2인 대국<small>번갈아 두기</small></button>
     </div>
   </div>`;
-  el.querySelectorAll('.omok-levels button').forEach(b => b.onclick = () => runJanggi(el, b.dataset.m));
+  el.querySelectorAll('.omok-levels button').forEach(b => b.onclick = () => {
+    if (b.dataset.k === 'two') runJanggi(el, 'two', null);
+    else runJanggi(el, 'cpu', JANGGI_LEVELS.find(l => l.key === b.dataset.k));
+  });
 }
-function runJanggi(el, mode) {
+function runJanggi(el, mode, level) {
   let board = jgInit(), turn = 'B', over = false, selR = null, selC = null, targets = [], resultMsg = '';
   const history = [];            // {fr,fc,tr,tc,cap,side} — 무르기용
   let recorded = false, busy = false;   // 결과 1회만 기록 / CPU 생각 중 입력 차단
@@ -1137,7 +1178,7 @@ function runJanggi(el, mode) {
     const m = el.querySelector('#jgMsg'); if (!m) return;
     if (over) { m.textContent = resultMsg; return; }
     const chk = jgInCheck(board, turn);
-    if (mode === 'cpu') m.textContent = turn === 'B' ? (chk ? '⚠️ 장군! 내 차례' : '내 차례 (한·빨강)') : '컴퓨터 생각 중…';
+    if (mode === 'cpu') m.textContent = turn === 'B' ? (chk ? `⚠️ 장군! 내 차례 · ${level.label}` : `내 차례 (한·빨강) · ${level.label}`) : '컴퓨터 생각 중…';
     else m.textContent = (chk ? '⚠️ 장군! ' : '') + (turn === 'B' ? '한(아래·빨강)' : '초(위·초록)') + ' 차례';
   };
   const render = () => {
@@ -1161,7 +1202,7 @@ function runJanggi(el, mode) {
     const bd = el.querySelector('#jgBoard'); bd.innerHTML = html;
     bd.querySelectorAll('.jg-pt').forEach(b => b.onclick = () => onTap(+b.dataset.r, +b.dataset.c));
     const ub = el.querySelector('#jgUndo'); ub.onclick = undo; ub.disabled = busy || history.length === 0;
-    el.querySelector('#jgNew').onclick = () => runJanggi(el, mode);
+    el.querySelector('#jgNew').onclick = () => runJanggi(el, mode, level);
     el.querySelector('#jgMode').onclick = () => startJanggi(el);
     updateMsg();
   };
@@ -1170,15 +1211,15 @@ function runJanggi(el, mode) {
     if (jgAllLegal(board, turn).length === 0) {     // 둘 수 없음 → 그 측 패배(외통)
       over = true; const winner = turn === 'B' ? 'T' : 'B';
       if (mode === 'cpu') {
-        resultMsg = winner === 'B' ? '이겼어요! 🎉 (외통)' : '졌어요 😢 (외통)';
-        if (!recorded) { recorded = true; recordStat('janggi', { result: winner === 'B' ? 'win' : 'loss' }); }   // 1회만
+        resultMsg = `[${level.label}] ` + (winner === 'B' ? '이겼어요! 🎉 (외통)' : '졌어요 😢 (외통)');
+        if (!recorded) { recorded = true; recordStat(level.key, { result: winner === 'B' ? 'win' : 'loss' }); }   // 급수별 1회만
       } else resultMsg = (winner === 'B' ? '한(빨강)' : '초(초록)') + ' 승리! 🎉 (외통)';
       render(); return;
     }
     render();
     if (mode === 'cpu' && turn === 'T') { busy = true; setTimeout(() => {
       if (!el.querySelector('.janggi')) return;     // 화면 이탈
-      const m = jgCpuMove(board);
+      const m = jgBestMove(board, level.ai);
       if (m) { const cap = jgApply(board, m.fr, m.fc, m.tr, m.tc); history.push({ fr:m.fr, fc:m.fc, tr:m.tr, tc:m.tc, cap, side:'T' }); }
       busy = false; afterMove();
     }, 350); }
