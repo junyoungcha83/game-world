@@ -23,6 +23,9 @@ body {
 .sync-status { margin-left: auto; font-size: .72rem; color: var(--muted); }
 
 .app-main { flex: 1 1 auto; overflow-y: auto; padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom)); }
+/* 게임 플레이 중에는 당겨서 새로고침(브라우저 pull-to-refresh) 차단 → 실수 리로드로 게임 리셋 방지 */
+body.playing { overscroll-behavior-y: contain; }
+body.playing .app-main { overscroll-behavior-y: contain; }
 .view { padding: 8px 16px 20px; }
 
 /* ── 허브 (방사형) ── */
