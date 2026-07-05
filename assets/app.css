@@ -114,6 +114,21 @@ body {
   font-size: 1.15rem; font-weight: 800; cursor: pointer; }
 .omok-levels button small { font-size: .75rem; font-weight: 600; color: var(--muted); }
 .omok-levels button:active { background: #243152; }
+/* 체스 */
+.mg.chess { gap: 12px; width: 100%; }
+.chess-board { width: min(92vw, 420px); aspect-ratio: 1 / 1; display: grid;
+  grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr);
+  border: 3px solid #6b4f2a; border-radius: 6px; overflow: hidden; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+.ch-sq { border: none; padding: 0; margin: 0; position: relative; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: min(8.5vw, 38px); line-height: 1; -webkit-tap-highlight-color: transparent; }
+.ch-sq.l { background: #f0d9b5; } .ch-sq.d { background: #b58863; }
+.ch-sq.sel { box-shadow: inset 0 0 0 3px #eab308; }
+.ch-sq.tgt::after { content: ''; position: absolute; width: 28%; height: 28%; border-radius: 50%; background: rgba(0,0,0,.30); }
+.ch-sq.tgt:has(.ch-pc)::after { width: 84%; height: 84%; background: transparent; box-shadow: inset 0 0 0 3px rgba(0,0,0,.4); }
+.ch-pc { position: relative; z-index: 1; }
+.ch-pc.w { color: #fff; text-shadow: 0 0 1px #000, 1px 0 1px #000, -1px 0 1px #000, 0 1px 1px #000, 0 -1px 1px #000; }
+.ch-pc.b { color: #1a1a1a; text-shadow: 0 0 1px rgba(255,255,255,.35); }
 .mg.janggi { gap: 10px; width: 100%; }
 /* 실제 장기판 — 선의 교차점(점)에 말이 놓임. 9열×10행 점, 궁성 대각선 포함 */
 .jg-board { width: min(92vw, 360px); padding: 5.5%; box-sizing: border-box;
