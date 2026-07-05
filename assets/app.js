@@ -4,7 +4,7 @@ const API_BASE   = 'https://game-world-api.junyoung-cha83.workers.dev';  // 배�
 const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
-const BUILD = 'b45';  // 화면 우상단에 표시 — 어떤 코드가 도는지 확인용
+const BUILD = 'b46';  // 화면 우상단에 표시 — 어떤 코드가 도는지 확인용
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -184,7 +184,7 @@ const GAMES = [
     fmtStat: s => s ? `${s.plays}게임·${s.wins}승 · 최소 ${s.best != null ? s.best + '번' : '-'}` : '아직 기록 없음', start: startBaseball },
   { id: 'omok', name: '오목', emoji: '⚫', color: '#a78bfa', best: 'high',
     fmtStat: () => omokAggFmt(), start: startOmok },
-  { id: 'janggi', name: '장기', emoji: '♟️', color: '#ef4444', best: 'high',
+  { id: 'janggi', name: '장기', emoji: '漢', color: '#ef4444', best: 'high',
     fmtStat: () => janggiAggFmt(), start: startJanggi },
   { id: 'chess', name: '체스', emoji: '♞', color: '#eab308', best: 'high',
     fmtStat: () => chessAggFmt(), start: startChess },
@@ -244,7 +244,7 @@ function boardGames() {
   for (const g of GAMES) {
     if (g.id === 'color' || g.id === 'brush' || g.id === 'roulette') continue;   // 기록 없는 게임 → 순위판 제외
     if (g.id === 'omok') for (const l of OMOK_LEVELS) out.push({ id: l.key, emoji: '⚫', name: `오목 ${l.label}`, best: 'high', fmtStat: omokFmt });
-    else if (g.id === 'janggi') for (const l of JANGGI_LEVELS) out.push({ id: l.key, emoji: '♟️', name: `장기 ${l.label}`, best: 'high', fmtStat: janggiFmt });
+    else if (g.id === 'janggi') for (const l of JANGGI_LEVELS) out.push({ id: l.key, emoji: '漢', name: `장기 ${l.label}`, best: 'high', fmtStat: janggiFmt });
     else if (g.id === 'chess') for (const l of CHESS_LEVELS) out.push({ id: l.key, emoji: '♞', name: `체스 ${l.label}`, best: 'high', fmtStat: chessFmt });
     else out.push(g);
   }
@@ -254,9 +254,9 @@ function boardGames() {
 // ── 허브(방사형) ──────────────────────────────────────
 // 홈 화면 카테고리 분류
 const HUB_CATEGORIES = [
-  { label: '🎨 자유',  ids: ['color', 'brush'] },
-  { label: '♟️ 보드',  ids: ['omok', 'janggi', 'ttt', 'baseball', 'spot'] },
-  { label: '🕹️ 레트로', ids: ['timer10', 'rps', 'guess', 'roulette'] },
+  { label: '🎨 자유',  ids: ['color', 'brush', 'roulette'] },
+  { label: '♟️ 보드',  ids: ['omok', 'janggi', 'chess', 'ttt', 'baseball', 'spot'] },
+  { label: '🕹️ 레트로', ids: ['timer10', 'rps', 'guess'] },
   { label: '🧠 퀴즈',  ids: ['flags', 'capital', 'mapq'] },
 ];
 function renderHub() {

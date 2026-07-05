@@ -50,6 +50,9 @@ body {
   width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
   font-size: 1.6rem; color: #0b1020; box-shadow: 0 4px 12px rgba(0,0,0,.35);
 }
+/* 장기: 빨간 원에 '漢'(한 장군) 글자 — 실제 장기 한 말 느낌 */
+.game-card[data-id="janggi"] .gc-emoji { color: #fff; font-weight: 900;
+  font-family: "Nanum Myeongjo", "AppleMyungjo", "Apple SD Gothic Neo", serif; }
 .gc-name { font-size: .74rem; font-weight: 800; text-align: center; line-height: 1.1; }
 .hub-hint { text-align: center; color: var(--muted); font-size: .85rem; }
 
