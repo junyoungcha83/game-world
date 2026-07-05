@@ -129,6 +129,27 @@ body {
 .ch-pc { position: relative; z-index: 1; }
 .ch-pc.w { color: #fff; text-shadow: 0 0 1px #000, 1px 0 1px #000, -1px 0 1px #000, 0 1px 1px #000, 0 -1px 1px #000; }
 .ch-pc.b { color: #1a1a1a; text-shadow: 0 0 1px rgba(255,255,255,.35); }
+.ch-guide-btn { margin-top: 4px; }
+/* 프로모션 선택 팝업 */
+.ch-promo { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 100;
+  display: flex; align-items: center; justify-content: center; }
+.ch-promo-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 18px; display: flex; flex-direction: column; gap: 12px; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.ch-promo-title { font-weight: 700; }
+.ch-promo-row { display: flex; gap: 10px; }
+.ch-promo-row button { width: 60px; height: 60px; font-size: 2.3rem; line-height: 1; border-radius: 12px;
+  border: 1px solid var(--border); background: #e8ddc5; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.ch-promo-row button:active { background: #d8c8a5; }
+/* 기물 설명 */
+.mg.chess-guide { gap: 12px; width: 100%; }
+.ch-guide-list { display: flex; flex-direction: column; gap: 10px; width: min(92vw, 420px); }
+.ch-guide-row { display: flex; align-items: center; gap: 12px; text-align: left;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; }
+.ch-guide-glyph { font-size: 2rem; flex: 0 0 1.4em; text-align: center; color: #f0d9b5; text-shadow: 0 0 1px #000, 1px 1px 1px #000; }
+.ch-guide-txt { display: flex; flex-direction: column; gap: 2px; }
+.ch-guide-txt small { color: var(--muted); font-size: .8rem; line-height: 1.4; }
+.ch-guide-note { width: min(92vw, 420px); color: var(--muted); font-size: .78rem; line-height: 1.6;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; text-align: left; }
 .mg.janggi { gap: 10px; width: 100%; }
 /* 실제 장기판 — 선의 교차점(점)에 말이 놓임. 9열×10행 점, 궁성 대각선 포함 */
 .jg-board { width: min(92vw, 360px); padding: 5.5%; box-sizing: border-box;
