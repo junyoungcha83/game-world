@@ -1771,21 +1771,26 @@ function startKbo(el){
   const battingTeam   = ()=> G.half===0 ? G.away : G.home;
   const scoreRun = (n)=>{ if (G.half===0) G.rA+=n; else G.rH+=n; };
   const resetCount = ()=>{ G.b=0; G.s=0; };
-  function advanceHit(){ let r=0; if (G.bases[2]) r++; G.bases[2]=G.bases[1]; G.bases[1]=G.bases[0]; G.bases[0]=true; scoreRun(r); return r; }
-  function advanceHR(){ let r=1; G.bases.forEach(x=>{ if(x) r++; }); G.bases=[false,false,false]; scoreRun(r); return r; }
+  function advanceN(n){ // n=1 단타·2 2루타·3 3루타·4 홈런
+    let runs=0; const nb=[false,false,false];
+    for(let i=0;i<3;i++){ if(G.bases[i]){ const to=i+1+n; if(to>=4) runs++; else nb[to-1]=true; } }
+    if(n>=4) runs++; else nb[n-1]=true;
+    G.bases=nb; scoreRun(runs); return runs; }
   function advanceWalk(){ let r=0;
     if (G.bases[0]&&G.bases[1]&&G.bases[2]) r++;
     if (G.bases[0]&&G.bases[1]) G.bases[2]=true;
     if (G.bases[0]) G.bases[1]=true;
     G.bases[0]=true; scoreRun(r); return r; }
+  const HITNAME = { single:'안타', double:'2루타', triple:'3루타', hr:'홈런' };
 
   function outcome(type){
     if (type==='ball'){ G.b++; if (G.b>=4){ const r=advanceWalk(); G.msg='볼넷! 출루'+(r?` (${r}점)`:''); resetCount(); return afterPlay(); } G.msg='볼'; }
     else if (type==='strike'){ G.s++; if (G.s>=3){ G.outs++; G.msg='삼진 아웃! ⚾'; resetCount(); return afterOut(); } G.msg='스트라이크'; }
     else if (type==='foul'){ if (G.s<2) G.s++; G.msg='파울'; }
     else if (type==='out'){ G.outs++; G.msg='범타 아웃!'; resetCount(); return afterOut(); }
-    else if (type==='single'){ const r=advanceHit(); G.msg='안타! 🙌'+(r?` ${r}점`:''); resetCount(); return afterPlay(); }
-    else if (type==='hr'){ const r=advanceHR(); G.msg=`홈런!! 💥 ${r}점`; resetCount(); return afterPlay(); }
+    else if (type==='single'||type==='double'||type==='triple'||type==='hr'){
+      const n = type==='single'?1 : type==='double'?2 : type==='triple'?3 : 4;
+      const r = advanceN(n); G.msg = `${HITNAME[type]}${type==='hr'?'!! 💥':'! 🙌'}` + (r?` ${r}점`:''); resetCount(); return afterPlay(); }
     render();
   }
   function afterOut(){ if (G.outs>=3) endHalf(); else render(); }
@@ -1803,14 +1808,14 @@ function startKbo(el){
 
   function weighted(w){ const ks=Object.keys(w); let t=0; ks.forEach(k=>t+=w[k]); let x=Math.random()*t;
     for (const k of ks){ x-=w[k]; if (x<0) return k; } return ks[0]; }
-  function cpuBatResult(pitchKey, course){
-    const breaking = pitchKey!=='ff';
-    if (course==='zone'){
-      if (Math.random()>0.78) return 'strike';
-      return weighted(breaking ? {hr:4,single:16,foul:15,out:40,strike:25} : {hr:8,single:22,foul:15,out:35,strike:20});
-    }
-    if (Math.random()>0.33) return 'ball';
-    return weighted({hr:1,single:8,foul:18,out:25,strike:48});
+  function cpuBat(pitchKey, inZone, cell){
+    const breaking = pitchKey!=='ff', center = cell===4;
+    if (!inZone){ if (Math.random()>0.30) return 'ball';    // 유인구에 안 속음
+      return weighted({hr:1,triple:1,double:3,single:6,foul:18,out:24,strike:47}); }
+    if (Math.random()>0.76) return 'strike';                // 루킹 스트라이크
+    const g = center ? 1.3 : 1;                             // 한가운데면 잘 맞음
+    return weighted({ hr:(breaking?4:7)*g, triple:2*g, double:6*g, single:(breaking?15:20)*g,
+      foul:15, out:(breaking?40:34), strike:24 });
   }
 
   function diamond(){
@@ -1836,92 +1841,141 @@ function startKbo(el){
       </div>
     </div>`;
   }
-  // ===== 90년대풍 픽셀 그래픽 =====
-  const SW=220, SH=168, TARGET_P=0.9;
+  // ===== 그래픽 (투수/타자 시점) =====
+  const SW=220, SH=180, TARGET_P=0.92;
   const stepOf = k => k==='ff'?0.020 : k==='sl'?0.016 : k==='ch'?0.013 : 0.011;
-  const px=(c,x,y,w,h,col)=>{ c.fillStyle=col; c.fillRect(x|0,y|0,Math.ceil(w),Math.ceil(h)); };
-  function drawBatter(c,x,y,col,swing){ const skin='#f2c79a';
-    px(c,x-4,y,3,8,'#e5e7eb'); px(c,x+2,y,3,8,'#e5e7eb');   // 다리
-    px(c,x-5,y-10,11,10,col);                                // 몸통(유니폼)
-    px(c,x-2,y-16,6,6,skin);                                 // 머리
-    px(c,x-3,y-18,8,3,col);                                  // 모자
-    c.save(); c.translate(x+5,y-8); c.rotate(-1.4+ (swing||0)*1.9);
-    px(c,0,-1,16,3,'#a5682a'); c.restore();                  // 배트
-    px(c,x+4,y-9,3,3,skin); }
-  function drawPitcher(c,x,y,col){ const skin='#f2c79a';
-    px(c,x-3,y,2,6,'#e5e7eb'); px(c,x+1,y,2,6,'#e5e7eb');
-    px(c,x-4,y-7,8,7,col); px(c,x-2,y-12,5,5,skin); px(c,x-3,y-13,7,2,col); }
-  function drawCatcher(c,x,y){ px(c,x-4,y-6,9,8,'#475569'); px(c,x-2,y-11,5,5,'#f2c79a'); px(c,x-4,y-12,9,3,'#334155'); }
-  function drawScene(c,o){ o=o||{};
-    px(c,0,0,SW,26,'#26325c');
-    for(let i=0;i<SW;i+=5) px(c,i,8,3,12, (i/5)%2?'#3a4a80':'#313f6e');   // 관중
-    px(c,0,24,SW,SH-24,'#3fa63f');
-    for(let y=34;y<SH;y+=14) px(c,0,y,SW,7,'#379b37');                    // 잔디 줄무늬
-    c.save(); c.translate(SW/2,92); c.rotate(Math.PI/4);
-    px(c,-44,-44,88,88,'#c98a52'); px(c,-28,-28,56,56,'#3fa63f'); c.restore();
-    px(c,SW/2-10,56,20,9,'#c98a52');                                      // 마운드
-    const pts=[[SW/2+38,92],[SW/2,54],[SW/2-38,92]];                      // 1·2·3루
-    pts.forEach((p,i)=> px(c,p[0]-4,p[1]-4,8,8, o.bases&&o.bases[i]?'#facc15':'#f8fafc'));
-    px(c,SW/2-5,128,10,6,'#f8fafc');                                      // 홈플레이트
-    drawPitcher(c,SW/2,50,o.pitcher||'#1e293b');
-    drawCatcher(c,SW/2,142);
-    drawBatter(c,SW/2-13,122,o.batter||'#c30452',o.swing||0);
-    if(o.ball){ const s=Math.max(3,3+o.ball.z*4);
-      px(c,o.ball.x-s/2-1,o.ball.y-s/2-1,s+2,s+2,'#0b1220'); px(c,o.ball.x-s/2,o.ball.y-s/2,s,s,'#ffffff'); } }
-  const ballAt = p => ({ x: SW/2 + (SW/2-13 - SW/2)*p*0.6, y: 60 + (122-60)*p, z:p });
+  const px=(c,x,y,w,h,col)=>{ c.fillStyle=col; c.fillRect(x|0,y|0,Math.max(1,Math.ceil(w)),Math.max(1,Math.ceil(h))); };
+  const ball=(c,x,y,r)=>{ r=Math.max(2,r); px(c,x-r-1,y-r-1,r*2+2,r*2+2,'#0b1220'); px(c,x-r,y-r,r*2,r*2,'#ffffff'); };
+  const ZGX=SW/2-18, ZGY=58, ZC=12;
+  const cellXY=i=>({ x: ZGX+(i%3)*ZC+ZC/2, y: ZGY+((i/3|0))*ZC+ZC/2 });
+  const skin='#f2c79a';
+  function fieldBG(c){ px(c,0,0,SW,20,'#26325c');
+    for(let i=0;i<SW;i+=5) px(c,i,6,3,10,(i/5)%2?'#3a4a80':'#313f6e');
+    px(c,0,18,SW,SH-18,'#3fa63f');
+    for(let y=30;y<SH;y+=16) px(c,0,y,SW,8,'#37993a'); }
+  function sPitcher(c,x,y,col,ph){ const legUp=ph>0.25&&ph<0.7;
+    px(c,x-3,y,2,7,'#e5e7eb'); px(c,x+1,y,2,legUp?4:7,'#e5e7eb');
+    px(c,x-4,y-8,8,8,col); px(c,x-2,y-13,5,5,skin); px(c,x-3,y-14,7,2,col);
+    const ax=x+(ph<0.6?-6:7), ay=y-8-(ph<0.6?3:0); px(c,ax,ay,3,3,skin); }
+  function sBatterFront(c,x,y,col,sw){
+    px(c,x-4,y,3,9,'#1f2937'); px(c,x+2,y,3,9,'#1f2937');
+    px(c,x-5,y-11,11,11,col); px(c,x-2,y-17,6,6,skin); px(c,x-3,y-19,8,3,col);
+    c.save(); c.translate(x-6,y-9); c.rotate(-2.2+(sw||0)*2.5); px(c,0,-1,15,3,'#a5682a'); c.restore(); }
+  function sBatterBack(c,x,y,col,sw){
+    px(c,x-5,y,4,12,'#1f2937'); px(c,x+3,y,4,12,'#1f2937');
+    px(c,x-8,y-14,17,14,col); px(c,x-3,y-21,7,7,skin); px(c,x-4,y-23,9,3,col);
+    c.save(); c.translate(x+8,y-12); c.rotate(-1.1-(sw||0)*2.3); px(c,0,-2,22,4,'#a5682a'); c.restore(); }
+  function sCatcher(c,x,y){ px(c,x-5,y-6,11,9,'#334155'); px(c,x-3,y-12,7,6,'#94a3b8'); px(c,x-5,y-14,11,3,'#1e293b'); }
+  function sUmpire(c,x,y){ px(c,x-4,y-6,9,8,'#1f2937'); px(c,x-2,y-11,5,5,skin); }
+  function drawZone(c,aim,cursor){
+    c.globalAlpha=0.25; px(c,ZGX,ZGY,ZC*3,ZC*3,'#0f172a'); c.globalAlpha=1;
+    for(let i=0;i<9;i++){ const cx=ZGX+(i%3)*ZC, cy=ZGY+((i/3|0))*ZC;
+      if(aim===i){ c.globalAlpha=0.55; px(c,cx,cy,ZC,ZC,'#22c55e'); c.globalAlpha=1; }
+      if(cursor===i){ c.strokeStyle='#facc15'; c.lineWidth=2; c.strokeRect(cx+1,cy+1,ZC-2,ZC-2); } }
+    c.strokeStyle='rgba(255,255,255,.85)'; c.lineWidth=1;
+    for(let k=0;k<=3;k++){ c.beginPath(); c.moveTo(ZGX+k*ZC,ZGY); c.lineTo(ZGX+k*ZC,ZGY+3*ZC); c.stroke();
+      c.beginPath(); c.moveTo(ZGX,ZGY+k*ZC); c.lineTo(ZGX+3*ZC,ZGY+k*ZC); c.stroke(); } }
+  function drawPitcherView(c,o){ o=o||{}; fieldBG(c); const zx=SW/2;
+    px(c,zx-34,52,68,46,'#c98a52');
+    px(c,zx-6,96,12,6,'#f8fafc');
+    sUmpire(c,zx+24,60);
+    sBatterFront(c,zx-16,92,o.batter||'#c30452',o.swing||0);
+    sCatcher(c,zx+4,100);
+    if(o.grid) drawZone(c,o.aim,o.cursor);
+    px(c,zx-14,SH-24,28,10,'#c98a52');
+    if(o.ball) ball(c,o.ball.x,o.ball.y,o.ball.r); }
+  function drawBatterView(c,o){ o=o||{}; fieldBG(c); const mx=SW/2;
+    px(c,mx-13,72,26,8,'#c98a52');
+    sPitcher(c,mx,70,o.pitcher||'#1e293b',o.phase||0);
+    px(c,mx-9,SH-26,18,8,'#f8fafc');
+    sCatcher(c,mx+16,SH-18);
+    sBatterBack(c,mx-26,SH-14,o.batter||'#c30452',o.swing||0);
+    if(o.ball) ball(c,o.ball.x,o.ball.y,o.ball.r); }
+  const ballApproach=p=>({ x: SW/2 + (SW/2-6 - SW/2)*p, y: 74 + (SH-30-74)*p, r: 1.6+p*3.6 });
+  function drawHitView(c,o){ o=o||{}; fieldBG(c);
+    c.strokeStyle='#eab308'; c.lineWidth=3; c.beginPath(); c.arc(SW/2,SH+46,118,Math.PI*1.16,Math.PI*1.84); c.stroke();
+    c.save(); c.translate(SW/2,SH-12); c.rotate(Math.PI/4); px(c,-24,-24,48,48,'#c98a52'); c.restore();
+    px(c,SW/2-6,SH-16,12,6,'#f8fafc');
+    sBatterFront(c,SW/2,SH-14,o.batter||'#c30452',1);
+    if(o.ball) ball(c,o.ball.x,o.ball.y,o.ball.r); }
+  function hitAnim(c, type, batC, cb){
+    const bl=document.getElementById('kboBelow');
+    if(bl) bl.innerHTML=`<div class="kbo-note kbo-hit">${type==='hr'?'홈런!! 💥':HITNAME[type]+'! 🙌'}</div>`;
+    const D = type==='hr'?1.18 : type==='triple'?0.92 : type==='double'?0.74 : 0.52;
+    const dir=(Math.random()*0.6-0.3), sx=SW/2, sy=SH-24; let t=0;
+    (function fr(){ t+=0.04;
+      const x=sx+dir*SW*0.55*t, y=sy-Math.sin(Math.min(1,t)*Math.PI)*D*(SH+20);
+      drawHitView(c,{batter:batC, ball:{x,y,r:Math.max(2,5-t*3)}});
+      if(t<1){ G.raf=requestAnimationFrame(fr);} else { stopAnim(); setTimeout(cb,450); } })(); }
   function makeCanvas(act){
     act.innerHTML = `<canvas class="kbo-canvas" width="${SW}" height="${SH}"></canvas><div class="kbo-below" id="kboBelow"></div>`;
     const cv=act.querySelector('.kbo-canvas'); return { ctx:cv.getContext('2d'), cv, below:act.querySelector('#kboBelow') }; }
 
+  // 타자 시점: 투수 폼 → 공 접근 → 스윙 타이밍
   function batUI(act){
-    const pitch = KBO_PITCHES[Math.floor(Math.random()*KBO_PITCHES.length)];
-    const course = Math.random()<0.6 ? 'zone':'chase';
+    const pitch=KBO_PITCHES[Math.floor(Math.random()*KBO_PITCHES.length)];
+    const isStrike=Math.random()<0.62;
     const { ctx, cv, below } = makeCanvas(act);
     const myC=KBO_TEAMS[G.away].c1, opC=KBO_TEAMS[G.home].c1;
-    below.innerHTML = `<div class="kbo-note">${pitch.name}! 공이 홈플레이트에 올 때 스윙</div>
-      <div class="kbo-btns"><button id="kboSwing" class="prime">🏏 스윙</button><button id="kboTake">지켜보기</button></div>`;
-    let p=0, swung=false, done=false; const step=stepOf(pitch.key);
-    const paint=(ball,swing)=> drawScene(ctx,{batter:myC,pitcher:opC,bases:G.bases,ball,swing});
-    paint(ballAt(0),0);
-    (function frame(){ if(done||swung) return;
-      p+=step; paint(ballAt(Math.min(p,1)),0);
-      if(p>=1){ done=true; stopAnim(); return outcome(course==='zone'?'strike':'ball'); }
-      G.raf=requestAnimationFrame(frame); })();
-    const doSwing=()=>{ if(swung||done)return; swung=true; stopAnim();
-      const err=Math.abs(p-TARGET_P);
-      const type = err<=0.04?'hr':err<=0.09?'single':err<=0.15?'foul':err<=0.22?'out':'strike';
-      const hit=(type==='hr'||type==='single'); const b0=ballAt(Math.min(p,1)); let sw=0;
-      (function sa(){ sw+=0.2;
-        const bx = hit ? b0.x + (type==='hr'?4:-34)*sw : b0.x;
-        const by = hit ? b0.y - (type==='hr'?95:22)*sw : b0.y+2*sw;
-        paint({x:bx,y:by,z:hit?Math.max(0,1-sw):1}, Math.min(1,sw));
-        if(sw<1){ G.raf=requestAnimationFrame(sa); } else { done=true; stopAnim(); setTimeout(()=>outcome(type),160); } })(); };
-    below.querySelector('#kboSwing').onclick=doSwing;
-    cv.onclick=doSwing;
-    below.querySelector('#kboTake').onclick=()=>{ if(swung||done)return; done=true; stopAnim(); outcome(course==='zone'?'strike':'ball'); };
+    below.innerHTML=`<div class="kbo-note">${pitch.name}! 타이밍 맞춰 스윙 (안 치면 볼/스트라이크)</div>
+      <div class="kbo-btns"><button id="sw" class="prime">🏏 스윙</button><button id="tk">지켜보기</button></div>`;
+    let p=0, done=false, swung=false; const step=stepOf(pitch.key);
+    (function fr(){ if(done||swung)return; p+=step;
+      const phase=Math.min(1,p/0.4);
+      const b = p>0.4 ? ballApproach((p-0.4)/0.6) : null;
+      drawBatterView(ctx,{batter:myC,pitcher:opC,ball:b,phase});
+      if(p>=1){ done=true; stopAnim(); return outcome(isStrike?'strike':'ball'); }
+      G.raf=requestAnimationFrame(fr); })();
+    const doSwing=()=>{ if(done||swung)return; swung=true; stopAnim();
+      const bp=Math.max(0,(p-0.4)/0.6), err=Math.abs(bp-TARGET_P);
+      const type = err<=0.03?'hr' : err<=0.06?'triple' : err<=0.10?'double' : err<=0.15?'single' : err<=0.24?'foul' : 'strike';
+      const b0=ballApproach(Math.min(1,bp||0.9)); let s=0;
+      (function sa(){ s+=0.25; drawBatterView(ctx,{batter:myC,pitcher:opC,ball:{x:b0.x,y:b0.y,r:4},swing:Math.min(1,s),phase:1});
+        if(s<1){ G.raf=requestAnimationFrame(sa);} else { stopAnim();
+          if(type==='hr'||type==='single'||type==='double'||type==='triple') hitAnim(ctx,type,myC,()=>outcome(type));
+          else setTimeout(()=>outcome(type),200); } })(); };
+    below.querySelector('#sw').onclick=doSwing; cv.onclick=doSwing;
+    below.querySelector('#tk').onclick=()=>{ if(done||swung)return; done=true; stopAnim(); outcome(isStrike?'strike':'ball'); };
   }
 
+  // 투수 시점: 구종 선택 → 9칸 커서 조준 → 게이지 → 투구 → CPU 타자 결과
   function pitchUI(act){
-    let course='zone';
-    const { ctx, below } = makeCanvas(act);
-    const batC=KBO_TEAMS[G.home].c1, pitC=KBO_TEAMS[G.away].c1;
-    drawScene(ctx,{batter:batC,pitcher:pitC,bases:G.bases,ball:null,swing:0});
-    below.innerHTML = `<div class="kbo-note">${KBO_TEAMS[G.home].name} 타석 — 코스·구종 선택</div>
-      <div class="kbo-course"><button data-c="zone" class="on">스트라이크존</button><button data-c="chase">유인구(볼)</button></div>
-      <div class="kbo-pbtns">${KBO_PITCHES.map(p=>`<button data-k="${p.key}">${p.name}</button>`).join('')}</div>`;
-    below.querySelectorAll('.kbo-course button').forEach(b=> b.onclick=()=>{ course=b.dataset.c;
-      below.querySelectorAll('.kbo-course button').forEach(x=>x.classList.toggle('on',x===b)); });
-    below.querySelectorAll('.kbo-pbtns button').forEach(b=> b.onclick=()=>{
-      below.querySelectorAll('.kbo-pbtns button, .kbo-course button').forEach(x=>x.disabled=true);
-      const res=cpuBatResult(b.dataset.k, course); const step=stepOf(b.dataset.k);
-      const swings = (res==='hr'||res==='single'||res==='foul'||res==='out') || (res==='strike'&&Math.random()<0.6);
-      const hit=(res==='hr'||res==='single'); let p=0;
-      (function fr(){ p+=step;
-        let sw = swings && p>0.78 ? Math.min(1,(p-0.78)/0.22) : 0;
-        let ball=ballAt(Math.min(p,1));
-        if(hit && p>=1){ ball={x:ballAt(1).x+(res==='hr'?4:-30), y:ballAt(1).y-(res==='hr'?70:18), z:0.3}; }
-        drawScene(ctx,{batter:batC,pitcher:pitC,bases:G.bases,ball,swing:sw});
-        if(p<1){ G.raf=requestAnimationFrame(fr); } else { stopAnim(); setTimeout(()=>outcome(res),220); } })(); });
+    const { ctx, cv, below } = makeCanvas(act);
+    const batC=KBO_TEAMS[G.home].c1;
+    let pitch=null, aim=4, cursor=0, phase='pick';
+    const draw=extra=> drawPitcherView(ctx, Object.assign({ batter:batC, grid:true,
+      aim:(phase==='gauge'||phase==='throw')?aim:undefined, cursor:phase==='aim'?cursor:undefined }, extra||{}));
+    function pick(){ phase='pick'; draw();
+      below.innerHTML=`<div class="kbo-note">${KBO_TEAMS[G.home].name} 타석 — 구종 선택</div>
+        <div class="kbo-pbtns">${KBO_PITCHES.map(p=>`<button data-k="${p.key}">${p.name}</button>`).join('')}</div>`;
+      below.querySelectorAll('button').forEach(b=>b.onclick=()=>{ pitch=KBO_PITCHES.find(x=>x.key===b.dataset.k); aimPhase(); }); }
+    function aimPhase(){ phase='aim'; cursor=0;
+      below.innerHTML=`<div class="kbo-note">${pitch.name} — 도는 커서를 '조준'으로 멈춰 코스 결정</div>
+        <div class="kbo-btns"><button id="aimBtn" class="prime">🎯 조준</button></div>`;
+      let t=0; (function loop(){ if(phase!=='aim')return; t++; if(t%5===0){ cursor=(cursor+1+(Math.random()*2|0))%9; draw(); } G.raf=requestAnimationFrame(loop); })();
+      below.querySelector('#aimBtn').onclick=()=>{ if(phase!=='aim')return; stopAnim(); aim=cursor; gaugePhase(); }; }
+    function gaugePhase(){ phase='gauge'; draw();
+      below.innerHTML=`<div class="kbo-note">가운데일수록 겨냥한 코스로! '던지기'</div>
+        <div class="kbo-meter"><div class="kbo-marker" id="gm"></div></div>
+        <div class="kbo-btns"><button id="thr" class="prime">⚾ 던지기</button></div>`;
+      const gm=below.querySelector('#gm'); let pos=0,dir=1;
+      (function loop(){ if(phase!=='gauge')return; pos+=dir*2.6; if(pos>=100){pos=100;dir=-1;}else if(pos<=0){pos=0;dir=1;} gm.style.left=pos+'%'; G.raf=requestAnimationFrame(loop); })();
+      below.querySelector('#thr').onclick=()=>{ if(phase!=='gauge')return; stopAnim(); throwIt(1-Math.abs(pos-50)/50); }; }
+    function throwIt(acc){ phase='throw';
+      below.innerHTML=`<div class="kbo-note">${pitch.name} 투구!</div>`;
+      let cell=aim, inZone=true;
+      if(Math.random() > acc*0.8+0.15){ cell=Math.random()*9|0; if(Math.random()>acc) inZone=Math.random()<0.5; }
+      const tgt = inZone ? cellXY(cell) : { x: cellXY(cell).x+(Math.random()<.5?-24:24), y: cellXY(cell).y+(Math.random()<.5?-6:14) };
+      const res = cpuBat(pitch.key, inZone, cell);
+      const swing = (res!=='ball'&&res!=='strike') || (res==='strike'&&Math.random()<0.55);
+      const sx=SW/2, sy=SH-24; let p=0;
+      (function fr(){ p+=0.05;
+        const x=sx+(tgt.x-sx)*p, y=sy+(tgt.y-sy)*p, r=5-p*3.2;
+        drawPitcherView(ctx,{batter:batC,grid:true,aim:inZone?cell:undefined,ball:{x,y,r},swing: swing&&p>0.72?Math.min(1,(p-0.72)/0.28):0});
+        if(p<1){ G.raf=requestAnimationFrame(fr);} else { stopAnim();
+          if(res==='hr'||res==='single'||res==='double'||res==='triple') hitAnim(ctx,res,batC,()=>outcome(res));
+          else setTimeout(()=>outcome(res),350); } })(); }
+    pick();
   }
   function render(){
     stopAnim();
