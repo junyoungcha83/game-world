@@ -335,6 +335,7 @@ function openGame(id) {
   if (!getCurrentUser()) { showReg(); return; }   // 사용자 없으면 기록이 안 쌓이므로 먼저 선택
   document.getElementById('gameTitle').textContent = g.emoji + ' ' + g.name;
   document.getElementById('gameBest').textContent = g.fmtStat(getStat(id));
+  document.getElementById('gameBack').onclick = () => showView('hub');   // 기본 뒤로가기(게임이 필요시 자체 오버라이드)
   showView('game');
   g.start(document.getElementById('gameScreen'));
 }
@@ -1873,6 +1874,9 @@ function startKbo(el){
     c.beginPath(); c.moveTo(HB[0],HB[1]-2); c.lineTo(B1[0]-10,B1[1]); c.lineTo(B2[0],B2[1]+10); c.lineTo(B3[0]+10,B3[1]); c.closePath(); c.fill(); c.restore();
     c.strokeStyle='rgba(255,255,255,.85)'; c.lineWidth=2; c.beginPath();
     c.moveTo(HB[0],HB[1]); c.lineTo(B1[0],B1[1]); c.lineTo(B2[0],B2[1]); c.lineTo(B3[0],B3[1]); c.closePath(); c.stroke();
+    c.strokeStyle='rgba(255,255,255,.92)'; c.lineWidth=2;               // 1·3루측 파울라인(외야까지 연장)
+    c.beginPath(); c.moveTo(HB[0],HB[1]); c.lineTo(SW/2+154,90); c.stroke();
+    c.beginPath(); c.moveTo(HB[0],HB[1]); c.lineTo(SW/2-154,90); c.stroke();
     c.fillStyle='#cf9a5e'; c.beginPath(); c.ellipse(MND[0],MND[1],20,10,0,0,7); c.fill(); // 마운드
   }
   function base(c,p,on){ c.save(); c.translate(p[0],p[1]); c.rotate(Math.PI/4);
@@ -1903,9 +1907,10 @@ function startKbo(el){
     c.fillStyle=skin; c.beginPath(); c.arc(x,y-36,15,0,7); c.fill();
     let hg=c.createLinearGradient(x-15,y-50,x+15,y-30); hg.addColorStop(0,shade(cap,14)); hg.addColorStop(1,cap);
     c.fillStyle=hg; c.beginPath(); c.arc(x,y-38,15.5,Math.PI*0.96,Math.PI*2.04); c.fill();
-    c.save(); c.translate(x+15,y-20); c.rotate(-0.55+(sw||0)*1.9);
-    c.fillStyle=skin; rr(c,-3,-5,16,10,5); c.fill();
-    c.fillStyle='#0f1520'; rr(c,12,-3.5,34,7,3.5); c.fill(); c.fillStyle='#8b939f'; rr(c,42,-3.5,7,7,2); c.fill(); c.restore(); }
+    c.save(); c.translate(x+12,y-22); c.rotate(-2.35+(sw||0)*2.8);   // 평소 뒤로 코킹 → 스윙 시 앞으로
+    c.fillStyle=skin; rr(c,-3,-5,15,10,5); c.fill();                  // 손/팔
+    c.fillStyle='#0f1520'; rr(c,10,-3.5,34,7,3.5); c.fill();          // 배트
+    c.fillStyle='#8b939f'; rr(c,40,-3.5,7,7,2); c.fill(); c.restore(); }
   function catcher(c,x,y){ shadow(c,x,y+7,9); c.fillStyle='#2f3a4d'; rr(c,x-8,y-8,16,15,6); c.fill();
     c.fillStyle='#9aa4b4'; c.beginPath(); c.arc(x,y-11,5.5,0,7); c.fill(); c.fillStyle='#1e2635'; rr(c,x-6,y-15,12,4,2); c.fill(); }
   function umpire(c,x,y){ shadow(c,x,y+6,6); c.fillStyle='#111827'; rr(c,x-5,y-7,10,11,4); c.fill();
@@ -1931,6 +1936,9 @@ function startKbo(el){
   const ballApproach=p=>({ x: MND[0] + (HB[0]-8 - MND[0])*p, y: (MND[1]-2) + (HB[1]-8-(MND[1]-2))*p, r: 3+p*6.5 });
   // 투수 시점(마운드에서 타석) — 9분할 존
   function drawPitcherView(c,o){ o=o||{}; bg(c);
+    c.strokeStyle='rgba(255,255,255,.85)'; c.lineWidth=2;              // 홈→1·3루 베이스라인+파울라인 연장(원근)
+    c.beginPath(); c.moveTo(SW/2,104); c.lineTo(SW-24,SH); c.stroke();
+    c.beginPath(); c.moveTo(SW/2,104); c.lineTo(24,SH); c.stroke();
     c.fillStyle='#cf9a5e'; c.beginPath(); c.ellipse(SW/2,96,46,26,0,0,7); c.fill();   // 홈 주변 흙
     homeAt(c,SW/2,104);
     umpire(c,SW/2+26,74); catcher(c,SW/2+6,112);
@@ -2024,8 +2032,20 @@ function startKbo(el){
           else setTimeout(()=>outcome(res),350); } })(); }
     pick();
   }
+  const gb = () => document.getElementById('gameBack');
+  function showQuit(){
+    if (el.querySelector('.kbo-quit')) return;
+    stopAnim();
+    const ov=document.createElement('div'); ov.className='kbo-quit';
+    ov.innerHTML=`<div class="kbo-quit-box"><p>게임을 종료하시겠습니까?</p>
+      <div class="kbo-quit-btns"><button id="qYes" class="prime">네</button><button id="qNo">아니오</button></div></div>`;
+    el.appendChild(ov);
+    ov.querySelector('#qYes').onclick=()=>{ ov.remove(); selectScreen(); };
+    ov.querySelector('#qNo').onclick=()=>{ ov.remove(); render(); };
+  }
   function render(){
     stopAnim();
+    if (gb()) gb().onclick = G.over ? (()=>showView('hub')) : (()=>showQuit());
     if (G.over){
       el.innerHTML = `<div class="mg kbo">${scoreboard()}
         <div class="kbo-final">${G.rA>G.rH?'🎉 승리!':G.rA<G.rH?'😢 패배':'🤝 무승부'}<br>
@@ -2042,6 +2062,7 @@ function startKbo(el){
   }
   function selectScreen(){
     stopAnim();
+    if (gb()) gb().onclick = () => showView('hub');   // 팀선택 화면에선 뒤로가기=허브
     Object.assign(G, { away:0, home:1, inning:1, half:0, outs:0, b:0, s:0, bases:[false,false,false], rA:0, rH:0, over:false, msg:'' });
     el.innerHTML = `<div class="mg kbo">
       <div class="kbo-msg">응원할 팀을 골라요 (선공·원정)</div>

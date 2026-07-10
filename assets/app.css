@@ -369,3 +369,10 @@ body.playing .app-main { overscroll-behavior-y: contain; }
   background:#4fb857; border:3px solid #0f172a; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.25); }
 .kbo-below { display:flex; flex-direction:column; gap:10px; margin-top:10px; }
 .kbo-note.kbo-hit { color:#dc2626; font-size:1.15rem; font-weight:800; }
+.kbo-quit { position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center;
+  background:rgba(8,12,20,.62); }
+.kbo-quit-box { background:#fff; border-radius:16px; padding:22px 20px; text-align:center; width:min(280px,82%); box-shadow:0 10px 30px rgba(0,0,0,.35); }
+.kbo-quit-box p { margin:0 0 16px; font-weight:800; font-size:1.05rem; color:#0f172a; }
+.kbo-quit-btns { display:flex; gap:10px; }
+.kbo-quit-btns button { flex:1; padding:12px; border-radius:12px; font-weight:800; border:none; cursor:pointer; background:#e2e8f0; }
+.kbo-quit-btns .prime { background:#dc2626; color:#fff; }
