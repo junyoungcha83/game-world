@@ -1,9 +1,10 @@
 // 앱 셸 오프라인 캐시. 캐시 이름 바꾸면 옛 캐시 자동 폐기.
-const CACHE = 'game-world-v46';
+const CACHE = 'game-world-v47';
 self.addEventListener('message', (e) => { if (e.data === 'skip-waiting') self.skipWaiting(); });
 const ASSETS = ['./', './index.html', './assets/app.css', './assets/app.js', './manifest.webmanifest', './assets/icon.svg'];
 // 지도 맞히기용 국가 실루엣 — 완전 오프라인 위해 프리캐시
-const MAP_CODES = ['kr','jp','cn','us','gb','fr','de','it','es','pt','ca','br','ar','mx','au','in','ru','th','vn','id','ph','tr','eg','za','nl','se','no','ch','gr'];
+const MAP_CODES = ['kr','jp','cn','us','gb','fr','de','it','es','pt','ca','br','ar','mx','au','in','ru','th','vn','id','ph','tr','eg','za','nl','se','no','ch','gr',
+  'cl','nz','ie','is','sa','ir','pk','my','mn','ua','pl','pe','co','ng','ma','fi','kz','ve','cu','ke','dk','at','ae','sg','lk','kh','np','il','be','cz','ro','hu'];
 const MAP_ASSETS = MAP_CODES.map(c => `./assets/maps/${c}.svg`);
 
 self.addEventListener('install', (e) => {
