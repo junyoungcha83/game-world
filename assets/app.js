@@ -1841,72 +1841,119 @@ function startKbo(el){
       </div>
     </div>`;
   }
-  // ===== 그래픽 (투수/타자 시점) =====
-  const SW=220, SH=180, TARGET_P=0.92;
+  // ===== 그래픽 (세련된 2.5D · 투수/타자 시점) =====
+  const SW=320, SH=232, TARGET_P=0.92;
   const stepOf = k => k==='ff'?0.020 : k==='sl'?0.016 : k==='ch'?0.013 : 0.011;
-  const px=(c,x,y,w,h,col)=>{ c.fillStyle=col; c.fillRect(x|0,y|0,Math.max(1,Math.ceil(w)),Math.max(1,Math.ceil(h))); };
-  const ball=(c,x,y,r)=>{ r=Math.max(2,r); px(c,x-r-1,y-r-1,r*2+2,r*2+2,'#0b1220'); px(c,x-r,y-r,r*2,r*2,'#ffffff'); };
-  const ZGX=SW/2-18, ZGY=58, ZC=12;
+  const ZC=18, ZGX=SW/2-27, ZGY=52;
   const cellXY=i=>({ x: ZGX+(i%3)*ZC+ZC/2, y: ZGY+((i/3|0))*ZC+ZC/2 });
-  const skin='#f2c79a';
-  function fieldBG(c){ px(c,0,0,SW,20,'#26325c');
-    for(let i=0;i<SW;i+=5) px(c,i,6,3,10,(i/5)%2?'#3a4a80':'#313f6e');
-    px(c,0,18,SW,SH-18,'#3fa63f');
-    for(let y=30;y<SH;y+=16) px(c,0,y,SW,8,'#37993a'); }
-  function sPitcher(c,x,y,col,ph){ const legUp=ph>0.25&&ph<0.7;
-    px(c,x-3,y,2,7,'#e5e7eb'); px(c,x+1,y,2,legUp?4:7,'#e5e7eb');
-    px(c,x-4,y-8,8,8,col); px(c,x-2,y-13,5,5,skin); px(c,x-3,y-14,7,2,col);
-    const ax=x+(ph<0.6?-6:7), ay=y-8-(ph<0.6?3:0); px(c,ax,ay,3,3,skin); }
-  function sBatterFront(c,x,y,col,sw){
-    px(c,x-4,y,3,9,'#1f2937'); px(c,x+2,y,3,9,'#1f2937');
-    px(c,x-5,y-11,11,11,col); px(c,x-2,y-17,6,6,skin); px(c,x-3,y-19,8,3,col);
-    c.save(); c.translate(x-6,y-9); c.rotate(-2.2+(sw||0)*2.5); px(c,0,-1,15,3,'#a5682a'); c.restore(); }
-  function sBatterBack(c,x,y,col,sw){
-    px(c,x-5,y,4,12,'#1f2937'); px(c,x+3,y,4,12,'#1f2937');
-    px(c,x-8,y-14,17,14,col); px(c,x-3,y-21,7,7,skin); px(c,x-4,y-23,9,3,col);
-    c.save(); c.translate(x+8,y-12); c.rotate(-1.1-(sw||0)*2.3); px(c,0,-2,22,4,'#a5682a'); c.restore(); }
-  function sCatcher(c,x,y){ px(c,x-5,y-6,11,9,'#334155'); px(c,x-3,y-12,7,6,'#94a3b8'); px(c,x-5,y-14,11,3,'#1e293b'); }
-  function sUmpire(c,x,y){ px(c,x-4,y-6,9,8,'#1f2937'); px(c,x-2,y-11,5,5,skin); }
+  const HB=[SW/2,196], B1=[SW/2+64,152], B2=[SW/2,120], B3=[SW/2-64,152], MND=[SW/2,140];
+  function rr(c,x,y,w,h,r){ r=Math.min(r,w/2,h/2); c.beginPath(); c.moveTo(x+r,y);
+    c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+  function shadow(c,x,y,rx){ c.save(); c.fillStyle='rgba(0,0,0,.20)'; c.beginPath(); c.ellipse(x,y,rx,rx*0.42,0,0,7); c.fill(); c.restore(); }
+  function ball(c,x,y,r){ r=Math.max(2.5,r); c.save();
+    c.fillStyle='rgba(0,0,0,.25)'; c.beginPath(); c.ellipse(x,y+r*0.9,r*1.05,r*0.5,0,0,7); c.fill();
+    const g=c.createRadialGradient(x-r*0.35,y-r*0.35,r*0.2,x,y,r); g.addColorStop(0,'#fff'); g.addColorStop(1,'#cbd3dd');
+    c.fillStyle=g; c.beginPath(); c.arc(x,y,r,0,7); c.fill();
+    c.strokeStyle='#e11d48'; c.lineWidth=Math.max(1,r*0.16); c.beginPath(); c.arc(x-r*0.5,y,r*0.95,-0.7,0.7); c.stroke(); c.restore(); }
+  const skin='#f6cca0';
+  function bg(c){
+    let s=c.createLinearGradient(0,0,0,44); s.addColorStop(0,'#152a44'); s.addColorStop(1,'#2c4a78'); c.fillStyle=s; c.fillRect(0,0,SW,44);
+    c.fillStyle='#3c4a63'; c.fillRect(0,40,SW,40);                    // 스탠드
+    for(let y=46;y<76;y+=5) for(let x=(y%2?0:4);x<SW;x+=8){ c.fillStyle=(x+y)%3?'#47587a':'#556894'; c.fillRect(x,y,4,3); }
+    c.fillStyle='#eef2f7'; c.fillRect(0,74,SW,7);                     // 광고판
+    c.fillStyle='#22406e'; c.fillRect(0,79,SW,8);                     // 외야 펜스
+    let g=c.createLinearGradient(0,87,0,SH); g.addColorStop(0,'#42a049'); g.addColorStop(1,'#4fb857'); c.fillStyle=g; c.fillRect(0,87,SW,SH-87);
+    c.save(); c.globalAlpha=0.07;                                     // 부채꼴 잔디 무늬
+    for(let i=-3;i<9;i++){ c.fillStyle=i%2?'#fff':'#0a3a12'; c.beginPath(); c.moveTo(SW/2,110); c.lineTo(SW/2-180+i*44,SH); c.lineTo(SW/2-140+i*44,SH); c.closePath(); c.fill(); } c.restore();
+  }
+  function infield(c){                                               // 흙 다이아 + 베이스라인
+    c.fillStyle='#cf9a5e'; c.beginPath();
+    c.moveTo(HB[0],HB[1]+12); c.lineTo(B1[0]+16,B1[1]); c.lineTo(B2[0],B2[1]-16); c.lineTo(B3[0]-16,B3[1]); c.closePath(); c.fill();
+    c.save(); c.fillStyle='#4fb857';                                 // 다이아 안쪽 잔디
+    c.beginPath(); c.moveTo(HB[0],HB[1]-2); c.lineTo(B1[0]-10,B1[1]); c.lineTo(B2[0],B2[1]+10); c.lineTo(B3[0]+10,B3[1]); c.closePath(); c.fill(); c.restore();
+    c.strokeStyle='rgba(255,255,255,.85)'; c.lineWidth=2; c.beginPath();
+    c.moveTo(HB[0],HB[1]); c.lineTo(B1[0],B1[1]); c.lineTo(B2[0],B2[1]); c.lineTo(B3[0],B3[1]); c.closePath(); c.stroke();
+    c.fillStyle='#cf9a5e'; c.beginPath(); c.ellipse(MND[0],MND[1],20,10,0,0,7); c.fill(); // 마운드
+  }
+  function base(c,p,on){ c.save(); c.translate(p[0],p[1]); c.rotate(Math.PI/4);
+    c.fillStyle='#fff'; c.fillRect(-5,-5,10,10); c.restore();
+    if(on){ c.fillStyle='#facc15'; c.beginPath(); c.arc(p[0],p[1]-6,3.4,0,7); c.fill(); c.fillStyle='#1d4ed8'; c.fillRect(p[0]-2.5,p[1]-4,5,6); } }
+  function homeplate(c){ const [x,y]=HB; c.fillStyle='#fff'; c.beginPath();
+    c.moveTo(x-8,y-5); c.lineTo(x+8,y-5); c.lineTo(x+8,y+1); c.lineTo(x,y+8); c.lineTo(x-8,y+1); c.closePath(); c.fill(); }
+  // ── 캐릭터(둥근 파워프로풍) ──
+  function pitcherFar(c,x,y,body,cap,ph){ shadow(c,x,y+10,9);
+    c.fillStyle=body; rr(c,x-6,y-4,12,14,4); c.fill();
+    if(ph>0.2&&ph<0.7){ c.fillStyle=body; rr(c,x+3,y+6,5,6,2); c.fill(); }
+    c.save(); c.translate(x-1,y-3); c.rotate(-1.3+(ph||0)*2.6); c.fillStyle=skin; rr(c,0,-2.5,10,5,2.5); c.fill(); c.restore();
+    c.fillStyle=skin; c.beginPath(); c.arc(x,y-9,6,0,7); c.fill();
+    c.fillStyle=cap; c.beginPath(); c.arc(x,y-10,6.2,Math.PI*0.98,Math.PI*2.02); c.fill(); c.fillStyle=cap; rr(c,x-8,y-11,7,3,1.5); c.fill(); }
+  function batterFront(c,x,y,body,cap,sw){ shadow(c,x,y+11,10);
+    c.fillStyle='#20293a'; rr(c,x-5,y,4,10,2); c.fill(); rr(c,x+2,y,4,10,2); c.fill();
+    c.fillStyle=body; rr(c,x-7,y-13,14,15,5); c.fill();
+    c.fillStyle=skin; c.beginPath(); c.arc(x,y-19,6.4,0,7); c.fill();
+    c.fillStyle=cap; c.beginPath(); c.arc(x,y-20,6.6,Math.PI*1.02,Math.PI*1.98); c.fill();
+    c.save(); c.translate(x-7,y-11); c.rotate(-2.2+(sw||0)*2.6);
+    c.fillStyle=skin; rr(c,-3,-2,7,4,2); c.fill(); c.fillStyle='#111827'; rr(c,2,-2.5,20,5,2.5); c.fill(); c.restore(); }
+  function bigBatter(c,x,y,body,cap,sw){                            // 전경 타자(등)
+    shadow(c,x+2,y+30,28);
+    c.fillStyle='#eef2f7'; rr(c,x-12,y+4,11,26,5); c.fill(); rr(c,x+2,y+4,11,26,5); c.fill();
+    let g=c.createLinearGradient(x-20,0,x+20,0); g.addColorStop(0,body); g.addColorStop(1,shade(body,-18));
+    c.fillStyle=g; rr(c,x-20,y-26,40,36,12); c.fill();
+    c.fillStyle='rgba(255,255,255,.92)'; c.font='bold 13px sans-serif'; c.textAlign='center'; c.textBaseline='middle'; c.fillText('53',x,y-6);
+    c.fillStyle=skin; c.beginPath(); c.arc(x,y-36,15,0,7); c.fill();
+    let hg=c.createLinearGradient(x-15,y-50,x+15,y-30); hg.addColorStop(0,shade(cap,14)); hg.addColorStop(1,cap);
+    c.fillStyle=hg; c.beginPath(); c.arc(x,y-38,15.5,Math.PI*0.96,Math.PI*2.04); c.fill();
+    c.save(); c.translate(x+15,y-20); c.rotate(-0.55+(sw||0)*1.9);
+    c.fillStyle=skin; rr(c,-3,-5,16,10,5); c.fill();
+    c.fillStyle='#0f1520'; rr(c,12,-3.5,34,7,3.5); c.fill(); c.fillStyle='#8b939f'; rr(c,42,-3.5,7,7,2); c.fill(); c.restore(); }
+  function catcher(c,x,y){ shadow(c,x,y+7,9); c.fillStyle='#2f3a4d'; rr(c,x-8,y-8,16,15,6); c.fill();
+    c.fillStyle='#9aa4b4'; c.beginPath(); c.arc(x,y-11,5.5,0,7); c.fill(); c.fillStyle='#1e2635'; rr(c,x-6,y-15,12,4,2); c.fill(); }
+  function umpire(c,x,y){ shadow(c,x,y+6,6); c.fillStyle='#111827'; rr(c,x-5,y-7,10,11,4); c.fill();
+    c.fillStyle=skin; c.beginPath(); c.arc(x,y-10,4.4,0,7); c.fill(); }
+  function shade(hex,d){ const n=parseInt(hex.slice(1),16); let r=(n>>16)+d,g=((n>>8)&255)+d,b=(n&255)+d;
+    r=Math.max(0,Math.min(255,r)); g=Math.max(0,Math.min(255,g)); b=Math.max(0,Math.min(255,b));
+    return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1); }
   function drawZone(c,aim,cursor){
-    c.globalAlpha=0.25; px(c,ZGX,ZGY,ZC*3,ZC*3,'#0f172a'); c.globalAlpha=1;
+    c.save(); c.globalAlpha=0.22; c.fillStyle='#0b1020'; rr(c,ZGX,ZGY,ZC*3,ZC*3,4); c.fill(); c.globalAlpha=1;
     for(let i=0;i<9;i++){ const cx=ZGX+(i%3)*ZC, cy=ZGY+((i/3|0))*ZC;
-      if(aim===i){ c.globalAlpha=0.55; px(c,cx,cy,ZC,ZC,'#22c55e'); c.globalAlpha=1; }
-      if(cursor===i){ c.strokeStyle='#facc15'; c.lineWidth=2; c.strokeRect(cx+1,cy+1,ZC-2,ZC-2); } }
-    c.strokeStyle='rgba(255,255,255,.85)'; c.lineWidth=1;
+      if(aim===i){ c.globalAlpha=0.5; c.fillStyle='#22c55e'; c.fillRect(cx,cy,ZC,ZC); c.globalAlpha=1; }
+      if(cursor===i){ c.strokeStyle='#fde047'; c.lineWidth=2.5; c.strokeRect(cx+1.5,cy+1.5,ZC-3,ZC-3); } }
+    c.strokeStyle='rgba(255,255,255,.9)'; c.lineWidth=1;
     for(let k=0;k<=3;k++){ c.beginPath(); c.moveTo(ZGX+k*ZC,ZGY); c.lineTo(ZGX+k*ZC,ZGY+3*ZC); c.stroke();
-      c.beginPath(); c.moveTo(ZGX,ZGY+k*ZC); c.lineTo(ZGX+3*ZC,ZGY+k*ZC); c.stroke(); } }
-  function drawPitcherView(c,o){ o=o||{}; fieldBG(c); const zx=SW/2;
-    px(c,zx-34,52,68,46,'#c98a52');
-    px(c,zx-6,96,12,6,'#f8fafc');
-    sUmpire(c,zx+24,60);
-    sBatterFront(c,zx-16,92,o.batter||'#c30452',o.swing||0);
-    sCatcher(c,zx+4,100);
+      c.beginPath(); c.moveTo(ZGX,ZGY+k*ZC); c.lineTo(ZGX+3*ZC,ZGY+k*ZC); c.stroke(); } c.restore(); }
+  // 타자 시점(등 뒤) — 1·2·3루 베이스 보임
+  function drawBatterView(c,o){ o=o||{}; bg(c); infield(c);
+    base(c,B1,G.bases[0]); base(c,B2,G.bases[1]); base(c,B3,G.bases[2]); homeplate(c);
+    pitcherFar(c,MND[0],MND[1]-4,o.pitcher||'#1e3a8a','#0e2350',o.phase||0);
+    umpire(c,SW/2+22,180); catcher(c,SW/2+4,190);
+    bigBatter(c,SW/2-44,210,o.batter||'#1d4ed8','#0b2a6b',o.swing||0);
+    if(o.ball) ball(c,o.ball.x,o.ball.y,o.ball.r); }
+  const ballApproach=p=>({ x: MND[0] + (HB[0]-8 - MND[0])*p, y: (MND[1]-2) + (HB[1]-8-(MND[1]-2))*p, r: 3+p*6.5 });
+  // 투수 시점(마운드에서 타석) — 9분할 존
+  function drawPitcherView(c,o){ o=o||{}; bg(c);
+    c.fillStyle='#cf9a5e'; c.beginPath(); c.ellipse(SW/2,96,46,26,0,0,7); c.fill();   // 홈 주변 흙
+    homeAt(c,SW/2,104);
+    umpire(c,SW/2+26,74); catcher(c,SW/2+6,112);
+    batterFront(c,SW/2-20,104,o.batter||'#c30452','#7f1020',o.swing||0);
     if(o.grid) drawZone(c,o.aim,o.cursor);
-    px(c,zx-14,SH-24,28,10,'#c98a52');
+    c.fillStyle='#cf9a5e'; c.beginPath(); c.ellipse(SW/2,SH-14,40,16,0,0,7); c.fill();  // 마운드(가까이)
     if(o.ball) ball(c,o.ball.x,o.ball.y,o.ball.r); }
-  function drawBatterView(c,o){ o=o||{}; fieldBG(c); const mx=SW/2;
-    px(c,mx-13,72,26,8,'#c98a52');
-    sPitcher(c,mx,70,o.pitcher||'#1e293b',o.phase||0);
-    px(c,mx-9,SH-26,18,8,'#f8fafc');
-    sCatcher(c,mx+16,SH-18);
-    sBatterBack(c,mx-26,SH-14,o.batter||'#c30452',o.swing||0);
-    if(o.ball) ball(c,o.ball.x,o.ball.y,o.ball.r); }
-  const ballApproach=p=>({ x: SW/2 + (SW/2-6 - SW/2)*p, y: 74 + (SH-30-74)*p, r: 1.6+p*3.6 });
-  function drawHitView(c,o){ o=o||{}; fieldBG(c);
-    c.strokeStyle='#eab308'; c.lineWidth=3; c.beginPath(); c.arc(SW/2,SH+46,118,Math.PI*1.16,Math.PI*1.84); c.stroke();
-    c.save(); c.translate(SW/2,SH-12); c.rotate(Math.PI/4); px(c,-24,-24,48,48,'#c98a52'); c.restore();
-    px(c,SW/2-6,SH-16,12,6,'#f8fafc');
-    sBatterFront(c,SW/2,SH-14,o.batter||'#c30452',1);
+  function homeAt(c,x,y){ c.fillStyle='#fff'; c.beginPath();
+    c.moveTo(x-7,y-4); c.lineTo(x+7,y-4); c.lineTo(x+7,y+1); c.lineTo(x,y+6); c.lineTo(x-7,y+1); c.closePath(); c.fill(); }
+  // 타구 뷰(공통) — 외야로 뻗는 공
+  function drawHitView(c,o){ o=o||{}; bg(c); infield(c);
+    base(c,B1,G.bases[0]); base(c,B2,G.bases[1]); base(c,B3,G.bases[2]); homeplate(c);
+    bigBatter(c,SW/2-44,210,o.batter||'#1d4ed8','#0b2a6b',1);
     if(o.ball) ball(c,o.ball.x,o.ball.y,o.ball.r); }
   function hitAnim(c, type, batC, cb){
     const bl=document.getElementById('kboBelow');
     if(bl) bl.innerHTML=`<div class="kbo-note kbo-hit">${type==='hr'?'홈런!! 💥':HITNAME[type]+'! 🙌'}</div>`;
-    const D = type==='hr'?1.18 : type==='triple'?0.92 : type==='double'?0.74 : 0.52;
-    const dir=(Math.random()*0.6-0.3), sx=SW/2, sy=SH-24; let t=0;
-    (function fr(){ t+=0.04;
-      const x=sx+dir*SW*0.55*t, y=sy-Math.sin(Math.min(1,t)*Math.PI)*D*(SH+20);
-      drawHitView(c,{batter:batC, ball:{x,y,r:Math.max(2,5-t*3)}});
-      if(t<1){ G.raf=requestAnimationFrame(fr);} else { stopAnim(); setTimeout(cb,450); } })(); }
+    const D = type==='hr'?1.02 : type==='triple'?0.82 : type==='double'?0.66 : 0.46;
+    const dir=(Math.random()*0.7-0.35), sx=HB[0]-6, sy=HB[1]-6; let t=0;
+    (function fr(){ t+=0.035;
+      const x=sx+dir*SW*0.6*t, y=sy-Math.sin(Math.min(1,t)*Math.PI)*D*(SH+30);
+      drawHitView(c,{batter:batC, ball:{x,y,r:Math.max(2.5,7-t*4)}});
+      if(t<1){ G.raf=requestAnimationFrame(fr);} else { stopAnim(); setTimeout(cb,480); } })(); }
   function makeCanvas(act){
     act.innerHTML = `<canvas class="kbo-canvas" width="${SW}" height="${SH}"></canvas><div class="kbo-below" id="kboBelow"></div>`;
     const cv=act.querySelector('.kbo-canvas'); return { ctx:cv.getContext('2d'), cv, below:act.querySelector('#kboBelow') }; }
