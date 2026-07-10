@@ -1836,37 +1836,92 @@ function startKbo(el){
       </div>
     </div>`;
   }
+  // ===== 90년대풍 픽셀 그래픽 =====
+  const SW=220, SH=168, TARGET_P=0.9;
+  const stepOf = k => k==='ff'?0.020 : k==='sl'?0.016 : k==='ch'?0.013 : 0.011;
+  const px=(c,x,y,w,h,col)=>{ c.fillStyle=col; c.fillRect(x|0,y|0,Math.ceil(w),Math.ceil(h)); };
+  function drawBatter(c,x,y,col,swing){ const skin='#f2c79a';
+    px(c,x-4,y,3,8,'#e5e7eb'); px(c,x+2,y,3,8,'#e5e7eb');   // 다리
+    px(c,x-5,y-10,11,10,col);                                // 몸통(유니폼)
+    px(c,x-2,y-16,6,6,skin);                                 // 머리
+    px(c,x-3,y-18,8,3,col);                                  // 모자
+    c.save(); c.translate(x+5,y-8); c.rotate(-1.4+ (swing||0)*1.9);
+    px(c,0,-1,16,3,'#a5682a'); c.restore();                  // 배트
+    px(c,x+4,y-9,3,3,skin); }
+  function drawPitcher(c,x,y,col){ const skin='#f2c79a';
+    px(c,x-3,y,2,6,'#e5e7eb'); px(c,x+1,y,2,6,'#e5e7eb');
+    px(c,x-4,y-7,8,7,col); px(c,x-2,y-12,5,5,skin); px(c,x-3,y-13,7,2,col); }
+  function drawCatcher(c,x,y){ px(c,x-4,y-6,9,8,'#475569'); px(c,x-2,y-11,5,5,'#f2c79a'); px(c,x-4,y-12,9,3,'#334155'); }
+  function drawScene(c,o){ o=o||{};
+    px(c,0,0,SW,26,'#26325c');
+    for(let i=0;i<SW;i+=5) px(c,i,8,3,12, (i/5)%2?'#3a4a80':'#313f6e');   // 관중
+    px(c,0,24,SW,SH-24,'#3fa63f');
+    for(let y=34;y<SH;y+=14) px(c,0,y,SW,7,'#379b37');                    // 잔디 줄무늬
+    c.save(); c.translate(SW/2,92); c.rotate(Math.PI/4);
+    px(c,-44,-44,88,88,'#c98a52'); px(c,-28,-28,56,56,'#3fa63f'); c.restore();
+    px(c,SW/2-10,56,20,9,'#c98a52');                                      // 마운드
+    const pts=[[SW/2+38,92],[SW/2,54],[SW/2-38,92]];                      // 1·2·3루
+    pts.forEach((p,i)=> px(c,p[0]-4,p[1]-4,8,8, o.bases&&o.bases[i]?'#facc15':'#f8fafc'));
+    px(c,SW/2-5,128,10,6,'#f8fafc');                                      // 홈플레이트
+    drawPitcher(c,SW/2,50,o.pitcher||'#1e293b');
+    drawCatcher(c,SW/2,142);
+    drawBatter(c,SW/2-13,122,o.batter||'#c30452',o.swing||0);
+    if(o.ball){ const s=Math.max(3,3+o.ball.z*4);
+      px(c,o.ball.x-s/2-1,o.ball.y-s/2-1,s+2,s+2,'#0b1220'); px(c,o.ball.x-s/2,o.ball.y-s/2,s,s,'#ffffff'); } }
+  const ballAt = p => ({ x: SW/2 + (SW/2-13 - SW/2)*p*0.6, y: 60 + (122-60)*p, z:p });
+  function makeCanvas(act){
+    act.innerHTML = `<canvas class="kbo-canvas" width="${SW}" height="${SH}"></canvas><div class="kbo-below" id="kboBelow"></div>`;
+    const cv=act.querySelector('.kbo-canvas'); return { ctx:cv.getContext('2d'), cv, below:act.querySelector('#kboBelow') }; }
+
   function batUI(act){
     const pitch = KBO_PITCHES[Math.floor(Math.random()*KBO_PITCHES.length)];
     const course = Math.random()<0.6 ? 'zone':'chase';
-    act.innerHTML = `<div class="kbo-atbat">
-      <div class="kbo-note">투수 ${pitch.name} — 초록칸에서 스윙하면 홈런!</div>
-      <div class="kbo-meter"><div class="kbo-marker" id="kboMark"></div></div>
-      <div class="kbo-btns"><button id="kboSwing" class="prime">🏏 스윙</button><button id="kboTake">지켜보기</button></div>
-    </div>`;
-    const mark = act.querySelector('#kboMark');
-    let pos=0, dir=1, swung=false;
-    (function loop(){ if (!mark.isConnected||swung) return;
-      pos+=dir*pitch.spd; if (pos>=100){pos=100;dir=-1;} else if (pos<=0){pos=0;dir=1;}
-      mark.style.left=pos+'%'; G.raf=requestAnimationFrame(loop); })();
-    act.querySelector('#kboSwing').onclick=()=>{ if(swung)return; swung=true; stopAnim();
-      const d=Math.abs(pos-50);
-      outcome(d<=5?'hr':d<=12?'single':d<=20?'foul':d<=30?'out':'strike'); };
-    act.querySelector('#kboTake').onclick=()=>{ if(swung)return; swung=true; stopAnim();
-      outcome(course==='zone'?'strike':'ball'); };
+    const { ctx, cv, below } = makeCanvas(act);
+    const myC=KBO_TEAMS[G.away].c1, opC=KBO_TEAMS[G.home].c1;
+    below.innerHTML = `<div class="kbo-note">${pitch.name}! 공이 홈플레이트에 올 때 스윙</div>
+      <div class="kbo-btns"><button id="kboSwing" class="prime">🏏 스윙</button><button id="kboTake">지켜보기</button></div>`;
+    let p=0, swung=false, done=false; const step=stepOf(pitch.key);
+    const paint=(ball,swing)=> drawScene(ctx,{batter:myC,pitcher:opC,bases:G.bases,ball,swing});
+    paint(ballAt(0),0);
+    (function frame(){ if(done||swung) return;
+      p+=step; paint(ballAt(Math.min(p,1)),0);
+      if(p>=1){ done=true; stopAnim(); return outcome(course==='zone'?'strike':'ball'); }
+      G.raf=requestAnimationFrame(frame); })();
+    const doSwing=()=>{ if(swung||done)return; swung=true; stopAnim();
+      const err=Math.abs(p-TARGET_P);
+      const type = err<=0.04?'hr':err<=0.09?'single':err<=0.15?'foul':err<=0.22?'out':'strike';
+      const hit=(type==='hr'||type==='single'); const b0=ballAt(Math.min(p,1)); let sw=0;
+      (function sa(){ sw+=0.2;
+        const bx = hit ? b0.x + (type==='hr'?4:-34)*sw : b0.x;
+        const by = hit ? b0.y - (type==='hr'?95:22)*sw : b0.y+2*sw;
+        paint({x:bx,y:by,z:hit?Math.max(0,1-sw):1}, Math.min(1,sw));
+        if(sw<1){ G.raf=requestAnimationFrame(sa); } else { done=true; stopAnim(); setTimeout(()=>outcome(type),160); } })(); };
+    below.querySelector('#kboSwing').onclick=doSwing;
+    cv.onclick=doSwing;
+    below.querySelector('#kboTake').onclick=()=>{ if(swung||done)return; done=true; stopAnim(); outcome(course==='zone'?'strike':'ball'); };
   }
+
   function pitchUI(act){
     let course='zone';
-    act.innerHTML = `<div class="kbo-pitch">
-      <div class="kbo-note">${KBO_TEAMS[G.home].name} 타석 — 코스와 구종을 골라 던지세요</div>
+    const { ctx, below } = makeCanvas(act);
+    const batC=KBO_TEAMS[G.home].c1, pitC=KBO_TEAMS[G.away].c1;
+    drawScene(ctx,{batter:batC,pitcher:pitC,bases:G.bases,ball:null,swing:0});
+    below.innerHTML = `<div class="kbo-note">${KBO_TEAMS[G.home].name} 타석 — 코스·구종 선택</div>
       <div class="kbo-course"><button data-c="zone" class="on">스트라이크존</button><button data-c="chase">유인구(볼)</button></div>
-      <div class="kbo-pbtns">${KBO_PITCHES.map(p=>`<button data-k="${p.key}">${p.name}</button>`).join('')}</div>
-    </div>`;
-    act.querySelectorAll('.kbo-course button').forEach(b=> b.onclick=()=>{ course=b.dataset.c;
-      act.querySelectorAll('.kbo-course button').forEach(x=>x.classList.toggle('on',x===b)); });
-    act.querySelectorAll('.kbo-pbtns button').forEach(b=> b.onclick=()=>{
-      act.querySelectorAll('.kbo-pbtns button').forEach(x=>x.disabled=true);
-      outcome(cpuBatResult(b.dataset.k, course)); });
+      <div class="kbo-pbtns">${KBO_PITCHES.map(p=>`<button data-k="${p.key}">${p.name}</button>`).join('')}</div>`;
+    below.querySelectorAll('.kbo-course button').forEach(b=> b.onclick=()=>{ course=b.dataset.c;
+      below.querySelectorAll('.kbo-course button').forEach(x=>x.classList.toggle('on',x===b)); });
+    below.querySelectorAll('.kbo-pbtns button').forEach(b=> b.onclick=()=>{
+      below.querySelectorAll('.kbo-pbtns button, .kbo-course button').forEach(x=>x.disabled=true);
+      const res=cpuBatResult(b.dataset.k, course); const step=stepOf(b.dataset.k);
+      const swings = (res==='hr'||res==='single'||res==='foul'||res==='out') || (res==='strike'&&Math.random()<0.6);
+      const hit=(res==='hr'||res==='single'); let p=0;
+      (function fr(){ p+=step;
+        let sw = swings && p>0.78 ? Math.min(1,(p-0.78)/0.22) : 0;
+        let ball=ballAt(Math.min(p,1));
+        if(hit && p>=1){ ball={x:ballAt(1).x+(res==='hr'?4:-30), y:ballAt(1).y-(res==='hr'?70:18), z:0.3}; }
+        drawScene(ctx,{batter:batC,pitcher:pitC,bases:G.bases,ball,swing:sw});
+        if(p<1){ G.raf=requestAnimationFrame(fr); } else { stopAnim(); setTimeout(()=>outcome(res),220); } })(); });
   }
   function render(){
     stopAnim();
