@@ -198,6 +198,8 @@ const GAMES = [
     fmtStat: () => '자유롭게 붓칠해요', start: startBrush },
   { id: 'roulette', name: '룰렛', emoji: '🎡', color: '#f43f5e', best: 'high',
     fmtStat: () => '돌려돌려 룰렛~', start: startRoulette },
+  { id: 'kbo', name: '프로야구', emoji: '🏟️', color: '#22c55e', best: 'high',
+    fmtStat: s => s ? `${s.plays}경기·${s.wins}승 · 최다 ${s.best || 0}점` : '아직 기록 없음', start: startKbo },
 ];
 // 오목 난이도(급수) — 기록은 급수별로 따로 누적/순위
 const OMOK_LEVELS = [
@@ -255,7 +257,7 @@ function boardGames() {
 // 홈 화면 카테고리 분류
 const HUB_CATEGORIES = [
   { label: '🎨 자유',  ids: ['color', 'brush', 'roulette'] },
-  { label: '♟️ 보드',  ids: ['omok', 'janggi', 'chess', 'ttt', 'baseball', 'spot'] },
+  { label: '♟️ 보드',  ids: ['omok', 'janggi', 'chess', 'ttt', 'baseball', 'kbo', 'spot'] },
   { label: '🕹️ 레트로', ids: ['timer10', 'rps', 'guess'] },
   { label: '🧠 퀴즈',  ids: ['flags', 'capital', 'mapq'] },
 ];
@@ -1739,5 +1741,165 @@ async function bootstrap() {
   await loadInitial();
   if (!getCurrentUser()) showReg();
   renderHub();
+}
+
+// ── 미니게임: 프로야구 (KBO 도시팀) ──────────────────────
+// 팀 선택(유저=원정/선공) → 1회초~9회말. 타격=타이밍 스윙, 수비=구종·코스 선택.
+const KBO_TEAMS = [
+  { name:'서울 LG',   c1:'#c30452', c2:'#ffffff' },
+  { name:'서울 두산', c1:'#12173f', c2:'#ffffff' },
+  { name:'서울 키움', c1:'#68222b', c2:'#c8a96b' },
+  { name:'인천 SSG',  c1:'#ce0e2d', c2:'#f5c518' },
+  { name:'수원 KT',   c1:'#2b2b2b', c2:'#e01f26' },
+  { name:'대전 한화', c1:'#fc4e00', c2:'#111111' },
+  { name:'대구 삼성', c1:'#0a4da2', c2:'#c9d2da' },
+  { name:'부산 롯데', c1:'#0a2856', c2:'#d2001c' },
+  { name:'광주 KIA',  c1:'#ea0029', c2:'#111111' },
+  { name:'창원 NC',   c1:'#1d467f', c2:'#a99274' },
+];
+const KBO_PITCHES = [
+  { key:'ff', name:'직구',    spd:2.7 },
+  { key:'sl', name:'슬라이더', spd:2.05 },
+  { key:'cu', name:'커브',    spd:1.5 },
+  { key:'ch', name:'체인지업', spd:1.75 },
+];
+function startKbo(el){
+  const G = { away:0, home:1, inning:1, half:0, outs:0, b:0, s:0, bases:[false,false,false],
+              rA:0, rH:0, over:false, raf:null, msg:'' };
+  const stopAnim = ()=>{ if (G.raf){ cancelAnimationFrame(G.raf); G.raf=null; } };
+  const battingIsUser = ()=> G.half===0;             // 유저=원정: 초 공격 / 말 수비
+  const battingTeam   = ()=> G.half===0 ? G.away : G.home;
+  const scoreRun = (n)=>{ if (G.half===0) G.rA+=n; else G.rH+=n; };
+  const resetCount = ()=>{ G.b=0; G.s=0; };
+  function advanceHit(){ let r=0; if (G.bases[2]) r++; G.bases[2]=G.bases[1]; G.bases[1]=G.bases[0]; G.bases[0]=true; scoreRun(r); return r; }
+  function advanceHR(){ let r=1; G.bases.forEach(x=>{ if(x) r++; }); G.bases=[false,false,false]; scoreRun(r); return r; }
+  function advanceWalk(){ let r=0;
+    if (G.bases[0]&&G.bases[1]&&G.bases[2]) r++;
+    if (G.bases[0]&&G.bases[1]) G.bases[2]=true;
+    if (G.bases[0]) G.bases[1]=true;
+    G.bases[0]=true; scoreRun(r); return r; }
+
+  function outcome(type){
+    if (type==='ball'){ G.b++; if (G.b>=4){ const r=advanceWalk(); G.msg='볼넷! 출루'+(r?` (${r}점)`:''); resetCount(); return afterPlay(); } G.msg='볼'; }
+    else if (type==='strike'){ G.s++; if (G.s>=3){ G.outs++; G.msg='삼진 아웃! ⚾'; resetCount(); return afterOut(); } G.msg='스트라이크'; }
+    else if (type==='foul'){ if (G.s<2) G.s++; G.msg='파울'; }
+    else if (type==='out'){ G.outs++; G.msg='범타 아웃!'; resetCount(); return afterOut(); }
+    else if (type==='single'){ const r=advanceHit(); G.msg='안타! 🙌'+(r?` ${r}점`:''); resetCount(); return afterPlay(); }
+    else if (type==='hr'){ const r=advanceHR(); G.msg=`홈런!! 💥 ${r}점`; resetCount(); return afterPlay(); }
+    render();
+  }
+  function afterOut(){ if (G.outs>=3) endHalf(); else render(); }
+  function afterPlay(){ if (G.half===1 && G.inning>=9 && G.rH>G.rA) return gameOver(); render(); }
+  function endHalf(){
+    G.outs=0; resetCount(); G.bases=[false,false,false];
+    if (G.half===0){ if (G.inning>=9 && G.rH>G.rA) return gameOver(); G.half=1; }
+    else { if (G.inning>=9 && G.rA!==G.rH) return gameOver(); if (G.inning>=12) return gameOver(); G.inning++; G.half=0; }
+    G.msg = `${G.inning}회 ${G.half===0?'초':'말'} — ${KBO_TEAMS[battingTeam()].name} 공격`;
+    render();
+  }
+  function gameOver(){ G.over=true; stopAnim();
+    const res = G.rA>G.rH ? 'win' : (G.rA<G.rH ? 'loss' : 'draw');
+    recordStat('kbo', { result:res, best:G.rA }); render(); }
+
+  function weighted(w){ const ks=Object.keys(w); let t=0; ks.forEach(k=>t+=w[k]); let x=Math.random()*t;
+    for (const k of ks){ x-=w[k]; if (x<0) return k; } return ks[0]; }
+  function cpuBatResult(pitchKey, course){
+    const breaking = pitchKey!=='ff';
+    if (course==='zone'){
+      if (Math.random()>0.78) return 'strike';
+      return weighted(breaking ? {hr:4,single:16,foul:15,out:40,strike:25} : {hr:8,single:22,foul:15,out:35,strike:20});
+    }
+    if (Math.random()>0.33) return 'ball';
+    return weighted({hr:1,single:8,foul:18,out:25,strike:48});
+  }
+
+  function diamond(){
+    return `<svg class="kbo-diamond" viewBox="0 0 100 100" aria-label="주자">
+      <polygon points="50,10 90,50 50,90 10,50" fill="none" stroke="#94a3b8" stroke-width="2"/>
+      <rect class="b ${G.bases[1]?'on':''}" x="40" y="6"  width="20" height="20" transform="rotate(45 50 16)"/>
+      <rect class="b ${G.bases[0]?'on':''}" x="76" y="40" width="20" height="20" transform="rotate(45 86 50)"/>
+      <rect class="b ${G.bases[2]?'on':''}" x="4"  y="40" width="20" height="20" transform="rotate(45 14 50)"/>
+    </svg>`;
+  }
+  function scoreboard(){
+    const A=KBO_TEAMS[G.away], H=KBO_TEAMS[G.home];
+    const dots=(n,on)=>Array.from({length:n},(_,i)=>`<i class="${i<on?'on':''}"></i>`).join('');
+    return `<div class="kbo-board">
+      <div class="kbo-teams">
+        <div class="kbo-trow ${G.half===0?'bat':''}"><span class="kbo-badge" style="background:${A.c1};color:${A.c2}">원정</span><b>${escapeHtml(A.name)}</b><span class="kbo-run">${G.rA}</span></div>
+        <div class="kbo-trow ${G.half===1?'bat':''}"><span class="kbo-badge" style="background:${H.c1};color:${H.c2}">홈</span><b>${escapeHtml(H.name)}</b><span class="kbo-run">${G.rH}</span></div>
+      </div>
+      <div class="kbo-info">
+        <div class="kbo-inn">${G.inning}회 ${G.half===0?'▲초':'▼말'}</div>
+        ${diamond()}
+        <div class="kbo-count"><span>B<div class="kbo-dots b">${dots(3,G.b)}</div></span><span>S<div class="kbo-dots s">${dots(2,G.s)}</div></span><span>O<div class="kbo-dots o">${dots(2,G.outs)}</div></span></div>
+      </div>
+    </div>`;
+  }
+  function batUI(act){
+    const pitch = KBO_PITCHES[Math.floor(Math.random()*KBO_PITCHES.length)];
+    const course = Math.random()<0.6 ? 'zone':'chase';
+    act.innerHTML = `<div class="kbo-atbat">
+      <div class="kbo-note">투수 ${pitch.name} — 초록칸에서 스윙하면 홈런!</div>
+      <div class="kbo-meter"><div class="kbo-marker" id="kboMark"></div></div>
+      <div class="kbo-btns"><button id="kboSwing" class="prime">🏏 스윙</button><button id="kboTake">지켜보기</button></div>
+    </div>`;
+    const mark = act.querySelector('#kboMark');
+    let pos=0, dir=1, swung=false;
+    (function loop(){ if (!mark.isConnected||swung) return;
+      pos+=dir*pitch.spd; if (pos>=100){pos=100;dir=-1;} else if (pos<=0){pos=0;dir=1;}
+      mark.style.left=pos+'%'; G.raf=requestAnimationFrame(loop); })();
+    act.querySelector('#kboSwing').onclick=()=>{ if(swung)return; swung=true; stopAnim();
+      const d=Math.abs(pos-50);
+      outcome(d<=5?'hr':d<=12?'single':d<=20?'foul':d<=30?'out':'strike'); };
+    act.querySelector('#kboTake').onclick=()=>{ if(swung)return; swung=true; stopAnim();
+      outcome(course==='zone'?'strike':'ball'); };
+  }
+  function pitchUI(act){
+    let course='zone';
+    act.innerHTML = `<div class="kbo-pitch">
+      <div class="kbo-note">${KBO_TEAMS[G.home].name} 타석 — 코스와 구종을 골라 던지세요</div>
+      <div class="kbo-course"><button data-c="zone" class="on">스트라이크존</button><button data-c="chase">유인구(볼)</button></div>
+      <div class="kbo-pbtns">${KBO_PITCHES.map(p=>`<button data-k="${p.key}">${p.name}</button>`).join('')}</div>
+    </div>`;
+    act.querySelectorAll('.kbo-course button').forEach(b=> b.onclick=()=>{ course=b.dataset.c;
+      act.querySelectorAll('.kbo-course button').forEach(x=>x.classList.toggle('on',x===b)); });
+    act.querySelectorAll('.kbo-pbtns button').forEach(b=> b.onclick=()=>{
+      act.querySelectorAll('.kbo-pbtns button').forEach(x=>x.disabled=true);
+      outcome(cpuBatResult(b.dataset.k, course)); });
+  }
+  function render(){
+    stopAnim();
+    if (G.over){
+      el.innerHTML = `<div class="mg kbo">${scoreboard()}
+        <div class="kbo-final">${G.rA>G.rH?'🎉 승리!':G.rA<G.rH?'😢 패배':'🤝 무승부'}<br>
+          ${escapeHtml(KBO_TEAMS[G.away].name)} ${G.rA} : ${G.rH} ${escapeHtml(KBO_TEAMS[G.home].name)}</div>
+        <button class="kbo-again" id="kboAgain">다시하기</button></div>`;
+      el.querySelector('#kboAgain').onclick = selectScreen;
+      return;
+    }
+    el.innerHTML = `<div class="mg kbo">${scoreboard()}
+      <div class="kbo-msg">${escapeHtml(G.msg||'')}</div>
+      <div class="kbo-action" id="kboAct"></div></div>`;
+    const act = el.querySelector('#kboAct');
+    if (battingIsUser()) batUI(act); else pitchUI(act);
+  }
+  function selectScreen(){
+    stopAnim();
+    Object.assign(G, { away:0, home:1, inning:1, half:0, outs:0, b:0, s:0, bases:[false,false,false], rA:0, rH:0, over:false, msg:'' });
+    el.innerHTML = `<div class="mg kbo">
+      <div class="kbo-msg">응원할 팀을 골라요 (선공·원정)</div>
+      <div class="kbo-teamsel">${KBO_TEAMS.map((t,i)=>
+        `<button data-i="${i}" style="--tc:${t.c1};--tc2:${t.c2}"><span class="kbo-cap"></span>${escapeHtml(t.name)}</button>`).join('')}</div>
+      <div class="kbo-note">3볼 2스트라이크·3아웃 · 1회초~9회말 · 타격은 타이밍 스윙, 수비는 구종 선택</div>
+    </div>`;
+    el.querySelectorAll('.kbo-teamsel button').forEach(b=> b.onclick=()=>{
+      G.away=+b.dataset.i;
+      do { G.home=Math.floor(Math.random()*KBO_TEAMS.length); } while (G.home===G.away);
+      G.msg=`플레이볼! 1회초 — ${KBO_TEAMS[G.away].name} 공격`;
+      render();
+    });
+  }
+  selectScreen();
 }
 document.addEventListener('DOMContentLoaded', bootstrap);
