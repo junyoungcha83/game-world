@@ -2088,8 +2088,9 @@ function startArchery(el){
   const OPP=[{n:'일본',f:'🇯🇵'},{n:'스페인',f:'🇪🇸'},{n:'호주',f:'🇦🇺'},{n:'프랑스',f:'🇫🇷'},
              {n:'우크라이나',f:'🇺🇦'},{n:'핀란드',f:'🇫🇮'},{n:'러시아',f:'🇷🇺'},{n:'중국',f:'🇨🇳'},
              {n:'이탈리아',f:'🇮🇹'},{n:'미국',f:'🇺🇸'}];
-  const AGES={'차준영':44,'차승호':12,'차승아':7};
-  const u=getCurrentUser(); const uname=(u&&u.name)?u.name:'선수';
+  const AGES={'준영':44,'승호':12,'승아':7};
+  const u=getCurrentUser(); let uname=(u&&u.name)?u.name:'선수';
+  for(const g of Object.keys(AGES)){ if(uname.endsWith(g)){ uname=g; break; } }   // 성 제거 → 준영/승호/승아
   const age=(AGES[uname]!=null)?AGES[uname]:'-';
 
   const G={ level:1, arrow:0, userScores:[], userMarks:[], cpuScores:[], cpuMarks:[],
