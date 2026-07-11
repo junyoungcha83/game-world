@@ -2126,30 +2126,31 @@ function startArchery(el){
   }
 
   // ── 조준(준비 꾹 누르기): 처음 5초 천천히 중앙으로, 이후 5초마다 빨라지며 상하좌우 랜덤 ──
+  const AIM_BASE=2.0;                              // 기본 이동속도(레벨0)
   function beginAim(){ if(G.phase!=='ready'||G.over) return;
     G.holdStart=performance.now();
-    const ang=Math.random()*Math.PI*2, rr=R*(0.7+Math.random()*0.5);
-    G.startPos={ x:clamp(cx+Math.cos(ang)*rr), y:clamp(cy+Math.sin(ang)*rr) };
-    G.reticle={ x:G.startPos.x, y:G.startPos.y }; G.wx=null; G.wy=null;
+    const ang=Math.random()*Math.PI*2, rr=R*(0.5+Math.random()*0.42);   // 과녁 안 랜덤 위치에서 시작
+    G.reticle={ x:clamp(cx+Math.cos(ang)*rr), y:clamp(cy+Math.sin(ang)*rr) };
+    const a2=Math.random()*Math.PI*2; G.vx=Math.cos(a2)*AIM_BASE; G.vy=Math.sin(a2)*AIM_BASE;
     G.phase='aim'; G.aiming=true; setMsg('조준 중… 손을 떼면 발사 🏹');
     loop();
   }
   function loop(){ if(G.phase!=='aim'){ return; }
     if(G.cv && !document.body.contains(G.cv)){ stopAnim(); return; }   // 화면 이탈 시 정리
     const t=(performance.now()-G.holdStart)/1000;
-    if(t<=5){                                                          // 1단계: 천천히 중앙으로
-      const p=t/5, e=p*p*(3-2*p), j=1.5+p*2.5;
-      const bx=G.startPos.x+(cx-G.startPos.x)*e, by=G.startPos.y+(cy-G.startPos.y)*e;
-      G.reticle.x=clamp(bx+(Math.random()-0.5)*j*2); G.reticle.y=clamp(by+(Math.random()-0.5)*j*2);
-    } else {                                                           // 2단계: 5초마다 빨라지는 랜덤 흔들림
-      const lv=Math.floor(t/5);
-      if(G.wx==null){ G.wx=G.reticle.x-cx; G.wy=G.reticle.y-cy; }
-      const speed=1.1*lv;
-      G.wx+=(Math.random()-0.5)*speed*3.4; G.wy+=(Math.random()-0.5)*speed*3.4;
-      const cap=Math.min(R*0.98, R*0.16*lv+10);
-      G.wx=Math.max(-cap,Math.min(cap,G.wx)); G.wy=Math.max(-cap,Math.min(cap,G.wy));
-      G.reticle.x=cx+G.wx; G.reticle.y=cy+G.wy;
-    }
+    const level=Math.floor(t/5);                                       // 5초마다 단계 상승
+    const spd=1+level*0.55;                                            // 속도 순차 가속
+    const turn=1.3;
+    G.vx+=(Math.random()-0.5)*turn; G.vy+=(Math.random()-0.5)*turn;    // 방향을 계속 요동 → 지그재그
+    if(Math.random()<0.06) G.vx=-G.vx;                                 // 가끔 급반전(뒤죽박죽)
+    if(Math.random()<0.06) G.vy=-G.vy;
+    const mag=Math.hypot(G.vx,G.vy)||1;                                // 속도 크기는 일정(방향만 요동)
+    G.vx=G.vx/mag*AIM_BASE; G.vy=G.vy/mag*AIM_BASE;
+    let nx=G.reticle.x+G.vx*spd, ny=G.reticle.y+G.vy*spd;
+    const Rlim=R*0.94, dx=nx-cx, dy=ny-cy, dd=Math.hypot(dx,dy)||1;    // 과녁 경계에서 반사
+    if(dd>Rlim){ const nX=dx/dd, nY=dy/dd, dot=G.vx*nX+G.vy*nY;
+      G.vx-=2*dot*nX; G.vy-=2*dot*nY; nx=cx+nX*Rlim; ny=cy+nY*Rlim; }
+    G.reticle.x=clamp(nx); G.reticle.y=clamp(ny);
     drawScene(); G.raf=requestAnimationFrame(loop);
   }
   function endAim(){ if(G.phase!=='aim') return; stopAnim(); G.aiming=false; fire(G.reticle.x,G.reticle.y); }
