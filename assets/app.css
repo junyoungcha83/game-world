@@ -393,20 +393,22 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 
 /* 🎯 양궁 */
 .arch { width:100%; gap:12px; }
-.arch-main { display:flex; gap:12px; width:100%; align-items:stretch; }
-.arch-profile { flex:0 0 106px; background:var(--bg2); border:1px solid var(--border); border-radius:14px;
-  padding:12px 10px; display:flex; flex-direction:column; gap:8px; }
-.arch-flag { font-size:2rem; text-align:center; line-height:1; }
-.arch-name { font-weight:800; text-align:center; font-size:.98rem; word-break:keep-all; }
-.arch-profile dl { margin:0; display:flex; flex-direction:column; gap:6px; }
-.arch-profile dl div { display:flex; justify-content:space-between; gap:6px; font-size:.74rem; }
-.arch-profile dt { color:var(--muted); }
-.arch-profile dd { margin:0; font-weight:700; }
-.arch-vs { margin-top:auto; text-align:center; font-size:.82rem; font-weight:800; color:var(--primary2);
-  border-top:1px solid var(--border); padding-top:8px; }
+.arch-players { display:flex; gap:8px; width:100%; align-items:stretch; }
+.arch-players .arch-profile { flex:1 1 0; }
+.arch-vsbadge { align-self:center; flex:none; font-weight:800; font-size:.9rem; color:var(--muted); }
+.arch-profile { background:var(--bg2); border:1px solid var(--border); border-radius:14px;
+  padding:10px; display:flex; flex-direction:column; gap:6px; min-width:0; }
+.arch-flag { font-size:1.7rem; text-align:center; line-height:1; }
+.arch-name { font-weight:800; text-align:center; font-size:.98rem; overflow-wrap:anywhere; }
+.arch-profile dl { margin:0; display:flex; flex-direction:column; gap:5px; }
+.arch-profile dl div { display:flex; justify-content:space-between; gap:8px; font-size:.76rem; }
+.arch-profile dt { color:var(--muted); flex:none; }
+.arch-profile dd { margin:0; font-weight:700; text-align:right; overflow-wrap:anywhere; }
+.arch-vs { margin-top:auto; text-align:center; font-size:.78rem; font-weight:800; color:var(--primary2);
+  border-top:1px solid var(--border); padding-top:7px; }
 .arch-vs span { color:var(--muted); font-weight:600; font-size:.72rem; }
-.arch-stage { flex:1; display:flex; align-items:center; justify-content:center; min-width:0; }
-.arch-canvas { width:100%; max-width:300px; aspect-ratio:1/1; display:block; border-radius:14px;
+.arch-stage { width:100%; display:flex; align-items:center; justify-content:center; }
+.arch-canvas { width:100%; min-width:0; max-width:340px; aspect-ratio:1/1; display:block; border-radius:14px;
   background:#0f1630; border:3px solid #0f172a; box-shadow:0 4px 14px rgba(0,0,0,.25);
   touch-action:none; -webkit-user-select:none; user-select:none; }
 .arch-hud { width:100%; text-align:center; display:flex; flex-direction:column; gap:4px; }
@@ -423,4 +425,5 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .arch-controls .arch-btn { background:var(--bg2); color:var(--text); border:1px solid var(--border);
   border-radius:14px; padding:14px 20px; font-weight:800; cursor:pointer; }
 .arch-controls .arch-btn.pri { background:var(--primary); color:#fff; border:none; }
-@media (max-width:380px){ .arch-profile { flex-basis:92px; padding:10px 8px; } .arch-profile dl div { font-size:.68rem; } }
+@media (max-width:380px){ .arch-profile { padding:8px 7px; } .arch-flag { font-size:1.5rem; }
+  .arch-name { font-size:.9rem; } .arch-profile dl div { font-size:.7rem; } }
