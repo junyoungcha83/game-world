@@ -369,18 +369,18 @@ body.playing .app-main { overscroll-behavior-y: contain; }
   background:#4fb857; border:3px solid #0f172a; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.25); }
 .kbo-below { display:flex; flex-direction:column; gap:10px; margin-top:10px; }
 /* 팀선택 화면 배경 */
-.kbo-select { position:relative; overflow:hidden; border-color:#0f172a;
-  background:#0b1020 url('kbo-bg.jpg') center/cover no-repeat; min-height:380px; justify-content:flex-start; }
-.kbo-select::before { content:''; position:absolute; inset:0;
-  background:linear-gradient(180deg, rgba(8,12,20,.32) 0%, rgba(8,12,20,.55) 55%, rgba(8,12,20,.82) 100%); }
-.kbo-select > * { position:relative; z-index:1; }
-.kbo-select .kbo-msg { color:#fff; font-weight:800; text-shadow:0 2px 10px rgba(0,0,0,.85); }
-.kbo-select .kbo-teamsel { grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; width:100%; margin-top:auto; }
+.kbo-select { border-color:#0f172a; justify-content:flex-start; gap:14px; min-height:470px; }
+.kbo-banner { position:relative; width:100%; height:240px; border-radius:12px; overflow:hidden; flex:none;
+  background:#0b1020 url('kbo-bg.jpg') center 20%/cover no-repeat; }
+.kbo-banner::after { content:''; position:absolute; inset:0;
+  background:linear-gradient(180deg, rgba(8,12,20,.10) 0%, rgba(8,12,20,0) 45%, rgba(8,12,20,.78) 100%); }
+.kbo-banner .kbo-msg { position:absolute; left:12px; right:12px; bottom:10px; margin:0;
+  color:#fff; text-shadow:0 2px 10px rgba(0,0,0,.9); }
+.kbo-select .kbo-teamsel { grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; width:100%; }
 .kbo-select .kbo-teamsel button { min-width:0; flex-direction:column; gap:5px; padding:8px 3px; font-size:.72rem;
   text-align:center; justify-content:center; word-break:keep-all; line-height:1.15; }
 .kbo-select .kbo-cap { width:15px; height:15px; box-shadow:inset 0 0 0 2px var(--tc2); }
-.kbo-select .kbo-note { color:#e7ecf6; background:rgba(8,12,20,.5); padding:8px 12px; border-radius:10px;
-  backdrop-filter:blur(2px); }
+.kbo-select .kbo-note { color:var(--muted); }
 @media (max-width:400px){ .kbo-select .kbo-teamsel button { font-size:.64rem; padding:7px 2px; } }
 .kbo-note.kbo-hit { color:#dc2626; font-size:1.15rem; font-weight:800; }
 .kbo-quit { position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center;

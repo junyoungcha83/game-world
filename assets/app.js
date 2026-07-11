@@ -2068,7 +2068,7 @@ function startKbo(el){
     if (gb()) gb().onclick = () => showView('hub');   // 팀선택 화면에선 뒤로가기=허브
     Object.assign(G, { away:0, home:1, inning:1, half:0, outs:0, b:0, s:0, bases:[false,false,false], rA:0, rH:0, over:false, msg:'' });
     el.innerHTML = `<div class="mg kbo kbo-select">
-      <div class="kbo-msg">응원할 팀을 골라요 (선공·원정)</div>
+      <div class="kbo-banner"><div class="kbo-msg">응원할 팀을 골라요 (선공·원정)</div></div>
       <div class="kbo-teamsel">${KBO_TEAMS.map((t,i)=>
         `<button data-i="${i}" style="--tc:${t.c1};--tc2:${t.c2}"><span class="kbo-cap"></span>${escapeHtml(t.name)}</button>`).join('')}</div>
       <div class="kbo-note">3볼 2스트라이크·3아웃 · 1회초~9회말 · 타격은 타이밍 스윙, 수비는 구종 선택</div>
