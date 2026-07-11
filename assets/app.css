@@ -370,13 +370,18 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .kbo-below { display:flex; flex-direction:column; gap:10px; margin-top:10px; }
 /* 팀선택 화면 배경 */
 .kbo-select { position:relative; overflow:hidden; border-color:#0f172a;
-  background:#0b1020 url('kbo-bg.jpg') center/cover no-repeat; min-height:360px; justify-content:center; }
+  background:#0b1020 url('kbo-bg.jpg') center/cover no-repeat; min-height:380px; justify-content:flex-start; }
 .kbo-select::before { content:''; position:absolute; inset:0;
   background:linear-gradient(180deg, rgba(8,12,20,.32) 0%, rgba(8,12,20,.55) 55%, rgba(8,12,20,.82) 100%); }
 .kbo-select > * { position:relative; z-index:1; }
 .kbo-select .kbo-msg { color:#fff; font-weight:800; text-shadow:0 2px 10px rgba(0,0,0,.85); }
+.kbo-select .kbo-teamsel { grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; width:100%; margin-top:auto; }
+.kbo-select .kbo-teamsel button { min-width:0; flex-direction:column; gap:5px; padding:8px 3px; font-size:.72rem;
+  text-align:center; justify-content:center; word-break:keep-all; line-height:1.15; }
+.kbo-select .kbo-cap { width:15px; height:15px; box-shadow:inset 0 0 0 2px var(--tc2); }
 .kbo-select .kbo-note { color:#e7ecf6; background:rgba(8,12,20,.5); padding:8px 12px; border-radius:10px;
   backdrop-filter:blur(2px); }
+@media (max-width:400px){ .kbo-select .kbo-teamsel button { font-size:.64rem; padding:7px 2px; } }
 .kbo-note.kbo-hit { color:#dc2626; font-size:1.15rem; font-weight:800; }
 .kbo-quit { position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center;
   background:rgba(8,12,20,.62); }
