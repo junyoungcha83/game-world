@@ -259,7 +259,8 @@ function boardGames() {
 // 홈 화면 카테고리 분류
 const HUB_CATEGORIES = [
   { label: '🎨 자유',  ids: ['color', 'brush', 'roulette'] },
-  { label: '♟️ 보드',  ids: ['omok', 'janggi', 'chess', 'ttt', 'baseball', 'kbo', 'archery', 'spot'] },
+  { label: '♟️ 보드',  ids: ['omok', 'janggi', 'chess', 'ttt', 'baseball', 'spot'] },
+  { label: '⚾ 스포츠', ids: ['kbo', 'archery'] },
   { label: '🕹️ 레트로', ids: ['timer10', 'rps', 'guess'] },
   { label: '🧠 퀴즈',  ids: ['flags', 'capital', 'mapq'] },
 ];
@@ -2066,7 +2067,7 @@ function startKbo(el){
     stopAnim();
     if (gb()) gb().onclick = () => showView('hub');   // 팀선택 화면에선 뒤로가기=허브
     Object.assign(G, { away:0, home:1, inning:1, half:0, outs:0, b:0, s:0, bases:[false,false,false], rA:0, rH:0, over:false, msg:'' });
-    el.innerHTML = `<div class="mg kbo">
+    el.innerHTML = `<div class="mg kbo kbo-select">
       <div class="kbo-msg">응원할 팀을 골라요 (선공·원정)</div>
       <div class="kbo-teamsel">${KBO_TEAMS.map((t,i)=>
         `<button data-i="${i}" style="--tc:${t.c1};--tc2:${t.c2}"><span class="kbo-cap"></span>${escapeHtml(t.name)}</button>`).join('')}</div>
