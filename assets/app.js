@@ -200,6 +200,8 @@ const GAMES = [
     fmtStat: () => '돌려돌려 룰렛~', start: startRoulette },
   { id: 'kbo', name: '프로야구', emoji: '🏟️', color: '#22c55e', best: 'high',
     fmtStat: s => s ? `${s.plays}경기·${s.wins}승 · 최다 ${s.best || 0}점` : '아직 기록 없음', start: startKbo },
+  { id: 'archery', name: '양궁', emoji: '🎯', color: '#dc2626', best: 'high',
+    fmtStat: s => s ? `${s.plays}경기·${s.wins}승 · 최고 ${s.best || 0}단계 격파` : '아직 기록 없음', start: startArchery },
 ];
 // 오목 난이도(급수) — 기록은 급수별로 따로 누적/순위
 const OMOK_LEVELS = [
@@ -257,7 +259,7 @@ function boardGames() {
 // 홈 화면 카테고리 분류
 const HUB_CATEGORIES = [
   { label: '🎨 자유',  ids: ['color', 'brush', 'roulette'] },
-  { label: '♟️ 보드',  ids: ['omok', 'janggi', 'chess', 'ttt', 'baseball', 'kbo', 'spot'] },
+  { label: '♟️ 보드',  ids: ['omok', 'janggi', 'chess', 'ttt', 'baseball', 'kbo', 'archery', 'spot'] },
   { label: '🕹️ 레트로', ids: ['timer10', 'rps', 'guess'] },
   { label: '🧠 퀴즈',  ids: ['flags', 'capital', 'mapq'] },
 ];
@@ -2079,4 +2081,158 @@ function startKbo(el){
   }
   selectScreen();
 }
+// ══════════════════════════ 🎯 양궁 ══════════════════════════
+function startArchery(el){
+  const SW=300, SH=300, cx=150, cy=150, R=132;
+  const OPP=[{n:'일본',f:'🇯🇵'},{n:'스페인',f:'🇪🇸'},{n:'호주',f:'🇦🇺'},{n:'프랑스',f:'🇫🇷'},
+             {n:'우크라이나',f:'🇺🇦'},{n:'핀란드',f:'🇫🇮'},{n:'러시아',f:'🇷🇺'},{n:'중국',f:'🇨🇳'},
+             {n:'이탈리아',f:'🇮🇹'},{n:'미국',f:'🇺🇸'}];
+  const AGES={'차준영':44,'차승호':12,'차승아':7};
+  const u=getCurrentUser(); const uname=(u&&u.name)?u.name:'선수';
+  const age=(AGES[uname]!=null)?AGES[uname]:'-';
+
+  const G={ level:1, arrow:0, userScores:[], userMarks:[], cpuScores:[], cpuMarks:[],
+            phase:'ready', reticle:null, aiming:false, over:false, msg:'', raf:null, cpuTimer:null,
+            holdStart:0, startPos:null, wx:null, wy:null, ctx:null, cv:null };
+
+  const clamp = v => Math.max(8, Math.min(SW-8, v));
+  const sum = a => a.reduce((x,y)=>x+y,0);
+  const scoreAt = (x,y)=>{ const d=Math.hypot(x-cx,y-cy); if(d>R) return 0; return Math.max(0,10-Math.floor(d/(R/10))); };
+  const stopAnim = ()=>{ if(G.raf){ cancelAnimationFrame(G.raf); G.raf=null; } if(G.cpuTimer){ clearInterval(G.cpuTimer); G.cpuTimer=null; } };
+  function gauss(){ const u1=Math.random()||1e-9, u2=Math.random(); return Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2); }
+  function cpuArrow(level){ let sd=R*(0.52-level*0.043); sd=Math.max(R*0.045,sd);
+    const x=cx+gauss()*sd, y=cy+gauss()*sd; return { x, y, s:scoreAt(x,y) }; }
+
+  // ── 그리기 ──
+  const ringColor = s => s>=9?'#f6d21a' : s>=7?'#e23b3b' : s>=5?'#2b6fd6' : s>=3?'#151b26' : '#eef2f7';
+  function drawHit(c,x,y,col,isUser){ c.save(); c.beginPath(); c.arc(x,y,4.3,0,7); c.fillStyle=col; c.fill();
+    c.lineWidth=1.6; c.strokeStyle=isUser?'#fff':'#374151'; c.stroke(); c.restore(); }
+  function drawReticle(c,x,y){ c.save(); c.strokeStyle='rgba(34,211,238,.95)'; c.lineWidth=2;
+    c.beginPath(); c.arc(x,y,13,0,7); c.stroke(); c.beginPath(); c.arc(x,y,4,0,7); c.stroke();
+    c.beginPath(); c.moveTo(x-18,y); c.lineTo(x-6,y); c.moveTo(x+6,y); c.lineTo(x+18,y);
+    c.moveTo(x,y-18); c.lineTo(x,y-6); c.moveTo(x,y+6); c.lineTo(x,y+18); c.stroke();
+    c.fillStyle='rgba(34,211,238,.95)'; c.beginPath(); c.arc(x,y,1.6,0,7); c.fill(); c.restore(); }
+  function drawScene(){ const c=G.ctx; if(!c) return;
+    c.fillStyle='#0f1630'; c.fillRect(0,0,SW,SH);
+    for(let s=1;s<=10;s++){ const rad=(11-s)/10*R; c.beginPath(); c.arc(cx,cy,rad,0,7); c.fillStyle=ringColor(s); c.fill(); }
+    for(let s=1;s<=10;s++){ const rad=(11-s)/10*R; c.beginPath(); c.arc(cx,cy,rad,0,7);
+      c.lineWidth=1; c.strokeStyle=(s>=3&&s<=4)?'rgba(255,255,255,.45)':'rgba(0,0,0,.28)'; c.stroke(); }
+    c.strokeStyle='rgba(0,0,0,.55)'; c.lineWidth=1;                       // 중앙 X
+    c.beginPath(); c.moveTo(cx-5,cy); c.lineTo(cx+5,cy); c.moveTo(cx,cy-5); c.lineTo(cx,cy+5); c.stroke();
+    for(const m of G.cpuMarks) drawHit(c,clamp(m.x),clamp(m.y),'#c7ccd6',false);
+    for(const m of G.userMarks) drawHit(c,m.x,m.y,'#16a34a',true);
+    if(G.aiming && G.reticle) drawReticle(c,G.reticle.x,G.reticle.y);
+  }
+
+  // ── 조준(준비 꾹 누르기): 처음 5초 천천히 중앙으로, 이후 5초마다 빨라지며 상하좌우 랜덤 ──
+  function beginAim(){ if(G.phase!=='ready'||G.over) return;
+    G.holdStart=performance.now();
+    const ang=Math.random()*Math.PI*2, rr=R*(0.7+Math.random()*0.5);
+    G.startPos={ x:clamp(cx+Math.cos(ang)*rr), y:clamp(cy+Math.sin(ang)*rr) };
+    G.reticle={ x:G.startPos.x, y:G.startPos.y }; G.wx=null; G.wy=null;
+    G.phase='aim'; G.aiming=true; setMsg('조준 중… 손을 떼면 발사 🏹');
+    loop();
+  }
+  function loop(){ if(G.phase!=='aim'){ return; }
+    if(G.cv && !document.body.contains(G.cv)){ stopAnim(); return; }   // 화면 이탈 시 정리
+    const t=(performance.now()-G.holdStart)/1000;
+    if(t<=5){                                                          // 1단계: 천천히 중앙으로
+      const p=t/5, e=p*p*(3-2*p), j=1.5+p*2.5;
+      const bx=G.startPos.x+(cx-G.startPos.x)*e, by=G.startPos.y+(cy-G.startPos.y)*e;
+      G.reticle.x=clamp(bx+(Math.random()-0.5)*j*2); G.reticle.y=clamp(by+(Math.random()-0.5)*j*2);
+    } else {                                                           // 2단계: 5초마다 빨라지는 랜덤 흔들림
+      const lv=Math.floor(t/5);
+      if(G.wx==null){ G.wx=G.reticle.x-cx; G.wy=G.reticle.y-cy; }
+      const speed=1.1*lv;
+      G.wx+=(Math.random()-0.5)*speed*3.4; G.wy+=(Math.random()-0.5)*speed*3.4;
+      const cap=Math.min(R*0.98, R*0.16*lv+10);
+      G.wx=Math.max(-cap,Math.min(cap,G.wx)); G.wy=Math.max(-cap,Math.min(cap,G.wy));
+      G.reticle.x=cx+G.wx; G.reticle.y=cy+G.wy;
+    }
+    drawScene(); G.raf=requestAnimationFrame(loop);
+  }
+  function endAim(){ if(G.phase!=='aim') return; stopAnim(); G.aiming=false; fire(G.reticle.x,G.reticle.y); }
+  function fire(x,y){ const s=scoreAt(x,y);
+    G.userMarks.push({ x:clamp(x), y:clamp(y), s }); G.userScores.push(s); G.arrow++;
+    if(G.arrow>=5){ startCpu(); }
+    else { G.phase='ready'; G.msg=`${s}점! 다음 화살(${G.arrow+1}/5) 준비`; render(); }
+  }
+
+  function startCpu(){ const opp=OPP[G.level-1];
+    G.phase='cpu'; G.msg=`${opp.n} 사격 중…`; render();
+    let i=0;
+    G.cpuTimer=setInterval(()=>{
+      if(i>=5){ stopAnim(); finishMatch(); return; }
+      const m=cpuArrow(G.level); G.cpuMarks.push(m); G.cpuScores.push(m.s);
+      setMsg(`${opp.n} ${i+1}번째 화살 · ${m.s}점`); drawScene(); i++;
+    }, 430);
+  }
+  function finishMatch(){ const ut=sum(G.userScores), ct=sum(G.cpuScores), opp=OPP[G.level-1];
+    let result = ut>ct ? 'win' : (ut<ct ? 'loss' : 'draw');
+    G.result=result; G.over=(result==='win' && G.level>=10);
+    recordStat('archery', result==='win' ? { result:'win', best:G.level } : { result });
+    if(result==='win' && G.level>=10) G.msg=`🏆 ${ut} : ${ct}  세계 제패! 미국까지 꺾은 대한민국 국가대표!`;
+    else if(result==='win') G.msg=`🎯 ${ut} : ${ct}  승리! ${opp.n} 격파 → 다음 상대 ${OPP[G.level].n}`;
+    else if(result==='draw') G.msg=`${ut} : ${ct}  무승부 — 재경기`;
+    else G.msg=`${ut} : ${ct}  아쉬운 패배 — ${opp.n}에게 재도전!`;
+    G.phase='result'; render();
+  }
+  function newMatch(){ G.arrow=0; G.userScores=[]; G.userMarks=[]; G.cpuScores=[]; G.cpuMarks=[];
+    G.phase='ready'; G.aiming=false; G.reticle=null; G.over=false;
+    G.msg=`${G.level}단계 · ${OPP[G.level-1].n} 국가대표와 대결! 준비를 꾹 눌러 조준`; render(); }
+
+  const setMsg = t => { const m=el.querySelector('.arch-msg'); if(m) m.textContent=t; };
+
+  function render(){ const opp=OPP[G.level-1];
+    const ut=sum(G.userScores), ct=sum(G.cpuScores);
+    let controls;
+    if(G.phase==='result'){
+      if(G.over) controls=`<button class="arch-btn pri" data-a="restart">🏆 처음부터</button>`;
+      else if(G.result==='win') controls=`<button class="arch-btn pri" data-a="next">다음 상대 →</button>`;
+      else controls=`<button class="arch-btn pri" data-a="retry">재도전</button><button class="arch-btn" data-a="restart">처음부터</button>`;
+    } else {
+      const dis=G.phase==='cpu'?'disabled':'';
+      controls=`<button class="arch-ready" ${dis}>${G.phase==='cpu'?'상대 사격 중…':'준비 (꾹 눌러 조준)'}</button>`;
+    }
+    el.innerHTML=`<div class="mg arch">
+      <div class="arch-main">
+        <aside class="arch-profile">
+          <div class="arch-flag">🇰🇷</div>
+          <div class="arch-name">${escapeHtml(uname)}</div>
+          <dl>
+            <div><dt>국가</dt><dd>대한민국</dd></div>
+            <div><dt>도시</dt><dd>서울</dd></div>
+            <div><dt>나이</dt><dd>${age}세</dd></div>
+            <div><dt>소속</dt><dd>국가대표</dd></div>
+          </dl>
+          <div class="arch-vs">VS ${opp.f} ${escapeHtml(opp.n)}<br><span>${G.level}단계 / 10</span></div>
+        </aside>
+        <div class="arch-stage"><canvas class="arch-canvas" width="${SW}" height="${SH}"></canvas></div>
+      </div>
+      <div class="arch-hud">
+        <div class="arch-sc"><b>${escapeHtml(uname)}</b> ${ut} <span>vs</span> ${ct} <b>${escapeHtml(opp.n)}</b></div>
+        <div class="arch-arrows">화살 ${G.arrow}/5${G.userScores.length?' · '+G.userScores.join(' '):''}</div>
+        <div class="arch-msg">${escapeHtml(G.msg)}</div>
+      </div>
+      <div class="arch-controls">${controls}</div>
+    </div>`;
+    G.cv=el.querySelector('.arch-canvas'); G.ctx=G.cv?G.cv.getContext('2d'):null; drawScene();
+    const btn=el.querySelector('.arch-ready');
+    if(btn){
+      btn.onpointerdown=e=>{ e.preventDefault(); if(G.phase!=='ready'||G.over) return;
+        try{ btn.setPointerCapture(e.pointerId); }catch(_){} beginAim(); };
+      btn.onpointerup=()=>{ if(G.phase==='aim') endAim(); };
+      btn.onpointercancel=()=>{ if(G.phase==='aim') endAim(); };
+    }
+    el.querySelectorAll('.arch-controls .arch-btn').forEach(b=> b.onclick=()=>{
+      const a=b.dataset.a;
+      if(a==='next') G.level=Math.min(10,G.level+1);
+      else if(a==='restart') G.level=1;
+      newMatch();
+    });
+  }
+
+  newMatch();
+}
+
 document.addEventListener('DOMContentLoaded', bootstrap);
