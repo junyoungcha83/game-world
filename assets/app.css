@@ -438,3 +438,44 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .arch-modal-btns .am-yes { background:var(--primary); color:#fff; }
 @media (max-width:380px){ .arch-profile { padding:8px 7px; } .arch-flag { font-size:1.5rem; }
   .arch-name { font-size:.9rem; } .arch-profile dl div { font-size:.7rem; } }
+
+/* 💰 야구 배팅 (가상 포인트) */
+.betbb { width:100%; max-width:340px; gap:12px; }
+.betbb .bb-wallet { align-self:stretch; text-align:right; font-size:1.05rem; color:var(--muted); }
+.betbb .bb-wallet b { color:#f6d21a; font-weight:800; font-size:1.2rem; }
+.betbb .bb-sec { align-self:stretch; font-size:.82rem; color:var(--muted); font-weight:700; margin-top:2px; }
+.betbb .bb-amounts { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; width:100%; }
+.betbb .bb-amt { padding:10px 4px; border-radius:10px; border:1px solid var(--border); background:var(--card);
+  color:var(--text); font-weight:700; font-size:.9rem; cursor:pointer; }
+.betbb .bb-amt.on { background:var(--primary); color:#fff; border-color:var(--primary); }
+.betbb .bb-amt:disabled { opacity:.35; cursor:not-allowed; }
+.betbb .bb-targets { display:flex; flex-direction:column; gap:7px; width:100%; }
+.betbb .bb-tgt { display:grid; grid-template-columns:1fr auto; grid-template-rows:auto auto; gap:1px 8px;
+  padding:10px 12px; border-radius:12px; border:1px solid var(--border); background:var(--card);
+  color:var(--text); cursor:pointer; text-align:left; }
+.betbb .bb-tgt.on { border-color:#f6d21a; box-shadow:0 0 0 2px rgba(246,210,26,.25) inset; }
+.betbb .bb-tgt-l { font-weight:800; font-size:1rem; }
+.betbb .bb-tgt-o { grid-row:1/3; align-self:center; font-weight:900; font-size:1.25rem; color:#f6d21a; }
+.betbb .bb-tgt-d { font-size:.76rem; color:var(--muted); }
+.betbb .bb-payout { align-self:stretch; text-align:center; color:var(--muted); font-size:.92rem; }
+.betbb .bb-payout b { color:#34d399; font-weight:800; font-size:1.1rem; }
+.betbb .bb-msg { min-height:1em; color:#f87171; font-size:.86rem; font-weight:700; }
+.betbb .bb-start, .betbb .bb-swing, .betbb .bb-recharge {
+  width:100%; padding:15px; border:none; border-radius:14px; font-size:1.1rem; font-weight:900; cursor:pointer;
+  background:linear-gradient(180deg,#16a34a,#12833c); color:#fff; box-shadow:0 6px 16px rgba(22,163,74,.32); }
+.betbb .bb-start:disabled { opacity:.4; cursor:not-allowed; box-shadow:none; }
+.betbb .bb-recharge { background:linear-gradient(180deg,#f59e0b,#d97706); box-shadow:0 6px 16px rgba(245,158,11,.3); font-size:.95rem; padding:12px; }
+.betbb .bb-swing { background:linear-gradient(180deg,#ef4444,#c02c2c); box-shadow:0 6px 16px rgba(239,68,68,.34); }
+.betbb .bb-betinfo { align-self:stretch; text-align:center; color:var(--muted); font-weight:700; }
+.betbb .bb-pitchmsg { font-size:1.1rem; font-weight:800; text-align:center; }
+.betbb .bb-track { position:relative; width:100%; height:34px; border-radius:999px;
+  background:linear-gradient(90deg,#334155,#475569,#334155); border:1px solid var(--border); overflow:hidden; }
+.betbb .bb-zone { position:absolute; left:44%; width:12%; top:0; bottom:0;
+  background:rgba(52,211,153,.55); border-left:2px solid #34d399; border-right:2px solid #34d399; }
+.betbb .bb-marker { position:absolute; top:-3px; width:6px; height:40px; margin-left:-3px; border-radius:3px;
+  background:#f6d21a; box-shadow:0 0 8px rgba(246,210,26,.9); }
+.betbb .bb-outcome { font-size:2rem; font-weight:900; text-align:center; }
+.betbb .bb-verdict { font-size:1.3rem; font-weight:900; text-align:center; }
+.betbb .bb-verdict.win { color:#34d399; }
+.betbb .bb-verdict.loss { color:#f87171; }
+.betbb .bb-sub { color:var(--muted); font-size:.88rem; }
