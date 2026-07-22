@@ -44,50 +44,76 @@ async function pushToServer() {
   } catch { setSync('오프라인'); }
 }
 // 로컬 우선으로 사용자/점수 병합 — 빈 원격이 로컬을 덮어쓰지 않게 함
-function mergeStates(a, b) {
-  if (!a) return b; if (!b) return a;
-  const byId = {};
-  for (const u of a.users) byId[u.id] = u;
-  for (const u of b.users) if (!byId[u.id]) byId[u.id] = u;
-  return { version: 1, users: Object.values(byId), scores: Object.assign({}, b.scores, a.scores) };
-}
 function normName(s) { return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase(); }
-// 같은 게임 통계 합산 (best 방향은 GAMES 기준 high/low)
+// 같은 게임 통계 병합 — 카운터는 max (멱등: 같은 데이터를 여러 번 병합해도 커지지 않음)
 function mergeStat(a, b, gid) {
   if (!a) return b ? { ...b } : b; if (!b) return { ...a };
   const dir = (GAMES.find(x => x.id === gid) || {}).best || 'high';
-  const out = { plays: (a.plays||0)+(b.plays||0), wins: (a.wins||0)+(b.wins||0), losses: (a.losses||0)+(b.losses||0), draws: (a.draws||0)+(b.draws||0), best: null };
+  const out = { plays: Math.max(a.plays||0, b.plays||0), wins: Math.max(a.wins||0, b.wins||0),
+    losses: Math.max(a.losses||0, b.losses||0), draws: Math.max(a.draws||0, b.draws||0), best: null };
   const bs = [a.best, b.best].filter(v => v != null);
   if (bs.length) out.best = dir === 'high' ? Math.max(...bs) : Math.min(...bs);
   return out;
 }
-// 같은 이름 사용자 합치기(중복 제거) + 점수 합산 → { state, remap(oldId→canonId) }
-function dedupeByName(st) {
-  const users = st.users || [], scores = st.scores || {};
-  const canon = {}, remap = {}, outUsers = [];
-  for (const u of users) {
-    const key = normName(u.name);
-    if (canon[key]) { remap[u.id] = canon[key].id; if (!canon[key].photo && u.photo) canon[key].photo = u.photo; }
-    else { canon[key] = u; remap[u.id] = u.id; outUsers.push(u); }
+// 로컬·원격 상태를 '이름' 기준으로 정규화 병합 → { state, remap(oldId→canonId) }.
+//  · 같은 이름은 대표 사용자 하나로 합침(대표 id 는 원격 우선 → 기기 간 안정).
+//  · 카운터: 이름이 '중복'(서로 다른 id 2개↑)이면 신뢰 가능한 원격 값으로 정정 → 로컬 폭주(수십만) 복구.
+//    단일 id 면 max(로컬,원격) — 멱등이라 재동기화로 값이 불어나지 않음.
+function reconcile(local, remote) {
+  local = local || {}; remote = remote || {};
+  const ls = local.scores || {}, rs = remote.scores || {};
+  const lw = local.wallets || {}, rw = remote.wallets || {};
+  const groups = {};   // 키(정규화 이름) → { localIds, remoteIds, user }
+  const touch = (u, from) => {
+    const key = normName(u.name) || ('__id__' + u.id);   // 이름 없으면 개별 보존
+    const g = groups[key] || (groups[key] = { localIds: [], remoteIds: [], user: null });
+    (from === 'remote' ? g.remoteIds : g.localIds).push(u.id);
+    if (from === 'remote' || !g.user) g.user = u;         // 원격 프로필(사진 등) 우선
+  };
+  for (const u of (local.users || [])) touch(u, 'local');
+  for (const u of (remote.users || [])) touch(u, 'remote');
+
+  const users = [], scores = {}, wallets = {}, remap = {};
+  for (const key of Object.keys(groups)) {
+    const g = groups[key];
+    const canon = g.remoteIds[0] || g.localIds[0];
+    users.push({ ...g.user, id: canon });
+    for (const id of g.localIds.concat(g.remoteIds)) remap[id] = canon;
+    const distinct = new Set([...g.localIds, ...g.remoteIds]);
+    const isDup = distinct.size > 1;                      // 같은 이름에 서로 다른 id 가 여러 개
+    const remoteScore = g.remoteIds[0] ? (rs[g.remoteIds[0]] || {}) : {};
+    const localMax = {};
+    for (const id of g.localIds) { const sc = ls[id] || {};
+      for (const gid of Object.keys(sc)) localMax[gid] = mergeStat(localMax[gid], sc[gid], gid); }
+    const out = {};
+    for (const gid of new Set([...Object.keys(remoteScore), ...Object.keys(localMax)])) {
+      if (isDup) out[gid] = normStat({ ...(remoteScore[gid] || localMax[gid]) });  // 중복 → 원격 우선(정정)
+      else out[gid] = mergeStat(localMax[gid], remoteScore[gid], gid);             // 단일 → max(멱등)
+    }
+    scores[canon] = out;
+    // 지갑: 중복이면 원격 우선, 단일이면 max
+    let lwv = -Infinity; for (const id of g.localIds) if (typeof lw[id] === 'number') lwv = Math.max(lwv, lw[id]);
+    const rwv = g.remoteIds[0] && typeof rw[g.remoteIds[0]] === 'number' ? rw[g.remoteIds[0]] : undefined;
+    let wv;
+    if (isDup) wv = rwv !== undefined ? rwv : (lwv > -Infinity ? lwv : undefined);
+    else { const c = []; if (lwv > -Infinity) c.push(lwv); if (rwv !== undefined) c.push(rwv); wv = c.length ? Math.max(...c) : undefined; }
+    if (wv !== undefined) wallets[canon] = wv;
   }
-  const outScores = {};
-  for (const oldId of Object.keys(scores)) {
-    const cid = remap[oldId] || oldId, src = scores[oldId] || {};
-    outScores[cid] = outScores[cid] || {};
-    for (const gid of Object.keys(src)) outScores[cid][gid] = mergeStat(outScores[cid][gid], src[gid], gid);
-  }
-  return { state: { version: st.version || 1, users: outUsers, scores: outScores }, remap };
+  return { state: { version: 1, users, scores, wallets }, remap };
 }
+function idsCollapsed(remap) { return Object.keys(remap).some(k => remap[k] !== k); }
+
 async function loadInitial() {
   const local = loadLocal();
   const remote = await fetchFromServer();
   if (local || remote) {
-    const merged = migrate(mergeStates(local, remote));   // 로컬 우선 병합 → 빈 원격이 로컬 사용자를 지우지 않음
-    const dd = dedupeByName(merged);                       // 같은 이름 사용자 자동 합치기
-    state = dd.state;
+    const dd = reconcile(local ? migrate(local) : null, remote ? migrate(remote) : null);
+    state = migrate(dd.state);
     const cur = localStorage.getItem(CURUSER_KEY);
     if (cur && dd.remap[cur] && dd.remap[cur] !== cur) setCurrentUser(dd.remap[cur]);   // 현재 사용자 재매핑
     saveLocalRaw();
+    // 중복 id 가 대표로 접혔으면 서버에도 반영 → 서버에서 중복 id 제거(재발 방지)
+    if (remote && getToken() && idsCollapsed(dd.remap)) pushToServer();
     setSync(remote ? '✓ 동기화됨' : (getToken() ? '오프라인(로컬)' : ''));
   } else {
     state = DEFAULT_STATE(); setSync('');
@@ -102,11 +128,12 @@ async function resyncFromServer() {
   try {
     const remote = await fetchFromServer();
     if (remote) {
-      const dd = dedupeByName(migrate(mergeStates(state, remote)));   // 현재 상태 우선 병합 + 같은이름 합치기
-      state = dd.state;
+      const dd = reconcile(state, migrate(remote));   // 이름 기준 정규화 병합(멱등 + 중복 정정)
+      state = migrate(dd.state);
       const cur = localStorage.getItem(CURUSER_KEY);
       if (cur && dd.remap[cur] && dd.remap[cur] !== cur) setCurrentUser(dd.remap[cur]);
       saveLocalRaw();
+      if (getToken() && idsCollapsed(dd.remap)) pushToServer();   // 중복 접힘 → 서버 정규화
       if (currentView === 'records') renderBoard();
       else if (currentView === 'hub') renderHub();
       else if (currentView === 'profile') renderProfile();
