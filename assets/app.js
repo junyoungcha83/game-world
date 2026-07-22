@@ -2138,7 +2138,7 @@ function startArchery(el){
   }
 
   // ── 조준(준비 꾹 누르기): 처음 5초 천천히 중앙으로, 이후 5초마다 빨라지며 상하좌우 랜덤 ──
-  const AIM_BASE=1.6;                              // 기본 이동속도(레벨0) — 약간 느리게
+  const AIM_BASE=2.05;                             // 기본 이동속도(레벨0) — 흔들림 세기 상향(난이도↑)
   const CENTER_FREQ=0.10;                          // 중앙으로 향하는 빈도(↑=쉬움)
   function beginAim(){ if(G.phase!=='ready'||G.over) return;
     G.holdStart=performance.now();
@@ -2153,7 +2153,7 @@ function startArchery(el){
     const t=(performance.now()-G.holdStart)/1000;
     const level=Math.floor(t/5);                                       // 5초마다 단계 상승
     const spd=1+level*0.4;                                             // 속도 순차 가속(완화)
-    const turn=1.3;
+    const turn=1.65;                                                  // 방향 요동 세기 — 흔들림 상향
     G.vx+=(Math.random()-0.5)*turn; G.vy+=(Math.random()-0.5)*turn;    // 방향을 계속 요동 → 지그재그
     if(Math.random()<0.06) G.vx=-G.vx;                                 // 가끔 급반전(뒤죽박죽)
     if(Math.random()<0.06) G.vy=-G.vy;
