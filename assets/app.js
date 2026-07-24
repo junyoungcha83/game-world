@@ -222,16 +222,6 @@ function recordStat(gid, opt) {
 }
 function refreshStat(gid) { const el = document.getElementById('gameBest'); if (el) { const g = GAMES.find(x => x.id === gid); if (g) el.textContent = g.fmtStat(getStat(gid)); } }
 
-// ── 가상 포인트 지갑 (야구 배팅 등에서 사용 — 실제 돈 아님) ──
-const WALLET_START = 100000;
-function getWallet() { const u = getCurrentUser(); if (!u) return 0;
-  state.wallets = state.wallets || {};
-  if (typeof state.wallets[u.id] !== 'number') state.wallets[u.id] = WALLET_START;
-  return state.wallets[u.id]; }
-function setWallet(v) { const u = getCurrentUser(); if (!u) return;
-  state.wallets = state.wallets || {}; state.wallets[u.id] = Math.max(0, Math.round(v)); save(); }
-function addWallet(delta) { setWallet(getWallet() + delta); return getWallet(); }
-
 // ── 게임 레지스트리 (여기에 추가만 하면 방사형 메뉴 자동 반영) ──
 const GAMES = [
   { id: 'rps',   name: '가위바위보', emoji: '✊', color: '#f472b6', best: 'high',
@@ -268,8 +258,6 @@ const GAMES = [
     fmtStat: s => s ? `${s.plays}경기·${s.wins}승 · 최다 ${s.best || 0}점` : '아직 기록 없음', start: startKbo },
   { id: 'archery', name: '양궁', emoji: '🎯', color: '#dc2626', best: 'high',
     fmtStat: s => s ? `${s.plays}경기·${s.wins}승 · 최고 ${s.best || 0}단계 격파` : '아직 기록 없음', start: startArchery },
-  { id: 'betbaseball', name: '야구 배팅', emoji: '💰', color: '#f59e0b', best: 'high',
-    fmtStat: s => s ? `${s.plays}판·${s.wins}적중 · 최고 배당 ${(s.best || 0).toLocaleString()}P` : '아직 기록 없음', start: startBetBaseball },
 ];
 // 오목 난이도(급수) — 기록은 급수별로 따로 누적/순위
 const OMOK_LEVELS = [
@@ -328,7 +316,7 @@ function boardGames() {
 const HUB_CATEGORIES = [
   { label: '🎨 자유',  ids: ['color', 'brush', 'roulette'] },
   { label: '♟️ 보드',  ids: ['omok', 'janggi', 'chess', 'ttt', 'baseball', 'spot'] },
-  { label: '⚾ 스포츠', ids: ['kbo', 'archery', 'betbaseball'] },
+  { label: '⚾ 스포츠', ids: ['kbo', 'archery'] },
   { label: '🕹️ 레트로', ids: ['timer10', 'rps', 'guess'] },
   { label: '🧠 퀴즈',  ids: ['flags', 'capital', 'mapq'] },
 ];
@@ -2336,113 +2324,6 @@ function startArchery(el){
   }
 
   newMatch();
-}
-
-// ══════════════════════════ 💰 야구 배팅 (가상 포인트) ══════════════════════════
-// Lv.1 타이밍 스윙 미니게임 + Lv.2 배팅(금액·배당·정산·지갑). 실제 돈 아님(가상 포인트).
-function startBetBaseball(el){
-  const AMOUNTS=[1000,5000,10000,50000];
-  const TARGETS=[
-    { key:'hit', label:'안타 이상', desc:'안타·2루타·3루타·홈런', odds:1.8, win:o=>o!=='out' },
-    { key:'xbh', label:'장타',      desc:'2루타 이상',           odds:3.5, win:o=>o==='double'||o==='triple'||o==='hr' },
-    { key:'hr',  label:'홈런',      desc:'담장을 넘겨라',        odds:8.0, win:o=>o==='hr' },
-  ];
-  const OUTCOME={ out:{t:'아웃 😵',c:'#94a3b8'}, single:{t:'안타 🙌',c:'#34d399'},
-    double:{t:'2루타 👏',c:'#22d3ee'}, triple:{t:'3루타 🔥',c:'#fb923c'}, hr:{t:'홈런!! 💥',c:'#f6d21a'} };
-  const G={ bet:10000, target:'hit', phase:'setup', raf:null, pos:0, dir:1, spd:2.3, alive:true,
-            result:null, payout:0, won:false };
-  const fmt=n=>Math.round(n).toLocaleString();
-  const stopAnim=()=>{ if(G.raf){ cancelAnimationFrame(G.raf); G.raf=null; } };
-  const tgt=()=>TARGETS.find(t=>t.key===G.target);
-
-  // 뒤로가기 시 애니메이션 정리
-  const backBtn=document.getElementById('gameBack');
-  if(backBtn) backBtn.onclick=()=>{ G.alive=false; stopAnim(); showView('hub'); };
-
-  function swingOutcome(err){        // err 0(정확)~1
-    let w;
-    if(err<0.06)      w={hr:30,triple:8,double:22,single:25,out:15};
-    else if(err<0.16) w={hr:10,triple:6,double:18,single:34,out:32};
-    else if(err<0.32) w={hr:3, triple:3,double:10,single:30,out:54};
-    else              w={hr:1, triple:1,double:4, single:16,out:78};
-    const ks=Object.keys(w); let t=0; ks.forEach(k=>t+=w[k]); let x=Math.random()*t;
-    for(const k of ks){ x-=w[k]; if(x<0) return k; } return 'out';
-  }
-  function placeBet(){
-    if(G.bet>getWallet()){ setMsg('포인트가 부족해요'); return; }
-    addWallet(-G.bet);                // 배팅액 차감
-    G.phase='pitch'; G.pos=6; G.dir=1; render();
-  }
-  function swing(){
-    if(G.phase!=='pitch') return;
-    stopAnim();
-    const err=Math.abs(G.pos-50)/50;  // 중앙(50)에서 벗어난 정도
-    const o=swingOutcome(err);
-    const t=tgt(); G.won=t.win(o); G.result=o;
-    G.payout=G.won?Math.round(G.bet*t.odds):0;
-    if(G.won) addWallet(G.payout);
-    recordStat('betbaseball', { result:G.won?'win':'loss', best:G.won?G.payout:undefined });
-    G.phase='result'; render();
-  }
-  function pitchLoop(){
-    if(!G.alive || G.phase!=='pitch'){ return; }
-    if(!el.isConnected){ stopAnim(); return; }
-    G.pos+=G.dir*G.spd;
-    if(G.pos>=94){ G.pos=94; G.dir=-1; } else if(G.pos<=6){ G.pos=6; G.dir=1; }
-    const mk=el.querySelector('.bb-marker'); if(mk) mk.style.left=G.pos+'%';
-    G.raf=requestAnimationFrame(pitchLoop);
-  }
-  function setMsg(m){ const e=el.querySelector('.bb-msg'); if(e) e.textContent=m; }
-
-  function render(){
-    const wallet=getWallet();
-    if(G.phase==='setup'){
-      const potential=fmt(G.bet*tgt().odds);
-      el.innerHTML=`<div class="mg betbb">
-        <div class="bb-wallet">💰 <b>${fmt(wallet)}</b> P</div>
-        <div class="bb-sec">배팅 금액</div>
-        <div class="bb-amounts">${AMOUNTS.map(a=>`<button class="bb-amt ${a===G.bet?'on':''}" data-amt="${a}" ${a>wallet?'disabled':''}>${fmt(a)}</button>`).join('')}</div>
-        <div class="bb-sec">예상 결과 선택</div>
-        <div class="bb-targets">${TARGETS.map(t=>`<button class="bb-tgt ${t.key===G.target?'on':''}" data-tgt="${t.key}">
-          <span class="bb-tgt-l">${t.label}</span><span class="bb-tgt-o">${t.odds}x</span><span class="bb-tgt-d">${t.desc}</span></button>`).join('')}</div>
-        <div class="bb-payout">예상 적중 시 <b>${potential}</b> P</div>
-        <div class="bb-msg"></div>
-        <button class="bb-start" data-act="bet" ${G.bet>wallet?'disabled':''}>⚾ 배팅 시작</button>
-        ${wallet<AMOUNTS[0]?`<button class="bb-recharge" data-act="recharge">💸 포인트 재충전 (${fmt(WALLET_START)}P)</button>`:''}
-      </div>`;
-    } else if(G.phase==='pitch'){
-      el.innerHTML=`<div class="mg betbb">
-        <div class="bb-wallet">💰 <b>${fmt(wallet)}</b> P</div>
-        <div class="bb-betinfo">${tgt().label} · ${fmt(G.bet)}P · ${tgt().odds}x</div>
-        <div class="bb-pitchmsg">타이밍 맞춰 스윙! 🏏</div>
-        <div class="bb-track"><div class="bb-zone"></div><div class="bb-marker" style="left:${G.pos}%"></div></div>
-        <button class="bb-swing" data-act="swing">스윙!</button>
-      </div>`;
-      G.raf=requestAnimationFrame(pitchLoop);
-    } else {   // result
-      const oc=OUTCOME[G.result]||OUTCOME.out;
-      el.innerHTML=`<div class="mg betbb">
-        <div class="bb-wallet">💰 <b>${fmt(wallet)}</b> P</div>
-        <div class="bb-outcome" style="color:${oc.c}">${oc.t}</div>
-        <div class="bb-verdict ${G.won?'win':'loss'}">${G.won?`적중! +${fmt(G.payout)} P`:`실패… -${fmt(G.bet)} P`}</div>
-        <div class="bb-sub">${tgt().label} 배팅 (${tgt().odds}x)</div>
-        <button class="bb-start" data-act="again">다시 배팅</button>
-      </div>`;
-    }
-    bind();
-  }
-  function bind(){
-    el.querySelectorAll('.bb-amt').forEach(b=> b.onclick=()=>{ G.bet=+b.dataset.amt; render(); });
-    el.querySelectorAll('.bb-tgt').forEach(b=> b.onclick=()=>{ G.target=b.dataset.tgt; render(); });
-    el.querySelectorAll('[data-act]').forEach(b=> b.onclick=()=>{
-      const a=b.dataset.act;
-      if(a==='bet') placeBet();
-      else if(a==='swing') swing();
-      else if(a==='again'){ G.phase='setup'; G.result=null; render(); }
-      else if(a==='recharge'){ setWallet(WALLET_START); render(); }
-    });
-  }
-  render();
 }
 
 document.addEventListener('DOMContentLoaded', bootstrap);
