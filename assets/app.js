@@ -25,6 +25,9 @@ function migrate(s) {
   if (!Array.isArray(s.users)) s.users = [];
   if (!s.scores || typeof s.scores !== 'object') s.scores = {};
   for (const u of s.users) { u.id = u.id || uid(); u.name = String(u.name || ''); u.photo = typeof u.photo === 'string' ? u.photo : ''; u.created_at = u.created_at || new Date().toISOString(); }
+  // 야구 배팅 제거 정리 — 남아있는 배팅 기록·가상 포인트 삭제(다시 살아나지 않도록)
+  if (s.wallets) delete s.wallets;
+  for (const k in s.scores) { if (s.scores[k]) delete s.scores[k].betbaseball; }
   return s;
 }
 async function fetchFromServer() {
@@ -63,7 +66,6 @@ function mergeStat(a, b, gid) {
 function reconcile(local, remote) {
   local = local || {}; remote = remote || {};
   const ls = local.scores || {}, rs = remote.scores || {};
-  const lw = local.wallets || {}, rw = remote.wallets || {};
   const groups = {};   // 키(정규화 이름) → { localIds, remoteIds, user }
   const touch = (u, from) => {
     const key = normName(u.name) || ('__id__' + u.id);   // 이름 없으면 개별 보존
@@ -74,7 +76,7 @@ function reconcile(local, remote) {
   for (const u of (local.users || [])) touch(u, 'local');
   for (const u of (remote.users || [])) touch(u, 'remote');
 
-  const users = [], scores = {}, wallets = {}, remap = {};
+  const users = [], scores = {}, remap = {};
   for (const key of Object.keys(groups)) {
     const g = groups[key];
     const canon = g.remoteIds[0] || g.localIds[0];
@@ -88,19 +90,13 @@ function reconcile(local, remote) {
       for (const gid of Object.keys(sc)) localMax[gid] = mergeStat(localMax[gid], sc[gid], gid); }
     const out = {};
     for (const gid of new Set([...Object.keys(remoteScore), ...Object.keys(localMax)])) {
+      if (gid === 'betbaseball') continue;                                         // 야구 배팅 기록은 병합에서 제외(제거)
       if (isDup) out[gid] = normStat({ ...(remoteScore[gid] || localMax[gid]) });  // 중복 → 원격 우선(정정)
       else out[gid] = mergeStat(localMax[gid], remoteScore[gid], gid);             // 단일 → max(멱등)
     }
     scores[canon] = out;
-    // 지갑: 중복이면 원격 우선, 단일이면 max
-    let lwv = -Infinity; for (const id of g.localIds) if (typeof lw[id] === 'number') lwv = Math.max(lwv, lw[id]);
-    const rwv = g.remoteIds[0] && typeof rw[g.remoteIds[0]] === 'number' ? rw[g.remoteIds[0]] : undefined;
-    let wv;
-    if (isDup) wv = rwv !== undefined ? rwv : (lwv > -Infinity ? lwv : undefined);
-    else { const c = []; if (lwv > -Infinity) c.push(lwv); if (rwv !== undefined) c.push(rwv); wv = c.length ? Math.max(...c) : undefined; }
-    if (wv !== undefined) wallets[canon] = wv;
   }
-  return { state: { version: 1, users, scores, wallets }, remap };
+  return { state: { version: 1, users, scores }, remap };
 }
 function idsCollapsed(remap) { return Object.keys(remap).some(k => remap[k] !== k); }
 
