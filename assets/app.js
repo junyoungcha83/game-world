@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b74';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b75';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -1151,14 +1151,14 @@ function floodFill(ctx, w, h, x, y, fill, tol) {
   ctx.putImageData(image, 0, 0);
 }
 function startColor(el) {
-  const CKEY = 'gw-brush-img';   // 붓칠하기와 '내 사진' 공유
-  const getImg = () => { try { return localStorage.getItem(CKEY) || ''; } catch (e) { return ''; } };
-  const total = () => COLOR_PICS.length + (getImg() ? 1 : 0);
   let pic = 0, selected = COLOR_PALETTE[0];
   const render = () => {
-    if (pic >= total()) pic = 0;
-    const custom = !!getImg() && pic === COLOR_PICS.length;
-    const name = custom ? '내 그림' : COLOR_PICS[pic].name;
+    const imgs = galleryGet();
+    const total = COLOR_PICS.length + imgs.length;
+    if (pic >= total) pic = 0;
+    const ci = pic - COLOR_PICS.length;          // ≥0이면 커스텀 사진 인덱스
+    const custom = ci >= 0;
+    const name = custom ? `내 그림 ${ci + 1}/${imgs.length}` : COLOR_PICS[pic].name;
     const stage = custom
       ? `<div class="color-canvas"><canvas id="colorCv"></canvas></div>`
       : `<div class="color-canvas"><svg viewBox="0 0 200 200" id="colorSvg">${COLOR_PICS[pic].svg}</svg></div>`;
@@ -1173,10 +1173,10 @@ function startColor(el) {
         <button class="btn ghost small" id="colorNext">다음 ▶</button>
       </div>
       <div class="color-btns">
-        <button class="btn ghost small" id="colorLoad">🖼️ 내 사진 불러오기</button>
-        ${custom ? `<button class="btn ghost small" id="colorDelImg">🗑 사진 삭제</button>` : ''}
+        <button class="btn ghost small" id="colorLoad">🖼️ 내 사진 추가</button>
+        ${custom ? `<button class="btn ghost small" id="colorDelImg">🗑 이 사진 삭제</button>` : ''}
       </div>
-      <input type="file" accept="image/*" id="colorFile" style="display:none">
+      <input type="file" accept="image/*" multiple id="colorFile" style="display:none">
     </div>`;
     const pal = el.querySelector('#colorPal'), history = [];
     const marks = () => pal.querySelectorAll('.sw').forEach(s => s.classList.toggle('sel', s.dataset.c === selected));
@@ -1194,7 +1194,7 @@ function startColor(el) {
         cx.drawImage(im, Math.round((S - im.naturalWidth) / 2), Math.round((S - im.naturalHeight) / 2));
         try { base = cx.getImageData(0, 0, S, S); } catch (e) {}
       };
-      im.src = getImg();
+      im.src = imgs[ci];
       cv.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         if (!cv.width) return;
@@ -1216,21 +1216,19 @@ function startColor(el) {
       el.querySelector('#colorUndo').onclick = () => { const last = history.pop(); if (last) last.el.setAttribute('fill', last.fill); };
       el.querySelector('#colorClear').onclick = () => { svg.querySelectorAll('.cregion').forEach(r => r.setAttribute('fill', '#ffffff')); history.length = 0; };
     }
-    const n = total();
+    const n = total;
     el.querySelector('#colorPrev').onclick = () => { pic = (pic - 1 + n) % n; render(); };
     el.querySelector('#colorNext').onclick = () => { pic = (pic + 1) % n; render(); };
     const fileEl = el.querySelector('#colorFile');
     el.querySelector('#colorLoad').onclick = () => fileEl.click();
-    fileEl.onchange = () => {
-      const f = fileEl.files[0]; fileEl.value = ''; if (!f) return;
-      loadBrushImage(f, (durl) => {
-        try { localStorage.setItem(CKEY, durl); }
-        catch (e) { alert('사진이 너무 커서 저장할 수 없어요. 더 작은 사진을 써주세요.'); return; }
-        pic = COLOR_PICS.length; render();
-      });
-    };
+    fileEl.onchange = () => addFilesToGallery(fileEl, (added) => {
+      if (added == null) return;                     // 취소
+      const g = galleryGet();
+      if (g.length) pic = COLOR_PICS.length + g.length - 1;   // 방금 추가한 마지막 사진으로 이동
+      render();
+    });
     const delImg = el.querySelector('#colorDelImg');
-    if (delImg) delImg.onclick = () => { if (!confirm('불러온 사진을 삭제할까요?')) return; try { localStorage.removeItem(CKEY); } catch (e) {} pic = 0; render(); };
+    if (delImg) delImg.onclick = () => { if (!confirm('이 사진을 삭제할까요?')) return; galleryRemoveAt(ci); pic = 0; render(); };
   };
   render();
 }
@@ -1238,7 +1236,8 @@ function startColor(el) {
 // ── 미니게임: 붓칠하기 (자유 드로잉, 기록 없음) ───────
 // 색칠하기와 같은 밑그림에 canvas로 자유롭게 붓칠. 외곽선은 위에 겹쳐 보이게(채움 없음).
 // 붓칠하기 '내 사진' — 흰 배경에 다운스케일 후 dataURL (multiply 오버레이용)
-function loadBrushImage(file, cb) {
+function loadBrushImage(file, cb, errCb) {
+  const fail = (msg) => { if (errCb) errCb(); else alert(msg); };
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
@@ -1253,23 +1252,64 @@ function loadBrushImage(file, cb) {
     cx.drawImage(img, 0, 0, w, h);
     let durl = '';
     try { durl = c.toDataURL('image/jpeg', 0.88); } catch (e) {}
-    durl ? cb(durl) : alert('이미지 처리에 실패했어요.');
+    durl ? cb(durl) : fail('이미지 처리에 실패했어요.');
   };
-  img.onerror = () => { URL.revokeObjectURL(url); alert('이미지를 열 수 없어요.'); };
+  img.onerror = () => { URL.revokeObjectURL(url); fail('이미지를 열 수 없어요.'); };
   img.src = url;
+}
+// '내 사진' 갤러리 — 여러 장 보관. 붓칠하기·색칠하기가 공유. localStorage 배열(dataURL).
+const GALLERY_KEY = 'gw-imgs', GALLERY_OLD = 'gw-brush-img';
+function galleryGet() {
+  try {
+    const raw = localStorage.getItem(GALLERY_KEY);
+    if (raw) { const a = JSON.parse(raw); if (Array.isArray(a)) return a.filter(x => typeof x === 'string' && x); }
+  } catch (e) {}
+  try { const old = localStorage.getItem(GALLERY_OLD); if (old) return [old]; } catch (e) {}   // 구버전 단일 사진 이관
+  return [];
+}
+function gallerySave(arr) {
+  localStorage.setItem(GALLERY_KEY, JSON.stringify(arr));   // 용량초과 시 예외 → 호출부 처리
+  try { localStorage.removeItem(GALLERY_OLD); } catch (e) {}
+}
+function galleryAdd(durl) {   // true=성공, false=용량초과
+  const arr = galleryGet(); arr.push(durl);
+  try { gallerySave(arr); return true; } catch (e) { return false; }
+}
+function galleryRemoveAt(i) {
+  const arr = galleryGet();
+  if (i >= 0 && i < arr.length) { arr.splice(i, 1); try { gallerySave(arr); } catch (e) {} }
+  return galleryGet();
+}
+// 파일 여러 개를 순차로 갤러리에 추가. done(added|null) — null=취소. 열기 실패 파일은 건너뜀.
+function addFilesToGallery(fileEl, done) {
+  const files = Array.from(fileEl.files || []); fileEl.value = '';
+  if (!files.length) { done(null); return; }
+  let added = 0, full = false;
+  const step = (i) => {
+    if (i >= files.length) {
+      if (full) alert('저장 공간이 부족해 일부 사진은 추가하지 못했어요. 사진을 몇 장 삭제한 뒤 다시 시도해주세요.');
+      done(added);
+      return;
+    }
+    loadBrushImage(files[i], (durl) => {
+      if (!full) { if (galleryAdd(durl)) added++; else full = true; }
+      step(i + 1);
+    }, () => step(i + 1));
+  };
+  step(0);
 }
 function startBrush(el) {
   const SIZES = [6, 14, 26], RES = 600, SCALE = RES / 200;
-  const CKEY = 'gw-brush-img';
-  const getImg = () => { try { return localStorage.getItem(CKEY) || ''; } catch (e) { return ''; } };
-  const total = () => COLOR_PICS.length + (getImg() ? 1 : 0);
   let pic = 0, color = COLOR_PALETTE[0], size = SIZES[1];
   const render = () => {
-    if (pic >= total()) pic = 0;
-    const custom = !!getImg() && pic === COLOR_PICS.length;
-    const name = custom ? '내 그림' : COLOR_PICS[pic].name;
+    const imgs = galleryGet();
+    const total = COLOR_PICS.length + imgs.length;
+    if (pic >= total) pic = 0;
+    const ci = pic - COLOR_PICS.length;          // ≥0이면 커스텀 사진 인덱스
+    const custom = ci >= 0;
+    const name = custom ? `내 그림 ${ci + 1}/${imgs.length}` : COLOR_PICS[pic].name;
     const overlay = custom
-      ? `<img class="brush-outline brush-img" src="${getImg()}" alt="내 그림">`
+      ? `<img class="brush-outline brush-img" src="${imgs[ci]}" alt="내 그림">`
       : `<svg class="brush-outline" viewBox="0 0 200 200">${COLOR_PICS[pic].svg}</svg>`;
     el.innerHTML = `<div class="mg brush">
       <div class="mg-msg">${name} — 붓으로 칠해요 🖌️</div>
@@ -1286,10 +1326,10 @@ function startBrush(el) {
         <button class="btn ghost small" id="brushNext">다음 ▶</button>
       </div>
       <div class="color-btns">
-        <button class="btn ghost small" id="brushLoad">🖼️ 내 사진 불러오기</button>
-        ${custom ? `<button class="btn ghost small" id="brushDelImg">🗑 사진 삭제</button>` : ''}
+        <button class="btn ghost small" id="brushLoad">🖼️ 내 사진 추가</button>
+        ${custom ? `<button class="btn ghost small" id="brushDelImg">🗑 이 사진 삭제</button>` : ''}
       </div>
-      <input type="file" accept="image/*" id="brushFile" style="display:none">
+      <input type="file" accept="image/*" multiple id="brushFile" style="display:none">
     </div>`;
     const cv = el.querySelector('#brushCv');
     cv.width = RES; cv.height = RES;
@@ -1320,23 +1360,21 @@ function startBrush(el) {
     const markS = () => szEl.querySelectorAll('.bsz').forEach(b => b.classList.toggle('sel', +b.dataset.s === size));
     szEl.querySelectorAll('.bsz').forEach(b => b.onclick = () => { size = +b.dataset.s; markS(); });
     markS();
-    const n = total();
+    const n = total;
     el.querySelector('#brushPrev').onclick = () => { pic = (pic - 1 + n) % n; render(); };
     el.querySelector('#brushNext').onclick = () => { pic = (pic + 1) % n; render(); };
     el.querySelector('#brushUndo').onclick = () => { const s = history.pop(); if (s) ctx.putImageData(s, 0, 0); };
     el.querySelector('#brushClear').onclick = () => { ctx.clearRect(0, 0, cv.width, cv.height); history.length = 0; };
     const fileEl = el.querySelector('#brushFile');
     el.querySelector('#brushLoad').onclick = () => fileEl.click();
-    fileEl.onchange = () => {
-      const f = fileEl.files[0]; fileEl.value = ''; if (!f) return;
-      loadBrushImage(f, (durl) => {
-        try { localStorage.setItem(CKEY, durl); }
-        catch (e) { alert('사진이 너무 커서 저장할 수 없어요. 더 작은 사진을 써주세요.'); return; }
-        pic = COLOR_PICS.length; render();
-      });
-    };
+    fileEl.onchange = () => addFilesToGallery(fileEl, (added) => {
+      if (added == null) return;                     // 취소
+      const g = galleryGet();
+      if (g.length) pic = COLOR_PICS.length + g.length - 1;   // 방금 추가한 마지막 사진으로 이동
+      render();
+    });
     const delImg = el.querySelector('#brushDelImg');
-    if (delImg) delImg.onclick = () => { if (!confirm('불러온 사진을 삭제할까요?')) return; try { localStorage.removeItem(CKEY); } catch (e) {} pic = 0; render(); };
+    if (delImg) delImg.onclick = () => { if (!confirm('이 사진을 삭제할까요?')) return; galleryRemoveAt(ci); pic = 0; render(); };
   };
   render();
 }
