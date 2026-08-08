@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b67';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b70';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -1006,8 +1006,45 @@ const COLOR_PICS = [
     <path class="cregion" d="M72 112 Q40 102 46 64 Q48 48 64 50 Q76 52 72 68 Q68 94 98 106 Z" fill="#fff" stroke="#333" stroke-width="2"/>
     <path class="cregion" d="M150 120 Q182 110 190 134 Q172 128 150 132 Z" fill="#fff" stroke="#333" stroke-width="2"/>
     <circle cx="58" cy="64" r="3.5" fill="#333"/>` },
+  { name: '별', svg: `
+    <polygon class="cregion" points="100,28 118,78 172,78 128,110 146,162 100,130 54,162 72,110 28,78 82,78" fill="#fff" stroke="#333" stroke-width="2"/>` },
+  { name: '하트', svg: `
+    <path class="cregion" d="M100 158 C50 118 44 74 72 62 C88 55 100 70 100 84 C100 70 112 55 128 62 C156 74 150 118 100 158 Z" fill="#fff" stroke="#333" stroke-width="2"/>` },
+  { name: '사과', svg: `
+    <rect class="cregion" x="97" y="40" width="6" height="26" rx="3" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path class="cregion" d="M103 54 Q128 40 134 60 Q112 64 103 54 Z" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path class="cregion" d="M100 64 C120 46 150 54 150 94 C150 132 124 162 100 162 C76 162 50 132 50 94 C50 54 80 46 100 64 Z" fill="#fff" stroke="#333" stroke-width="2"/>` },
+  { name: '돛단배', svg: `
+    <path class="cregion" d="M40 142 L160 142 L140 170 L60 170 Z" fill="#fff" stroke="#333" stroke-width="2"/>
+    <rect class="cregion" x="97" y="46" width="6" height="96" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path class="cregion" d="M104 52 L152 134 L104 134 Z" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path class="cregion" d="M92 62 L50 134 L92 134 Z" fill="#fff" stroke="#333" stroke-width="2"/>` },
+  { name: '곰', svg: `
+    <circle class="cregion" cx="60" cy="58" r="20" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle class="cregion" cx="140" cy="58" r="20" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle class="cregion" cx="100" cy="108" r="58" fill="#fff" stroke="#333" stroke-width="2"/>
+    <ellipse class="cregion" cx="100" cy="126" rx="30" ry="24" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle cx="82" cy="98" r="5" fill="#333"/>
+    <circle cx="118" cy="98" r="5" fill="#333"/>
+    <ellipse class="cregion" cx="100" cy="118" rx="9" ry="7" fill="#fff" stroke="#333" stroke-width="2"/>` },
+  { name: '눈사람', svg: `
+    <circle class="cregion" cx="100" cy="130" r="42" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle class="cregion" cx="100" cy="66" r="30" fill="#fff" stroke="#333" stroke-width="2"/>
+    <rect class="cregion" x="72" y="30" width="56" height="8" fill="#fff" stroke="#333" stroke-width="2"/>
+    <rect class="cregion" x="84" y="8" width="32" height="24" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle cx="90" cy="62" r="3.5" fill="#333"/>
+    <circle cx="110" cy="62" r="3.5" fill="#333"/>
+    <polygon class="cregion" points="100,70 120,74 100,78" fill="#fff" stroke="#333" stroke-width="2"/>` },
+  { name: '태양', svg: `
+    <circle class="cregion" cx="100" cy="100" r="42" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path d="M100 28 V52 M100 148 V172 M28 100 H52 M148 100 H172 M49 49 L66 66 M151 49 L134 66 M49 151 L66 134 M151 151 L134 134" fill="none" stroke="#333" stroke-width="2"/>` },
+  { name: '아이스크림', svg: `
+    <circle class="cregion" cx="100" cy="60" r="28" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle class="cregion" cx="78" cy="76" r="22" fill="#fff" stroke="#333" stroke-width="2"/>
+    <circle class="cregion" cx="122" cy="76" r="22" fill="#fff" stroke="#333" stroke-width="2"/>
+    <path class="cregion" d="M62 92 L100 178 L138 92 Z" fill="#fff" stroke="#333" stroke-width="2"/>` },
 ];
-const COLOR_PALETTE = ['#ef4444','#f97316','#facc15','#34d399','#22d3ee','#60a5fa','#a78bfa','#f472b6','#8b5a2b','#9ca3af','#000000','#ffffff'];
+const COLOR_PALETTE =['#ef4444','#f97316','#facc15','#34d399','#22d3ee','#60a5fa','#a78bfa','#f472b6','#8b5a2b','#9ca3af','#000000','#ffffff'];
 
 function startColor(el) {
   let pic = 0, selected = COLOR_PALETTE[0];
