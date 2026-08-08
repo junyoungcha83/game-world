@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b73';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b74';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -1116,12 +1116,55 @@ const COLOR_PICS = [
 ];
 const COLOR_PALETTE =['#ef4444','#f97316','#facc15','#34d399','#22d3ee','#60a5fa','#a78bfa','#f472b6','#8b5a2b','#9ca3af','#000000','#ffffff'];
 
+// #hex → [r,g,b]
+function hexToRgb(hex) {
+  hex = String(hex).replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  const n = parseInt(hex, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+// 캔버스 플러드필(물통) — 탭 지점의 색 영역을 fill 색으로. 어두운 선에서 멈춤.
+function floodFill(ctx, w, h, x, y, fill, tol) {
+  const image = ctx.getImageData(0, 0, w, h), data = image.data;
+  const idx = (px, py) => (py * w + px) * 4;
+  const si = idx(x, y);
+  const tr = data[si], tg = data[si + 1], tb = data[si + 2], ta = data[si + 3];
+  if (tr + tg + tb < 150) return;                                        // 어두운 선은 채우지 않음
+  const [fr, fg, fb] = fill;
+  if (Math.abs(tr - fr) + Math.abs(tg - fg) + Math.abs(tb - fb) < 8) return;
+  const match = (i) => (Math.abs(data[i] - tr) + Math.abs(data[i + 1] - tg) + Math.abs(data[i + 2] - tb) + Math.abs(data[i + 3] - ta)) <= tol;
+  const stack = [[x, y]];
+  while (stack.length) {
+    const [cx0, cy] = stack.pop();
+    let nx = cx0;
+    while (nx >= 0 && match(idx(nx, cy))) nx--;
+    nx++;
+    let up = false, down = false;
+    while (nx < w && match(idx(nx, cy))) {
+      const i = idx(nx, cy);
+      data[i] = fr; data[i + 1] = fg; data[i + 2] = fb; data[i + 3] = 255;
+      if (cy > 0) { if (match(idx(nx, cy - 1))) { if (!up) { stack.push([nx, cy - 1]); up = true; } } else up = false; }
+      if (cy < h - 1) { if (match(idx(nx, cy + 1))) { if (!down) { stack.push([nx, cy + 1]); down = true; } } else down = false; }
+      nx++;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+}
 function startColor(el) {
+  const CKEY = 'gw-brush-img';   // 붓칠하기와 '내 사진' 공유
+  const getImg = () => { try { return localStorage.getItem(CKEY) || ''; } catch (e) { return ''; } };
+  const total = () => COLOR_PICS.length + (getImg() ? 1 : 0);
   let pic = 0, selected = COLOR_PALETTE[0];
   const render = () => {
+    if (pic >= total()) pic = 0;
+    const custom = !!getImg() && pic === COLOR_PICS.length;
+    const name = custom ? '내 그림' : COLOR_PICS[pic].name;
+    const stage = custom
+      ? `<div class="color-canvas"><canvas id="colorCv"></canvas></div>`
+      : `<div class="color-canvas"><svg viewBox="0 0 200 200" id="colorSvg">${COLOR_PICS[pic].svg}</svg></div>`;
     el.innerHTML = `<div class="mg color">
-      <div class="mg-msg">${COLOR_PICS[pic].name} — 색을 고르고 영역을 탭! 🎨</div>
-      <div class="color-canvas"><svg viewBox="0 0 200 200" id="colorSvg">${COLOR_PICS[pic].svg}</svg></div>
+      <div class="mg-msg">${name} — 색을 고르고 ${custom ? '선 안쪽을' : '영역을'} 탭! 🎨</div>
+      ${stage}
       <div class="color-palette" id="colorPal">${COLOR_PALETTE.map(c => `<button class="sw" data-c="${c}" style="background:${c}"></button>`).join('')}</div>
       <div class="color-btns">
         <button class="btn ghost small" id="colorPrev">◀ 이전</button>
@@ -1129,19 +1172,65 @@ function startColor(el) {
         <button class="btn ghost small" id="colorClear">전부삭제</button>
         <button class="btn ghost small" id="colorNext">다음 ▶</button>
       </div>
+      <div class="color-btns">
+        <button class="btn ghost small" id="colorLoad">🖼️ 내 사진 불러오기</button>
+        ${custom ? `<button class="btn ghost small" id="colorDelImg">🗑 사진 삭제</button>` : ''}
+      </div>
+      <input type="file" accept="image/*" id="colorFile" style="display:none">
     </div>`;
-    const svg = el.querySelector('#colorSvg'), pal = el.querySelector('#colorPal'), history = [];
-    svg.querySelectorAll('.cregion').forEach(r => r.addEventListener('click', () => {
-      history.push({ el: r, fill: r.getAttribute('fill') });   // 되돌리기용 이전 색 기록
-      r.setAttribute('fill', selected);
-    }));
+    const pal = el.querySelector('#colorPal'), history = [];
     const marks = () => pal.querySelectorAll('.sw').forEach(s => s.classList.toggle('sel', s.dataset.c === selected));
     pal.querySelectorAll('.sw').forEach(s => s.onclick = () => { selected = s.dataset.c; marks(); });
     marks();
-    el.querySelector('#colorPrev').onclick = () => { pic = (pic - 1 + COLOR_PICS.length) % COLOR_PICS.length; render(); };
-    el.querySelector('#colorNext').onclick = () => { pic = (pic + 1) % COLOR_PICS.length; render(); };
-    el.querySelector('#colorUndo').onclick = () => { const last = history.pop(); if (last) last.el.setAttribute('fill', last.fill); };
-    el.querySelector('#colorClear').onclick = () => { svg.querySelectorAll('.cregion').forEach(r => r.setAttribute('fill', '#ffffff')); history.length = 0; };
+    if (custom) {
+      const cv = el.querySelector('#colorCv');
+      const cx = cv.getContext('2d', { willReadFrequently: true });
+      let base = null;
+      const im = new Image();
+      im.onload = () => {
+        const S = Math.max(im.naturalWidth, im.naturalHeight) || 600;   // 정사각 캔버스(왜곡·좌표오차 방지)
+        cv.width = S; cv.height = S;
+        cx.fillStyle = '#fff'; cx.fillRect(0, 0, S, S);
+        cx.drawImage(im, Math.round((S - im.naturalWidth) / 2), Math.round((S - im.naturalHeight) / 2));
+        try { base = cx.getImageData(0, 0, S, S); } catch (e) {}
+      };
+      im.src = getImg();
+      cv.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (!cv.width) return;
+        const r = cv.getBoundingClientRect();
+        const x = Math.round((e.clientX - r.left) * (cv.width / r.width));
+        const y = Math.round((e.clientY - r.top) * (cv.height / r.height));
+        if (x < 0 || y < 0 || x >= cv.width || y >= cv.height) return;
+        try { history.push(cx.getImageData(0, 0, cv.width, cv.height)); if (history.length > 10) history.shift(); } catch (e2) {}
+        floodFill(cx, cv.width, cv.height, x, y, hexToRgb(selected), 50);
+      });
+      el.querySelector('#colorUndo').onclick = () => { const s = history.pop(); if (s) cx.putImageData(s, 0, 0); };
+      el.querySelector('#colorClear').onclick = () => { if (base) cx.putImageData(base, 0, 0); history.length = 0; };
+    } else {
+      const svg = el.querySelector('#colorSvg');
+      svg.querySelectorAll('.cregion').forEach(r => r.addEventListener('click', () => {
+        history.push({ el: r, fill: r.getAttribute('fill') });
+        r.setAttribute('fill', selected);
+      }));
+      el.querySelector('#colorUndo').onclick = () => { const last = history.pop(); if (last) last.el.setAttribute('fill', last.fill); };
+      el.querySelector('#colorClear').onclick = () => { svg.querySelectorAll('.cregion').forEach(r => r.setAttribute('fill', '#ffffff')); history.length = 0; };
+    }
+    const n = total();
+    el.querySelector('#colorPrev').onclick = () => { pic = (pic - 1 + n) % n; render(); };
+    el.querySelector('#colorNext').onclick = () => { pic = (pic + 1) % n; render(); };
+    const fileEl = el.querySelector('#colorFile');
+    el.querySelector('#colorLoad').onclick = () => fileEl.click();
+    fileEl.onchange = () => {
+      const f = fileEl.files[0]; fileEl.value = ''; if (!f) return;
+      loadBrushImage(f, (durl) => {
+        try { localStorage.setItem(CKEY, durl); }
+        catch (e) { alert('사진이 너무 커서 저장할 수 없어요. 더 작은 사진을 써주세요.'); return; }
+        pic = COLOR_PICS.length; render();
+      });
+    };
+    const delImg = el.querySelector('#colorDelImg');
+    if (delImg) delImg.onclick = () => { if (!confirm('불러온 사진을 삭제할까요?')) return; try { localStorage.removeItem(CKEY); } catch (e) {} pic = 0; render(); };
   };
   render();
 }
