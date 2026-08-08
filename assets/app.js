@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b71';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b72';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -1148,15 +1148,45 @@ function startColor(el) {
 
 // ── 미니게임: 붓칠하기 (자유 드로잉, 기록 없음) ───────
 // 색칠하기와 같은 밑그림에 canvas로 자유롭게 붓칠. 외곽선은 위에 겹쳐 보이게(채움 없음).
+// 붓칠하기 '내 사진' — 흰 배경에 다운스케일 후 dataURL (multiply 오버레이용)
+function loadBrushImage(file, cb) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    const MAX = 1100;
+    let w = img.naturalWidth, h = img.naturalHeight;
+    const s = Math.min(1, MAX / Math.max(w, h));
+    w = Math.max(1, Math.round(w * s)); h = Math.max(1, Math.round(h * s));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const cx = c.getContext('2d');
+    cx.fillStyle = '#fff'; cx.fillRect(0, 0, w, h);   // 투명 배경 → 흰색(멀티플라이 중립)
+    cx.drawImage(img, 0, 0, w, h);
+    let durl = '';
+    try { durl = c.toDataURL('image/jpeg', 0.88); } catch (e) {}
+    durl ? cb(durl) : alert('이미지 처리에 실패했어요.');
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); alert('이미지를 열 수 없어요.'); };
+  img.src = url;
+}
 function startBrush(el) {
   const SIZES = [6, 14, 26], RES = 600, SCALE = RES / 200;
+  const CKEY = 'gw-brush-img';
+  const getImg = () => { try { return localStorage.getItem(CKEY) || ''; } catch (e) { return ''; } };
+  const total = () => COLOR_PICS.length + (getImg() ? 1 : 0);
   let pic = 0, color = COLOR_PALETTE[0], size = SIZES[1];
   const render = () => {
+    if (pic >= total()) pic = 0;
+    const custom = !!getImg() && pic === COLOR_PICS.length;
+    const name = custom ? '내 그림' : COLOR_PICS[pic].name;
+    const overlay = custom
+      ? `<img class="brush-outline brush-img" src="${getImg()}" alt="내 그림">`
+      : `<svg class="brush-outline" viewBox="0 0 200 200">${COLOR_PICS[pic].svg}</svg>`;
     el.innerHTML = `<div class="mg brush">
-      <div class="mg-msg">${COLOR_PICS[pic].name} — 붓으로 칠해요 🖌️</div>
+      <div class="mg-msg">${name} — 붓으로 칠해요 🖌️</div>
       <div class="brush-stage">
         <canvas id="brushCv"></canvas>
-        <svg class="brush-outline" viewBox="0 0 200 200">${COLOR_PICS[pic].svg}</svg>
+        ${overlay}
       </div>
       <div class="color-palette" id="brushPal">${COLOR_PALETTE.map(c => `<button class="sw" data-c="${c}" style="background:${c}"></button>`).join('')}</div>
       <div class="brush-sizes" id="brushSizes">${SIZES.map(s => `<button class="bsz" data-s="${s}"><span style="width:${s}px;height:${s}px"></span></button>`).join('')}</div>
@@ -1166,6 +1196,11 @@ function startBrush(el) {
         <button class="btn ghost small" id="brushClear">전부삭제</button>
         <button class="btn ghost small" id="brushNext">다음 ▶</button>
       </div>
+      <div class="color-btns">
+        <button class="btn ghost small" id="brushLoad">🖼️ 내 사진 불러오기</button>
+        ${custom ? `<button class="btn ghost small" id="brushDelImg">🗑 사진 삭제</button>` : ''}
+      </div>
+      <input type="file" accept="image/*" id="brushFile" style="display:none">
     </div>`;
     const cv = el.querySelector('#brushCv');
     cv.width = RES; cv.height = RES;
@@ -1196,10 +1231,23 @@ function startBrush(el) {
     const markS = () => szEl.querySelectorAll('.bsz').forEach(b => b.classList.toggle('sel', +b.dataset.s === size));
     szEl.querySelectorAll('.bsz').forEach(b => b.onclick = () => { size = +b.dataset.s; markS(); });
     markS();
-    el.querySelector('#brushPrev').onclick = () => { pic = (pic - 1 + COLOR_PICS.length) % COLOR_PICS.length; render(); };
-    el.querySelector('#brushNext').onclick = () => { pic = (pic + 1) % COLOR_PICS.length; render(); };
+    const n = total();
+    el.querySelector('#brushPrev').onclick = () => { pic = (pic - 1 + n) % n; render(); };
+    el.querySelector('#brushNext').onclick = () => { pic = (pic + 1) % n; render(); };
     el.querySelector('#brushUndo').onclick = () => { const s = history.pop(); if (s) ctx.putImageData(s, 0, 0); };
     el.querySelector('#brushClear').onclick = () => { ctx.clearRect(0, 0, cv.width, cv.height); history.length = 0; };
+    const fileEl = el.querySelector('#brushFile');
+    el.querySelector('#brushLoad').onclick = () => fileEl.click();
+    fileEl.onchange = () => {
+      const f = fileEl.files[0]; fileEl.value = ''; if (!f) return;
+      loadBrushImage(f, (durl) => {
+        try { localStorage.setItem(CKEY, durl); }
+        catch (e) { alert('사진이 너무 커서 저장할 수 없어요. 더 작은 사진을 써주세요.'); return; }
+        pic = COLOR_PICS.length; render();
+      });
+    };
+    const delImg = el.querySelector('#brushDelImg');
+    if (delImg) delImg.onclick = () => { if (!confirm('불러온 사진을 삭제할까요?')) return; try { localStorage.removeItem(CKEY); } catch (e) {} pic = 0; render(); };
   };
   render();
 }
