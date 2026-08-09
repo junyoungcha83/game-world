@@ -82,8 +82,10 @@ body.playing .app-main { overscroll-behavior-y: contain; }
   background: rgba(2, 6, 23, .72); color: #fff; border-radius: 14px; font-size: 1.3rem; font-weight: 800; text-align: center; }
 .pin-msg b { font-size: 1.6rem; color: #facc15; }
 .pin-msg.hidden { display: none; }
-.pin-ctrl { display: flex; gap: 10px; width: min(94vw, 340px); }
-.pin-ctrl .btn.flip { flex: 1; padding: 16px 0; font-size: 1.05rem; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+.pin-ctrl { display: flex; gap: 8px; width: min(94vw, 340px); }
+.pin-ctrl .btn { padding: 16px 0; font-size: 1.05rem; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+.pin-ctrl .btn.flip { flex: 1; font-size: 1.3rem; }
+.pin-ctrl .btn.launch { flex: 1.4; }
 .pin-tip { font-size: .78rem; color: var(--muted); text-align: center; max-width: min(94vw, 340px); }
 .rps-choices { display: flex; gap: 14px; }
 .rps-choices button { width: 76px; height: 76px; font-size: 2.2rem; border-radius: 18px;
