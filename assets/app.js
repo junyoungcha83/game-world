@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b75';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b76';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -1114,7 +1114,22 @@ const COLOR_PICS = [
     <circle cx="92" cy="68" r="3" fill="#333"/>
     <circle cx="108" cy="68" r="3" fill="#333"/>` },
 ];
-const COLOR_PALETTE =['#ef4444','#f97316','#facc15','#34d399','#22d3ee','#60a5fa','#a78bfa','#f472b6','#8b5a2b','#9ca3af','#000000','#ffffff'];
+const COLOR_PALETTE = [
+  // 빨강·분홍
+  '#7f1d1d', '#ef4444', '#f87171', '#ec4899', '#f9a8d4',
+  // 주황·노랑
+  '#c2410c', '#f97316', '#fdba74', '#eab308', '#facc15', '#fde047',
+  // 초록
+  '#4d7c0f', '#22c55e', '#86efac',
+  // 청록·파랑
+  '#0d9488', '#22d3ee', '#a5f3fc', '#1e40af', '#3b82f6', '#93c5fd',
+  // 보라
+  '#6d28d9', '#a78bfa', '#c084fc',
+  // 갈색·살구
+  '#92400e', '#b45309', '#d2a679', '#f5d0b5',
+  // 무채색
+  '#000000', '#9ca3af', '#e5e7eb', '#ffffff'
+];
 
 // #hex → [r,g,b]
 function hexToRgb(hex) {
