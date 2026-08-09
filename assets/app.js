@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b76';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b77';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -1189,6 +1189,7 @@ function startColor(el) {
       </div>
       <div class="color-btns">
         <button class="btn ghost small" id="colorLoad">🖼️ 내 사진 추가</button>
+        <button class="btn ghost small" id="colorSave">💾 저장하기</button>
         ${custom ? `<button class="btn ghost small" id="colorDelImg">🗑 이 사진 삭제</button>` : ''}
       </div>
       <input type="file" accept="image/*" multiple id="colorFile" style="display:none">
@@ -1244,6 +1245,11 @@ function startColor(el) {
     });
     const delImg = el.querySelector('#colorDelImg');
     if (delImg) delImg.onclick = () => { if (!confirm('이 사진을 삭제할까요?')) return; galleryRemoveAt(ci); pic = 0; render(); };
+    // 저장하기 — 색칠 결과를 한 장으로 만들어 사진첩에 저장
+    el.querySelector('#colorSave').onclick = () => {
+      if (custom) saveCanvasToGallery(el.querySelector('#colorCv'), artFilename());
+      else svgToCanvas(el.querySelector('#colorSvg'), 800, '#fff', (c) => saveCanvasToGallery(c, artFilename()));
+    };
   };
   render();
 }
@@ -1313,6 +1319,47 @@ function addFilesToGallery(fileEl, done) {
   };
   step(0);
 }
+// SVG 요소를 캔버스로 래스터화. bg=null이면 투명 배경. done(canvas|null).
+function svgToCanvas(svgEl, size, bg, done) {
+  const clone = svgEl.cloneNode(true);
+  clone.setAttribute('width', size);
+  clone.setAttribute('height', size);
+  if (!clone.getAttribute('viewBox')) clone.setAttribute('viewBox', '0 0 200 200');
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  const xml = new XMLSerializer().serializeToString(clone);
+  const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas'); c.width = size; c.height = size;
+    const cx = c.getContext('2d');
+    if (bg) { cx.fillStyle = bg; cx.fillRect(0, 0, size, size); }
+    cx.drawImage(img, 0, 0, size, size);
+    done(c);
+  };
+  img.onerror = () => done(null);
+  img.src = url;
+}
+function artFilename() {
+  const d = new Date(), p = (n) => String(n).padStart(2, '0');
+  return `내그림_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.png`;
+}
+// 캔버스를 사진첩에 저장. 모바일은 공유시트('이미지 저장'), 안 되면 다운로드로 폴백.
+function saveCanvasToGallery(canvas, filename) {
+  if (!canvas) { alert('저장할 그림을 만들지 못했어요.'); return; }
+  canvas.toBlob((blob) => {
+    if (!blob) { alert('저장할 그림을 만들지 못했어요.'); return; }
+    const file = new File([blob], filename, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: '내 그림' }).catch(() => {});   // 사용자가 취소하면 무시
+      return;
+    }
+    const url = URL.createObjectURL(blob);   // 폴백: 파일 다운로드
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, 'image/png');
+}
 function startBrush(el) {
   const SIZES = [6, 14, 26], RES = 600, SCALE = RES / 200;
   let pic = 0, color = COLOR_PALETTE[0], size = SIZES[1];
@@ -1342,6 +1389,7 @@ function startBrush(el) {
       </div>
       <div class="color-btns">
         <button class="btn ghost small" id="brushLoad">🖼️ 내 사진 추가</button>
+        <button class="btn ghost small" id="brushSave">💾 저장하기</button>
         ${custom ? `<button class="btn ghost small" id="brushDelImg">🗑 이 사진 삭제</button>` : ''}
       </div>
       <input type="file" accept="image/*" multiple id="brushFile" style="display:none">
@@ -1390,6 +1438,30 @@ function startBrush(el) {
     });
     const delImg = el.querySelector('#brushDelImg');
     if (delImg) delImg.onclick = () => { if (!confirm('이 사진을 삭제할까요?')) return; galleryRemoveAt(ci); pic = 0; render(); };
+    // 저장하기 — 붓칠(캔버스)과 외곽선을 한 장으로 합성해 사진첩에 저장
+    el.querySelector('#brushSave').onclick = () => {
+      const out = document.createElement('canvas'); out.width = RES; out.height = RES;
+      const oc = out.getContext('2d');
+      oc.fillStyle = '#fff'; oc.fillRect(0, 0, RES, RES);
+      oc.drawImage(cv, 0, 0);   // 붓칠 획
+      if (custom) {
+        const im2 = new Image();
+        im2.onload = () => {
+          const s = Math.min(RES / im2.naturalWidth, RES / im2.naturalHeight);   // contain 배치
+          const w = im2.naturalWidth * s, h = im2.naturalHeight * s;
+          oc.globalCompositeOperation = 'multiply';   // 화면과 동일하게 외곽선을 곱하기 합성
+          oc.drawImage(im2, (RES - w) / 2, (RES - h) / 2, w, h);
+          oc.globalCompositeOperation = 'source-over';
+          saveCanvasToGallery(out, artFilename());
+        };
+        im2.onerror = () => saveCanvasToGallery(out, artFilename());
+        im2.src = imgs[ci];
+      } else {
+        const clone = el.querySelector('.brush-outline').cloneNode(true);
+        clone.querySelectorAll('.cregion').forEach(r => r.setAttribute('fill', 'none'));   // 외곽선만(채움 제거)
+        svgToCanvas(clone, RES, null, (sc) => { if (sc) oc.drawImage(sc, 0, 0); saveCanvasToGallery(out, artFilename()); });
+      }
+    };
   };
   render();
 }
