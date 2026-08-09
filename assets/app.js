@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b77';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b78';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -1189,7 +1189,7 @@ function startColor(el) {
       </div>
       <div class="color-btns">
         <button class="btn ghost small" id="colorLoad">🖼️ 내 사진 추가</button>
-        <button class="btn ghost small" id="colorSave">💾 저장하기</button>
+        <button class="btn ghost small" id="colorSave" title="사진첩(갤러리)에 저장">💾 저장하기</button>
         ${custom ? `<button class="btn ghost small" id="colorDelImg">🗑 이 사진 삭제</button>` : ''}
       </div>
       <input type="file" accept="image/*" multiple id="colorFile" style="display:none">
@@ -1343,21 +1343,29 @@ function artFilename() {
   const d = new Date(), p = (n) => String(n).padStart(2, '0');
   return `내그림_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.png`;
 }
-// 캔버스를 사진첩에 저장. 모바일은 공유시트('이미지 저장'), 안 되면 다운로드로 폴백.
+// 캔버스를 사진첩에 저장. 모바일은 공유시트('이미지 저장')로 사진 앱(갤러리)에 저장,
+// 공유가 안 되거나 실패하면 PNG 파일 다운로드로 대체.
+// ※ 웹앱은 저장 폴더(예: 스크린샷 폴더)를 지정할 수 없음 — OS가 위치를 결정.
 function saveCanvasToGallery(canvas, filename) {
   if (!canvas) { alert('저장할 그림을 만들지 못했어요.'); return; }
   canvas.toBlob((blob) => {
     if (!blob) { alert('저장할 그림을 만들지 못했어요.'); return; }
+    const download = () => {   // 폴백: 파일 다운로드
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
     const file = new File([blob], filename, { type: 'image/png' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({ files: [file], title: '내 그림' }).catch(() => {});   // 사용자가 취소하면 무시
+      navigator.share({ files: [file], title: '내 그림' }).catch((err) => {
+        if (err && err.name === 'AbortError') return;   // 사용자가 취소 → 그대로 둠
+        download();                                      // 공유 실패(권한/제스처) → 다운로드로 저장
+      });
       return;
     }
-    const url = URL.createObjectURL(blob);   // 폴백: 파일 다운로드
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    download();
   }, 'image/png');
 }
 function startBrush(el) {
@@ -1389,7 +1397,7 @@ function startBrush(el) {
       </div>
       <div class="color-btns">
         <button class="btn ghost small" id="brushLoad">🖼️ 내 사진 추가</button>
-        <button class="btn ghost small" id="brushSave">💾 저장하기</button>
+        <button class="btn ghost small" id="brushSave" title="사진첩(갤러리)에 저장">💾 저장하기</button>
         ${custom ? `<button class="btn ghost small" id="brushDelImg">🗑 이 사진 삭제</button>` : ''}
       </div>
       <input type="file" accept="image/*" multiple id="brushFile" style="display:none">
