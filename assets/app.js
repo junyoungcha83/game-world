@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b80';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b81';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -1598,11 +1598,10 @@ function startPinball(el) {
       <div class="pin-msg hidden" id="pinMsg"></div>
     </div>
     <div class="pin-ctrl">
-      <button class="btn flip" id="pinL">◀</button>
-      <button class="btn launch" id="pinLaunch">🚀 발사</button>
-      <button class="btn flip" id="pinR">▶</button>
+      <button class="btn flip" id="pinL">◀ 왼쪽</button>
+      <button class="btn flip" id="pinR">오른쪽 ▶</button>
     </div>
-    <div class="pin-tip">◀▶(또는 화면 좌/우 터치, 키보드 ←→) 플리퍼 · 🚀 길게 눌러 발사(Space)</div>
+    <div class="pin-tip">공은 위에서 자동으로 투입돼요 · ◀▶(화면 좌/우 터치, 키보드 ←→)로 플리퍼</div>
   </div>`;
 
   const cv = el.querySelector('#pinCv'), ctx = cv.getContext('2d');
@@ -1615,8 +1614,7 @@ function startPinball(el) {
     [150,38,214,52],[214,52,262,92],[262,92,286,150],[286,150,286,300],  // 우 돔 + 우 벽
     [16,300,16,412],[16,412,96,470],[286,300,286,412],[286,412,214,470], // 하단 유도(아웃레인)
     [70,392,104,452],[240,392,206,452],                            // 인레인 분리대
-    [292,150,292,524],[314,84,314,524],[292,524,314,524],[314,84,272,50], // 플런저 레인 + 상단 디플렉터
-  ];
+  ]; // 우측은 돔+우측벽으로 닫힘 (플런저 레인 제거 → 공은 상단에서 자동 투입)
   // 팝 범퍼(원)
   const BUMPERS = [
     { x:110, y:150, r:19, pts:100, flash:0 },
@@ -1649,8 +1647,9 @@ function startPinball(el) {
   const flipR = { px:214, py:476, rest:Math.PI-0.6, act:Math.PI+0.48, a:Math.PI-0.6, pressed:false };
   const flipTip = f => ({ x:f.px+FL*Math.cos(f.a), y:f.py+FL*Math.sin(f.a) });
 
-  let ball, score=0, balls=BALLS_START, over=false, inLane=true, charging=false, pwr=0;
-  function newBall(){ ball={ x:303, y:512, vx:0, vy:0 }; inLane=true; pwr=0; }
+  let ball, score=0, balls=BALLS_START, over=false;
+  // 공 자동 투입: 상단 중앙 살짝 옆에서 아래로 떨어져 항상 플레이로 진입
+  function newBall(){ ball={ x:150 + (Math.random()*40-20), y:64, vx:(Math.random()*2-1)*1.4, vy:1.2 }; }
   newBall();
 
   function closestOnSeg(px,py,ax,ay,bx,by){ const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy||1; let t=((px-ax)*dx+(py-ay)*dy)/L2; t=Math.max(0,Math.min(1,t)); return {x:ax+t*dx,y:ay+t*dy}; }
@@ -1681,11 +1680,9 @@ function startPinball(el) {
 
   function step(){
     for(const f of [flipL,flipR]){ const t=f.pressed?f.act:f.rest; f.a+=(t-f.a)*0.55; }
-    if(charging && inLane){ pwr=Math.min(pwr+0.5,16); }
     ball.vy+=GRAV;
-    const sp=Math.hypot(ball.vx,ball.vy), MAX=12; if(sp>MAX){ ball.vx*=MAX/sp; ball.vy*=MAX/sp; }
+    const sp=Math.hypot(ball.vx,ball.vy), MAX=15; if(sp>MAX){ ball.vx*=MAX/sp; ball.vy*=MAX/sp; }
     ball.x+=ball.vx; ball.y+=ball.vy;
-    if(inLane && ball.x<292) inLane=false;
 
     for(const w of WALLS) bounceSeg(w[0],w[1],w[2],w[3],WALL_E,0);
     for(const b of BUMPERS){ if(circleHit(b.x,b.y,b.r,1.0,1.6)){ b.flash=8; addScore(b.pts); } }
@@ -1721,7 +1718,6 @@ function startPinball(el) {
     for(const b of BUMPERS){ ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,7); ctx.fillStyle=b.flash>0?'#fde047':'#f97316'; ctx.fill(); ctx.beginPath(); ctx.arc(b.x,b.y,b.r*0.6,0,7); ctx.fillStyle=b.flash>0?'#fff7ed':'#fdba74'; ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle='#fff7ed'; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,7); ctx.stroke(); if(b.flash>0)b.flash--; }
     ctx.strokeStyle='#facc15'; ctx.lineWidth=FLT; ctx.lineCap='round';
     for(const f of [flipL,flipR]){ const t=flipTip(f); ctx.beginPath(); ctx.moveTo(f.px,f.py); ctx.lineTo(t.x,t.y); ctx.stroke(); }
-    if(inLane){ const ph=Math.min(pwr/16,1)*70; ctx.fillStyle='#22c55e'; ctx.fillRect(305,520-ph,6,ph); }
     ctx.beginPath(); ctx.arc(ball.x,ball.y,R,0,7); ctx.fillStyle='#f1f5f9'; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle='#94a3b8'; ctx.stroke();
   }
 
@@ -1733,16 +1729,14 @@ function startPinball(el) {
   }
 
   const setL=v=>flipL.pressed=v, setR=v=>flipR.pressed=v;
-  const doLaunch=()=>{ if(inLane){ ball.vy=-(pwr||10); ball.vx=-0.6; } charging=false; pwr=0; };
   const bindHold=(id,dn,up)=>{ const b=el.querySelector(id); b.addEventListener('pointerdown',e=>{e.preventDefault();dn();}); b.addEventListener('pointerup',up); b.addEventListener('pointerleave',up); b.addEventListener('pointercancel',up); };
   bindHold('#pinL',()=>setL(true),()=>setL(false));
   bindHold('#pinR',()=>setR(true),()=>setR(false));
-  bindHold('#pinLaunch',()=>{charging=true;},()=>doLaunch());
   cv.addEventListener('pointerdown',e=>{ const r=cv.getBoundingClientRect(); (e.clientX-r.left<r.width/2?setL:setR)(true); });
   cv.addEventListener('pointerup',()=>{setL(false);setR(false);});
   cv.addEventListener('pointercancel',()=>{setL(false);setR(false);});
-  function onKey(e){ if(e.key==='ArrowLeft')setL(true); else if(e.key==='ArrowRight')setR(true); else if(e.key===' '||e.key==='ArrowUp'){ if(inLane)charging=true; } }
-  function onKeyUp(e){ if(e.key==='ArrowLeft')setL(false); else if(e.key==='ArrowRight')setR(false); else if(e.key===' '||e.key==='ArrowUp'){ doLaunch(); } }
+  function onKey(e){ if(e.key==='ArrowLeft')setL(true); else if(e.key==='ArrowRight')setR(true); }
+  function onKeyUp(e){ if(e.key==='ArrowLeft')setL(false); else if(e.key==='ArrowRight')setR(false); }
   window.addEventListener('keydown',onKey); window.addEventListener('keyup',onKeyUp);
 
   requestAnimationFrame(loop);
