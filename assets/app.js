@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b78';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b79';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -254,6 +254,8 @@ const GAMES = [
     fmtStat: s => s ? `${s.plays}경기·${s.wins}승 · 최다 ${s.best || 0}점` : '아직 기록 없음', start: startKbo },
   { id: 'archery', name: '양궁', emoji: '🎯', color: '#dc2626', best: 'high',
     fmtStat: s => s ? `${s.plays}경기·${s.wins}승 · 최고 ${s.best || 0}단계 격파` : '아직 기록 없음', start: startArchery },
+  { id: 'pinball', name: '핀볼', emoji: '🔴', color: '#f97316', best: 'high',
+    fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startPinball },
 ];
 // 오목 난이도(급수) — 기록은 급수별로 따로 누적/순위
 const OMOK_LEVELS = [
@@ -312,7 +314,7 @@ function boardGames() {
 const HUB_CATEGORIES = [
   { label: '🎨 자유',  ids: ['color', 'brush', 'roulette'] },
   { label: '♟️ 보드',  ids: ['omok', 'janggi', 'chess', 'ttt', 'baseball', 'spot'] },
-  { label: '⚾ 스포츠', ids: ['kbo', 'archery'] },
+  { label: '⚾ 스포츠', ids: ['kbo', 'archery', 'pinball'] },
   { label: '🕹️ 레트로', ids: ['timer10', 'rps', 'guess'] },
   { label: '🧠 퀴즈',  ids: ['flags', 'capital', 'mapq'] },
 ];
@@ -1576,6 +1578,183 @@ function startRoulette(el) {
   el.querySelector('#rlPlus').onclick = () => setN(n + 1);
 
   renderItems(); draw();
+}
+
+// ── 미니게임: 핀볼 (스포츠) ───────────────────────────
+// 캔버스 물리(중력·반사) 기반. 좌우 플리퍼로 공을 튕겨 범퍼를 맞혀 점수. 공 3개.
+function startPinball(el) {
+  const W = 300, H = 460, R = 8;               // 논리 캔버스 크기 · 공 반지름
+  const GRAV = 0.24, WALL_E = 0.62, BUMP_E = 1.02, FLIP_E = 0.5;
+  const BALLS_START = 3;
+
+  el.innerHTML = `<div class="mg pinball">
+    <div class="pin-hud">
+      <span>점수 <b id="pinScore">0</b></span>
+      <span>공 <b id="pinBalls">${BALLS_START}</b></span>
+      <span>최고 <b id="pinBest">${(getStat('pinball')?.best || 0).toLocaleString('ko-KR')}</b></span>
+    </div>
+    <div class="pin-stage">
+      <canvas id="pinCv" width="${W}" height="${H}"></canvas>
+      <div class="pin-msg hidden" id="pinMsg"></div>
+    </div>
+    <div class="pin-ctrl">
+      <button class="btn flip" id="pinL">◀ 왼쪽</button>
+      <button class="btn flip" id="pinR">오른쪽 ▶</button>
+    </div>
+    <div class="pin-tip">좌우 버튼(또는 화면 좌/우 터치, 키보드 ←→)으로 플리퍼를 튕겨요</div>
+  </div>`;
+
+  const cv = el.querySelector('#pinCv'), ctx = cv.getContext('2d');
+  const $score = el.querySelector('#pinScore'), $balls = el.querySelector('#pinBalls'), $msg = el.querySelector('#pinMsg');
+  const alive = () => !!el.querySelector('.pinball');
+
+  // 정적 벽(선분)
+  const WALLS = [
+    [14, 14, 14, 372], [286, 14, 286, 372], [14, 14, 286, 14],   // 좌·우·상
+    [14, 372, 108, 410], [286, 372, 192, 410],                    // 하단 경사(아웃레인)
+  ];
+  // 범퍼(원) — 맞으면 점수
+  const BUMPERS = [
+    { x: 150, y: 108, r: 22, pts: 100, flash: 0 },
+    { x: 92,  y: 176, r: 17, pts: 50,  flash: 0 },
+    { x: 208, y: 176, r: 17, pts: 50,  flash: 0 },
+    { x: 150, y: 232, r: 15, pts: 50,  flash: 0 },
+  ];
+  // 플리퍼: pivot 고정, 각도 애니메이션
+  const FL = 62, FLT = 9;   // 길이 · 두께
+  const flipL = { px: 108, py: 410, rest: 0.33, act: -0.42, a: 0.33, pressed: false, dir: 1 };
+  const flipR = { px: 192, py: 410, rest: Math.PI - 0.33, act: Math.PI + 0.42, a: Math.PI - 0.33, pressed: false, dir: -1 };
+  const flipTip = (f) => ({ x: f.px + FL * Math.cos(f.a), y: f.py + FL * Math.sin(f.a) });
+
+  let ball, score = 0, balls = BALLS_START, over = false, launching = true;
+
+  function newBall() {
+    ball = { x: 150, y: 44, vx: (Math.random() * 2 - 1) * 1.2, vy: 0 };
+    launching = true;
+  }
+  newBall();
+
+  function closestOnSeg(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1;
+    let t = ((px - ax) * dx + (py - ay) * dy) / L2; t = Math.max(0, Math.min(1, t));
+    return { x: ax + t * dx, y: ay + t * dy };
+  }
+  function bounceSeg(ax, ay, bx, by, e, boost) {
+    const c = closestOnSeg(ball.x, ball.y, ax, ay, bx, by);
+    let nx = ball.x - c.x, ny = ball.y - c.y;
+    let d = Math.hypot(nx, ny);
+    if (d >= R + FLT / 2) return false;
+    if (d < 0.01) { nx = 0; ny = -1; d = 1; }
+    nx /= d; ny /= d;
+    const overlap = (R + FLT / 2) - d;
+    ball.x += nx * overlap; ball.y += ny * overlap;
+    const vn = ball.vx * nx + ball.vy * ny;
+    if (vn < 0) { ball.vx -= (1 + e) * vn * nx; ball.vy -= (1 + e) * vn * ny; }
+    if (boost) { ball.vx += nx * boost; ball.vy += ny * boost; }
+    return true;
+  }
+
+  function step() {
+    // 플리퍼 각도 이동
+    for (const f of [flipL, flipR]) {
+      const target = f.pressed ? f.act : f.rest;
+      f.a += (target - f.a) * 0.55;
+    }
+    ball.vy += GRAV;
+    // 속도 제한
+    const sp = Math.hypot(ball.vx, ball.vy), MAX = 11;
+    if (sp > MAX) { ball.vx *= MAX / sp; ball.vy *= MAX / sp; }
+    ball.x += ball.vx; ball.y += ball.vy;
+
+    // 벽
+    for (const w of WALLS) bounceSeg(w[0], w[1], w[2], w[3], WALL_E, 0);
+    // 범퍼
+    for (const b of BUMPERS) {
+      let nx = ball.x - b.x, ny = ball.y - b.y, d = Math.hypot(nx, ny);
+      if (d < R + b.r) {
+        if (d < 0.01) { nx = 0; ny = -1; d = 1; }
+        nx /= d; ny /= d;
+        ball.x = b.x + nx * (R + b.r); ball.y = b.y + ny * (R + b.r);
+        const vn = ball.vx * nx + ball.vy * ny;
+        ball.vx -= (1 + BUMP_E) * vn * nx; ball.vy -= (1 + BUMP_E) * vn * ny;
+        ball.vx += nx * 1.4; ball.vy += ny * 1.4;   // 살짝 킥
+        b.flash = 8; addScore(b.pts);
+      }
+    }
+    // 플리퍼(눌렀을 때 위로 부스트)
+    for (const f of [flipL, flipR]) {
+      const tip = flipTip(f);
+      const boost = f.pressed ? 6.5 : 0;
+      bounceSeg(f.px, f.py, tip.x, tip.y, FLIP_E, boost);
+    }
+    // 드레인(플리퍼 아래로)
+    if (ball.y - R > H) loseBall();
+  }
+
+  function addScore(p) { score += p; $score.textContent = score.toLocaleString('ko-KR'); }
+  function loseBall() {
+    balls--; $balls.textContent = Math.max(0, balls);
+    if (balls <= 0) { gameOver(); return; }
+    newBall();
+  }
+  function gameOver() {
+    over = true;
+    recordStat('pinball', { best: score, result: score > 0 ? 'win' : undefined });
+    $msg.innerHTML = `게임 오버<br><b>${score.toLocaleString('ko-KR')}점</b><br><button class="btn" id="pinAgain">다시하기</button>`;
+    $msg.classList.remove('hidden');
+    const again = el.querySelector('#pinAgain');
+    if (again) again.onclick = () => { score = 0; balls = BALLS_START; over = false; $score.textContent = '0'; $balls.textContent = balls; $msg.classList.add('hidden'); newBall(); };
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, H);
+    // 벽
+    ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    for (const w of WALLS) { ctx.beginPath(); ctx.moveTo(w[0], w[1]); ctx.lineTo(w[2], w[3]); ctx.stroke(); }
+    // 범퍼
+    for (const b of BUMPERS) {
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7);
+      ctx.fillStyle = b.flash > 0 ? '#fde047' : '#f97316'; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = '#fff7ed'; ctx.stroke();
+      if (b.flash > 0) b.flash--;
+    }
+    // 플리퍼
+    ctx.strokeStyle = '#facc15'; ctx.lineWidth = FLT; ctx.lineCap = 'round';
+    for (const f of [flipL, flipR]) { const t = flipTip(f); ctx.beginPath(); ctx.moveTo(f.px, f.py); ctx.lineTo(t.x, t.y); ctx.stroke(); }
+    // 공
+    ctx.beginPath(); ctx.arc(ball.x, ball.y, R, 0, 7);
+    ctx.fillStyle = '#e5e7eb'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#94a3b8'; ctx.stroke();
+  }
+
+  // 루프
+  function loop() {
+    if (!alive()) { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKeyUp); return; }
+    if (!over) { for (let i = 0; i < 3; i++) step(); }   // 서브스텝(터널링 방지)
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // 입력
+  const setL = (v) => flipL.pressed = v, setR = (v) => flipR.pressed = v;
+  const bindBtn = (id, set) => {
+    const b = el.querySelector(id);
+    b.addEventListener('pointerdown', e => { e.preventDefault(); set(true); });
+    b.addEventListener('pointerup', () => set(false));
+    b.addEventListener('pointerleave', () => set(false));
+    b.addEventListener('pointercancel', () => set(false));
+  };
+  bindBtn('#pinL', setL); bindBtn('#pinR', setR);
+  // 화면 좌/우 터치로도 플리퍼
+  cv.addEventListener('pointerdown', e => { const r = cv.getBoundingClientRect(); (e.clientX - r.left < r.width / 2 ? setL : setR)(true); });
+  cv.addEventListener('pointerup', () => { setL(false); setR(false); });
+  cv.addEventListener('pointercancel', () => { setL(false); setR(false); });
+  function onKey(e) { if (e.key === 'ArrowLeft') setL(true); else if (e.key === 'ArrowRight') setR(true); }
+  function onKeyUp(e) { if (e.key === 'ArrowLeft') setL(false); else if (e.key === 'ArrowRight') setR(false); }
+  window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKeyUp);
+
+  requestAnimationFrame(loop);
 }
 
 // ── 미니게임: 10초 맞추기 ─────────────────────────────
