@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b83';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b84';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -1756,7 +1756,7 @@ function startPinball(el) {
 // ── 미니게임: 테트리스 (보드) ─────────────────────────
 // 10x20 보드, 7종 블록(7-bag), 이동/회전(월킥)/소프트·하드드롭, 라인클리어·점수·레벨. 최고 점수 기록.
 function startTetris(el) {
-  const COLS = 10, ROWS = 20, CELL = 24;
+  const COLS = 10, ROWS = 20, CELL = 30;
   const COLORS = { I: '#22d3ee', O: '#facc15', T: '#a78bfa', S: '#34d399', Z: '#f87171', J: '#60a5fa', L: '#fb923c' };
   const SHAPES = { I: [[1, 1, 1, 1]], O: [[1, 1], [1, 1]], T: [[0, 1, 0], [1, 1, 1]], S: [[0, 1, 1], [1, 1, 0]], Z: [[1, 1, 0], [0, 1, 1]], J: [[1, 0, 0], [1, 1, 1]], L: [[0, 0, 1], [1, 1, 1]] };
   const KEYS = Object.keys(SHAPES);

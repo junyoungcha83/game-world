@@ -90,19 +90,19 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 
 /* 테트리스 */
 .mg.tetris { gap: 10px; width: 100%; }
-.tet-hud { display: flex; align-items: center; gap: 12px; width: min(92vw, 300px); font-size: .9rem; color: var(--muted); flex-wrap: wrap; }
+.tet-hud { display: flex; align-items: center; gap: 12px; width: min(96vw, 400px); font-size: .95rem; color: var(--muted); flex-wrap: wrap; }
 .tet-hud b { color: var(--primary2); font-variant-numeric: tabular-nums; }
 .tet-next { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .tet-next canvas { background: #0b1220; border-radius: 6px; }
-.tet-stage { position: relative; width: min(62vw, 240px); }
+.tet-stage { position: relative; width: min(90vw, 400px); }
 .tet-stage #tCv { width: 100%; height: auto; display: block; border-radius: 10px; background: #0b1220; touch-action: none; image-rendering: pixelated; }
 .tet-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-  background: rgba(2,6,23,.78); color: #fff; border-radius: 10px; font-size: 1.2rem; font-weight: 800; text-align: center; }
-.tet-msg b { font-size: 1.5rem; color: #38bdf8; }
+  background: rgba(2,6,23,.78); color: #fff; border-radius: 10px; font-size: 1.3rem; font-weight: 800; text-align: center; }
+.tet-msg b { font-size: 1.7rem; color: #38bdf8; }
 .tet-msg.hidden { display: none; }
-.tet-ctrl { display: flex; gap: 8px; width: min(92vw, 320px); }
-.tet-ctrl .btn { flex: 1; padding: 14px 0; font-size: 1.15rem; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
-.tet-tip { font-size: .74rem; color: var(--muted); text-align: center; max-width: min(92vw, 340px); }
+.tet-ctrl { display: flex; gap: 10px; width: min(96vw, 440px); }
+.tet-ctrl .btn { flex: 1; padding: 22px 0; font-size: 1.6rem; border-radius: 14px; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+.tet-tip { font-size: .76rem; color: var(--muted); text-align: center; max-width: min(96vw, 440px); }
 
 .rps-choices { display: flex; gap: 14px; }
 .rps-choices button { width: 76px; height: 76px; font-size: 2.2rem; border-radius: 18px;
