@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b82';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b83';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -256,6 +256,8 @@ const GAMES = [
     fmtStat: s => s ? `${s.plays}경기·${s.wins}승 · 최고 ${s.best || 0}단계 격파` : '아직 기록 없음', start: startArchery },
   { id: 'pinball', name: '핀볼', emoji: '🔴', color: '#f97316', best: 'high',
     fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startPinball },
+  { id: 'tetris', name: '테트리스', emoji: '🟦', color: '#0ea5e9', best: 'high',
+    fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startTetris },
 ];
 // 오목 난이도(급수) — 기록은 급수별로 따로 누적/순위
 const OMOK_LEVELS = [
@@ -313,7 +315,7 @@ function boardGames() {
 // 홈 화면 카테고리 분류
 const HUB_CATEGORIES = [
   { label: '🎨 자유',  ids: ['color', 'brush', 'roulette'] },
-  { label: '♟️ 보드',  ids: ['omok', 'janggi', 'chess', 'ttt', 'baseball', 'spot'] },
+  { label: '♟️ 보드',  ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot'] },
   { label: '⚾ 스포츠', ids: ['kbo', 'archery', 'pinball'] },
   { label: '🕹️ 레트로', ids: ['timer10', 'rps', 'guess'] },
   { label: '🧠 퀴즈',  ids: ['flags', 'capital', 'mapq'] },
@@ -1751,7 +1753,140 @@ function startPinball(el) {
   requestAnimationFrame(loop);
 }
 
+// ── 미니게임: 테트리스 (보드) ─────────────────────────
+// 10x20 보드, 7종 블록(7-bag), 이동/회전(월킥)/소프트·하드드롭, 라인클리어·점수·레벨. 최고 점수 기록.
+function startTetris(el) {
+  const COLS = 10, ROWS = 20, CELL = 24;
+  const COLORS = { I: '#22d3ee', O: '#facc15', T: '#a78bfa', S: '#34d399', Z: '#f87171', J: '#60a5fa', L: '#fb923c' };
+  const SHAPES = { I: [[1, 1, 1, 1]], O: [[1, 1], [1, 1]], T: [[0, 1, 0], [1, 1, 1]], S: [[0, 1, 1], [1, 1, 0]], Z: [[1, 1, 0], [0, 1, 1]], J: [[1, 0, 0], [1, 1, 1]], L: [[0, 0, 1], [1, 1, 1]] };
+  const KEYS = Object.keys(SHAPES);
+  const LINE_SCORE = [0, 100, 300, 500, 800];
 
+  el.innerHTML = `<div class="mg tetris">
+    <div class="tet-hud">
+      <span>점수 <b id="tScore">0</b></span>
+      <span>라인 <b id="tLines">0</b></span>
+      <span>레벨 <b id="tLevel">1</b></span>
+      <span class="tet-next">다음 <canvas id="tNext" width="52" height="52"></canvas></span>
+    </div>
+    <div class="tet-stage">
+      <canvas id="tCv" width="${COLS * CELL}" height="${ROWS * CELL}"></canvas>
+      <div class="tet-msg hidden" id="tMsg"></div>
+    </div>
+    <div class="tet-ctrl">
+      <button class="btn" id="tLeft">◀</button>
+      <button class="btn" id="tRot">⟳</button>
+      <button class="btn" id="tRight">▶</button>
+      <button class="btn" id="tDown">▼</button>
+      <button class="btn" id="tDrop">⤓</button>
+    </div>
+    <div class="tet-tip">◀▶ 이동 · ⟳ 회전 · ▼ 소프트드롭 · ⤓ 하드드롭 (키보드 ←→↓↑·Space)</div>
+  </div>`;
+
+  const cv = el.querySelector('#tCv'), ctx = cv.getContext('2d');
+  const ncv = el.querySelector('#tNext'), nctx = ncv.getContext('2d');
+  const $score = el.querySelector('#tScore'), $lines = el.querySelector('#tLines'), $level = el.querySelector('#tLevel'), $msg = el.querySelector('#tMsg');
+  const alive = () => !!el.querySelector('.tetris');
+
+  let grid, cur, bag, nextKey, score, lines, level, over, dropAcc, lastT;
+
+  function refillBag() { const b = KEYS.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } bag.push(...b); }
+  function fromBag() { if (bag.length < 1) refillBag(); return bag.shift(); }
+  function collide(shape, x, y) {
+    for (let r = 0; r < shape.length; r++) for (let c = 0; c < shape[r].length; c++) {
+      if (!shape[r][c]) continue;
+      const nx = x + c, ny = y + r;
+      if (nx < 0 || nx >= COLS || ny >= ROWS) return true;
+      if (ny >= 0 && grid[ny][nx]) return true;
+    }
+    return false;
+  }
+  function rotateCW(m) { const R = m.length, C = m[0].length; const n = Array.from({ length: C }, () => Array(R).fill(0)); for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) n[c][R - 1 - r] = m[r][c]; return n; }
+  function spawn() {
+    const k = nextKey; nextKey = fromBag();
+    const shape = SHAPES[k].map(r => r.slice());
+    cur = { color: COLORS[k], shape, x: Math.floor((COLS - shape[0].length) / 2), y: 0 };
+    drawNext();
+    if (collide(cur.shape, cur.x, cur.y)) gameOver();
+  }
+  function merge() { for (let r = 0; r < cur.shape.length; r++) for (let c = 0; c < cur.shape[r].length; c++) { if (cur.shape[r][c]) { const ny = cur.y + r; if (ny >= 0) grid[ny][cur.x + c] = cur.color; } } }
+  function clearLines() {
+    let n = 0;
+    for (let r = ROWS - 1; r >= 0; r--) { if (grid[r].every(c => c)) { grid.splice(r, 1); grid.unshift(Array(COLS).fill(0)); n++; r++; } }
+    if (n) { lines += n; score += LINE_SCORE[n] * level; level = Math.min(10, Math.floor(lines / 10) + 1); updateHud(); }
+  }
+  function lock() { merge(); clearLines(); if (!over) spawn(); }
+  function move(dx) { if (over) return; if (!collide(cur.shape, cur.x + dx, cur.y)) { cur.x += dx; draw(); } }
+  function gravity() { if (!collide(cur.shape, cur.x, cur.y + 1)) cur.y++; else lock(); }
+  function softDrop() { if (over) return; if (!collide(cur.shape, cur.x, cur.y + 1)) { cur.y++; score += 1; updateHud(); } else lock(); draw(); }
+  function hardDrop() { if (over) return; let d = 0; while (!collide(cur.shape, cur.x, cur.y + 1)) { cur.y++; d++; } score += d * 2; updateHud(); lock(); draw(); }
+  function rotate() { if (over) return; const nr = rotateCW(cur.shape); for (const off of [0, -1, 1, -2, 2]) { if (!collide(nr, cur.x + off, cur.y)) { cur.shape = nr; cur.x += off; draw(); return; } } }
+  function ghostY() { let y = cur.y; while (!collide(cur.shape, cur.x, y + 1)) y++; return y; }
+
+  function cell(g, x, y, color) { g.fillStyle = color; g.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2); g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, 4); }
+  function draw() {
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.strokeStyle = 'rgba(148,163,184,.08)'; ctx.lineWidth = 1;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { if (grid[r][c]) cell(ctx, c, r, grid[r][c]); }
+    if (cur && !over) {
+      const gy = ghostY();
+      for (let r = 0; r < cur.shape.length; r++) for (let c = 0; c < cur.shape[r].length; c++) {
+        if (!cur.shape[r][c]) continue;
+        if (gy !== cur.y) { ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect((cur.x + c) * CELL + 1, (gy + r) * CELL + 1, CELL - 2, CELL - 2); }
+        if (cur.y + r >= 0) cell(ctx, cur.x + c, cur.y + r, cur.color);
+      }
+    }
+  }
+  function drawNext() {
+    nctx.clearRect(0, 0, ncv.width, ncv.height);
+    const s = SHAPES[nextKey], u = 11, ox = (ncv.width - s[0].length * u) / 2, oy = (ncv.height - s.length * u) / 2;
+    nctx.fillStyle = COLORS[nextKey];
+    for (let r = 0; r < s.length; r++) for (let c = 0; c < s[r].length; c++) if (s[r][c]) nctx.fillRect(ox + c * u + 1, oy + r * u + 1, u - 2, u - 2);
+  }
+  function updateHud() { $score.textContent = score.toLocaleString('ko-KR'); $lines.textContent = lines; $level.textContent = level; }
+  function dropInterval() { return Math.max(120, 800 - (level - 1) * 70); }
+  function gameOver() {
+    over = true;
+    recordStat('tetris', { best: score, result: score > 0 ? 'win' : undefined });
+    $msg.innerHTML = `게임 오버<br><b>${score.toLocaleString('ko-KR')}점</b><br><button class="btn" id="tAgain">다시하기</button>`;
+    $msg.classList.remove('hidden');
+    const a = el.querySelector('#tAgain'); if (a) a.onclick = reset;
+  }
+  function reset() {
+    grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+    bag = []; nextKey = fromBag(); score = 0; lines = 0; level = 1; over = false; dropAcc = 0; lastT = 0;
+    $msg.classList.add('hidden'); updateHud(); spawn(); draw();
+  }
+
+  function loop(t) {
+    if (!alive()) { window.removeEventListener('keydown', onKey); return; }
+    if (!over) {
+      if (!lastT) lastT = t;
+      dropAcc += Math.min(t - lastT, 100); lastT = t;
+      const iv = dropInterval();
+      while (dropAcc >= iv && !over) { dropAcc -= iv; gravity(); }
+      draw();
+    } else lastT = t;
+    requestAnimationFrame(loop);
+  }
+
+  // 입력
+  const holdBtn = (id, fn) => { const b = el.querySelector(id); let iv = null; const stop = () => { if (iv) { clearInterval(iv); iv = null; } }; b.addEventListener('pointerdown', e => { e.preventDefault(); fn(); iv = setInterval(fn, 130); }); b.addEventListener('pointerup', stop); b.addEventListener('pointerleave', stop); b.addEventListener('pointercancel', stop); };
+  const tapBtn = (id, fn) => el.querySelector(id).addEventListener('pointerdown', e => { e.preventDefault(); fn(); });
+  holdBtn('#tLeft', () => move(-1)); holdBtn('#tRight', () => move(1)); holdBtn('#tDown', softDrop);
+  tapBtn('#tRot', rotate); tapBtn('#tDrop', hardDrop);
+  function onKey(e) {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); move(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); move(1); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); softDrop(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (!e.repeat) rotate(); }
+    else if (e.key === ' ') { e.preventDefault(); if (!e.repeat) hardDrop(); }
+  }
+  window.addEventListener('keydown', onKey);
+
+  reset();
+  requestAnimationFrame(loop);
+}
 
 // ── 미니게임: 10초 맞추기 ─────────────────────────────
 // 시작 후 시간이 흐르는 동안(숨김) 기다렸다가 멈추기 → 10초에 가까울수록 좋은 기록
