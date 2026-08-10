@@ -94,7 +94,7 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .tet-hud b { color: var(--primary2); font-variant-numeric: tabular-nums; }
 .tet-next { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .tet-next canvas { background: #0b1220; border-radius: 6px; }
-.tet-stage { position: relative; width: min(90vw, 400px); }
+.tet-stage { position: relative; width: min(72vw, 320px); }
 .tet-stage #tCv { width: 100%; height: auto; display: block; border-radius: 10px; background: #0b1220; touch-action: none; image-rendering: pixelated; }
 .tet-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   background: rgba(2,6,23,.78); color: #fff; border-radius: 10px; font-size: 1.3rem; font-weight: 800; text-align: center; }
