@@ -1775,20 +1775,22 @@ function startTetris(el) {
     </div>
     <div class="tet-ctrl">
       <button class="btn tet-up" id="tRot">⟳</button>
+      <button class="btn tet-pause" id="tPause">⏸</button>
       <button class="btn tet-left" id="tLeft">◀</button>
       <button class="btn tet-right" id="tRight">▶</button>
       <button class="btn tet-drop" id="tDrop">⤓</button>
       <button class="btn tet-down" id="tDown">▼</button>
     </div>
-    <div class="tet-tip">⟳ 모양바꾸기 · ◀▶ 이동 · ▼ 천천히 내리기 · ⤓ 빨리 내리기 (키보드 ↑←→↓·Space)</div>
+    <div class="tet-tip">⟳ 모양바꾸기 · ◀▶ 이동 · ▼ 천천히 내리기 · ⤓ 빨리 내리기 · ⏸ 일시멈춤 (키보드 ↑←→↓·Space·P)</div>
   </div>`;
 
   const cv = el.querySelector('#tCv'), ctx = cv.getContext('2d');
   const ncv = el.querySelector('#tNext'), nctx = ncv.getContext('2d');
   const $score = el.querySelector('#tScore'), $lines = el.querySelector('#tLines'), $level = el.querySelector('#tLevel'), $msg = el.querySelector('#tMsg');
+  const $pause = el.querySelector('#tPause');
   const alive = () => !!el.querySelector('.tetris');
 
-  let grid, cur, bag, nextKey, score, lines, level, over, dropAcc, lastT;
+  let grid, cur, bag, nextKey, score, lines, level, over, paused, dropAcc, lastT;
 
   function refillBag() { const b = KEYS.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } bag.push(...b); }
   function fromBag() { if (bag.length < 1) refillBag(); return bag.shift(); }
@@ -1816,11 +1818,11 @@ function startTetris(el) {
     if (n) { lines += n; score += LINE_SCORE[n] * level; level = Math.min(10, Math.floor(lines / 10) + 1); updateHud(); }
   }
   function lock() { merge(); clearLines(); if (!over) spawn(); }
-  function move(dx) { if (over) return; if (!collide(cur.shape, cur.x + dx, cur.y)) { cur.x += dx; draw(); } }
+  function move(dx) { if (over || paused) return; if (!collide(cur.shape, cur.x + dx, cur.y)) { cur.x += dx; draw(); } }
   function gravity() { if (!collide(cur.shape, cur.x, cur.y + 1)) cur.y++; else lock(); }
-  function softDrop() { if (over) return; if (!collide(cur.shape, cur.x, cur.y + 1)) { cur.y++; score += 1; updateHud(); } else lock(); draw(); }
-  function hardDrop() { if (over) return; let d = 0; while (!collide(cur.shape, cur.x, cur.y + 1)) { cur.y++; d++; } score += d * 2; updateHud(); lock(); draw(); }
-  function rotate() { if (over) return; const nr = rotateCW(cur.shape); for (const off of [0, -1, 1, -2, 2]) { if (!collide(nr, cur.x + off, cur.y)) { cur.shape = nr; cur.x += off; draw(); return; } } }
+  function softDrop() { if (over || paused) return; if (!collide(cur.shape, cur.x, cur.y + 1)) { cur.y++; score += 1; updateHud(); } else lock(); draw(); }
+  function hardDrop() { if (over || paused) return; let d = 0; while (!collide(cur.shape, cur.x, cur.y + 1)) { cur.y++; d++; } score += d * 2; updateHud(); lock(); draw(); }
+  function rotate() { if (over || paused) return; const nr = rotateCW(cur.shape); for (const off of [0, -1, 1, -2, 2]) { if (!collide(nr, cur.x + off, cur.y)) { cur.shape = nr; cur.x += off; draw(); return; } } }
   function ghostY() { let y = cur.y; while (!collide(cur.shape, cur.x, y + 1)) y++; return y; }
 
   function cell(g, x, y, color) { g.fillStyle = color; g.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2); g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, 4); }
@@ -1846,21 +1848,33 @@ function startTetris(el) {
   function updateHud() { $score.textContent = score.toLocaleString('ko-KR'); $lines.textContent = lines; $level.textContent = level; }
   function dropInterval() { return Math.max(120, 800 - (level - 1) * 70); }
   function gameOver() {
-    over = true;
+    over = true; paused = false; syncPauseBtn();
     recordStat('tetris', { best: score, result: score > 0 ? 'win' : undefined });
     $msg.innerHTML = `게임 오버<br><b>${score.toLocaleString('ko-KR')}점</b><br><button class="btn" id="tAgain">다시하기</button>`;
     $msg.classList.remove('hidden');
     const a = el.querySelector('#tAgain'); if (a) a.onclick = reset;
   }
+  function syncPauseBtn() { $pause.textContent = paused ? '▶' : '⏸'; $pause.setAttribute('aria-label', paused ? '계속하기' : '일시멈춤'); }
+  function setPaused(p) {
+    if (over || paused === p) return;
+    paused = p; syncPauseBtn();
+    if (paused) {
+      $msg.innerHTML = `일시정지<br><button class="btn" id="tResume">계속하기</button>`;
+      $msg.classList.remove('hidden');
+      const r = el.querySelector('#tResume'); if (r) r.onclick = () => setPaused(false);
+    } else {
+      $msg.classList.add('hidden'); dropAcc = 0; lastT = 0;
+    }
+  }
   function reset() {
     grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
-    bag = []; nextKey = fromBag(); score = 0; lines = 0; level = 1; over = false; dropAcc = 0; lastT = 0;
-    $msg.classList.add('hidden'); updateHud(); spawn(); draw();
+    bag = []; nextKey = fromBag(); score = 0; lines = 0; level = 1; over = false; paused = false; dropAcc = 0; lastT = 0;
+    $msg.classList.add('hidden'); syncPauseBtn(); updateHud(); spawn(); draw();
   }
 
   function loop(t) {
-    if (!alive()) { window.removeEventListener('keydown', onKey); return; }
-    if (!over) {
+    if (!alive()) { window.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onHide); return; }
+    if (!over && !paused) {
       if (!lastT) lastT = t;
       dropAcc += Math.min(t - lastT, 100); lastT = t;
       const iv = dropInterval();
@@ -1874,15 +1888,19 @@ function startTetris(el) {
   const holdBtn = (id, fn) => { const b = el.querySelector(id); let iv = null; const stop = () => { if (iv) { clearInterval(iv); iv = null; } }; b.addEventListener('pointerdown', e => { e.preventDefault(); fn(); iv = setInterval(fn, 130); }); b.addEventListener('pointerup', stop); b.addEventListener('pointerleave', stop); b.addEventListener('pointercancel', stop); };
   const tapBtn = (id, fn) => el.querySelector(id).addEventListener('pointerdown', e => { e.preventDefault(); fn(); });
   holdBtn('#tLeft', () => move(-1)); holdBtn('#tRight', () => move(1)); holdBtn('#tDown', softDrop);
-  tapBtn('#tRot', rotate); tapBtn('#tDrop', hardDrop);
+  tapBtn('#tRot', rotate); tapBtn('#tDrop', hardDrop); tapBtn('#tPause', () => setPaused(!paused));
   function onKey(e) {
     if (e.key === 'ArrowLeft') { e.preventDefault(); move(-1); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); move(1); }
     else if (e.key === 'ArrowDown') { e.preventDefault(); softDrop(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); if (!e.repeat) rotate(); }
     else if (e.key === ' ') { e.preventDefault(); if (!e.repeat) hardDrop(); }
+    else if (e.code === 'KeyP' || e.key === 'Escape') { e.preventDefault(); if (!e.repeat) setPaused(!paused); }
   }
+  // 다른 탭·앱으로 전환하면 자동으로 일시정지
+  function onHide() { if (document.hidden) setPaused(true); }
   window.addEventListener('keydown', onKey);
+  document.addEventListener('visibilitychange', onHide);
 
   reset();
   requestAnimationFrame(loop);
