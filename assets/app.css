@@ -89,23 +89,37 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .pin-tip { font-size: .78rem; color: var(--muted); text-align: center; max-width: min(94vw, 340px); }
 
 /* 테트리스 */
-.mg.tetris { gap: 8px; width: 100%; padding: 10px 8px; }
+/* 패널 높이를 화면에 맞춰 고정하고(헤더·탭바·게임바 제외) 게임판이 남는 높이를 흡수하게 한다.
+   → 조작부가 1행에서 3행(십자)으로 커져도 버튼이 탭바 아래로 잘리지 않는다. */
+.mg.tetris { gap: 8px; width: 100%; padding: 10px 8px;
+  height: calc(100vh - var(--header-h) - var(--tab-h) - 62px); }
+@supports (height: 1dvh) { .mg.tetris { height: calc(100dvh - var(--header-h) - var(--tab-h) - 62px); } }
 .tet-hud { display: flex; align-items: center; gap: 12px; width: min(96vw, 400px); font-size: .95rem; color: var(--muted); flex-wrap: wrap; }
 .tet-hud b { color: var(--primary2); font-variant-numeric: tabular-nums; }
 .tet-next { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .tet-next canvas { background: #0b1220; border-radius: 6px; }
-/* 세로(dvh) 기준으로 게임판 높이를 제한 → HUD·버튼이 항상 화면 안에 보이게.
-   보드 비율 1:2 이므로 폭 = 보드높이/2. 34vh 폭이면 보드높이 ≈ 68vh. */
-.tet-stage { position: relative; width: min(86vw, 320px, 34vh); }
-@supports (width: 1dvh) { .tet-stage { width: min(86vw, 320px, 34dvh); } }
-.tet-stage #tCv { width: 100%; height: auto; display: block; border-radius: 10px; background: #0b1220; touch-action: none; image-rendering: pixelated; }
+/* 게임판은 HUD·조작부·안내문을 뺀 나머지 높이를 전부 차지한다(flex: 1).
+   캔버스가 height 기준으로 그려지고 폭이 비율(1:2)로 따라오므로 화면이 짧아도 넘치지 않는다. */
+.tet-stage { position: relative; flex: 1 1 auto; min-height: 0; width: auto; max-width: min(86vw, 320px); }
+.tet-stage #tCv { height: 100%; width: auto; max-width: 100%; display: block; border-radius: 10px; background: #0b1220; touch-action: none; image-rendering: pixelated; }
 .tet-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   background: rgba(2,6,23,.78); color: #fff; border-radius: 10px; font-size: 1.3rem; font-weight: 800; text-align: center; }
 .tet-msg b { font-size: 1.7rem; color: #38bdf8; }
 .tet-msg.hidden { display: none; }
-.tet-ctrl { display: flex; gap: 10px; width: min(96vw, 440px); }
-.tet-ctrl .btn { flex: 1; padding: 22px 0; font-size: 1.6rem; border-radius: 14px; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
-.tet-tip { font-size: .76rem; color: var(--muted); text-align: center; max-width: min(96vw, 440px); }
+/* 십자(D-패드) 배치 — 4열 3행. 상=모양바꾸기, 좌우=이동, 하=천천히 내리기.
+   빨리 내리기(⤓)는 오른쪽 버튼의 오른편(2행 4열)에 따로 둔다.
+   폭에 dvh 를 섞어 화면이 짧을 때 버튼도 같이 줄어들게 → 게임판과 함께 항상 화면 안에. */
+.tet-ctrl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; flex: 0 0 auto; width: min(94vw, 340px); }
+@supports (width: 1dvh) { .tet-ctrl { width: min(94vw, 340px, 30dvh); } }
+.tet-ctrl .btn { aspect-ratio: 1; padding: 0; font-size: 1.7rem; border-radius: 14px; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+.tet-up { grid-area: 1 / 2; }
+.tet-left { grid-area: 2 / 1; }
+.tet-right { grid-area: 2 / 3; }
+.tet-drop { grid-area: 2 / 4; }
+.tet-down { grid-area: 3 / 2; }
+.tet-tip { font-size: .76rem; color: var(--muted); text-align: center; max-width: min(96vw, 440px); flex: 0 0 auto; }
+/* 화면이 짧으면 안내문을 숨겨 그만큼 게임판에 준다(버튼 아이콘만으로도 조작을 알 수 있음). */
+@media (max-height: 700px) { .tet-tip { display: none; } }
 
 .rps-choices { display: flex; gap: 14px; }
 .rps-choices button { width: 76px; height: 76px; font-size: 2.2rem; border-radius: 18px;

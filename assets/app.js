@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b86';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b87';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -1767,20 +1767,20 @@ function startTetris(el) {
       <span>점수 <b id="tScore">0</b></span>
       <span>라인 <b id="tLines">0</b></span>
       <span>레벨 <b id="tLevel">1</b></span>
-      <span class="tet-next">다음 <canvas id="tNext" width="52" height="52"></canvas></span>
+      <span class="tet-next">다음 <canvas id="tNext" width="40" height="40"></canvas></span>
     </div>
     <div class="tet-stage">
       <canvas id="tCv" width="${COLS * CELL}" height="${ROWS * CELL}"></canvas>
       <div class="tet-msg hidden" id="tMsg"></div>
     </div>
     <div class="tet-ctrl">
-      <button class="btn" id="tLeft">◀</button>
-      <button class="btn" id="tRot">⟳</button>
-      <button class="btn" id="tRight">▶</button>
-      <button class="btn" id="tDown">▼</button>
-      <button class="btn" id="tDrop">⤓</button>
+      <button class="btn tet-up" id="tRot">⟳</button>
+      <button class="btn tet-left" id="tLeft">◀</button>
+      <button class="btn tet-right" id="tRight">▶</button>
+      <button class="btn tet-drop" id="tDrop">⤓</button>
+      <button class="btn tet-down" id="tDown">▼</button>
     </div>
-    <div class="tet-tip">◀▶ 이동 · ⟳ 회전 · ▼ 소프트드롭 · ⤓ 하드드롭 (키보드 ←→↓↑·Space)</div>
+    <div class="tet-tip">⟳ 모양바꾸기 · ◀▶ 이동 · ▼ 천천히 내리기 · ⤓ 빨리 내리기 (키보드 ↑←→↓·Space)</div>
   </div>`;
 
   const cv = el.querySelector('#tCv'), ctx = cv.getContext('2d');
@@ -1839,7 +1839,7 @@ function startTetris(el) {
   }
   function drawNext() {
     nctx.clearRect(0, 0, ncv.width, ncv.height);
-    const s = SHAPES[nextKey], u = 11, ox = (ncv.width - s[0].length * u) / 2, oy = (ncv.height - s.length * u) / 2;
+    const s = SHAPES[nextKey], u = 9, ox = (ncv.width - s[0].length * u) / 2, oy = (ncv.height - s.length * u) / 2;
     nctx.fillStyle = COLORS[nextKey];
     for (let r = 0; r < s.length; r++) for (let c = 0; c < s[r].length; c++) if (s[r][c]) nctx.fillRect(ox + c * u + 1, oy + r * u + 1, u - 2, u - 2);
   }
