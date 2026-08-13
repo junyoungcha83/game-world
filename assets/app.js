@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b93';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b94';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -213,7 +213,8 @@ function recordStat(gid, opt) {
   const s = state.scores[u.id][gid] = normStat(state.scores[u.id][gid]);
   s.plays++;
   if (opt.result === 'win') s.wins++; else if (opt.result === 'loss') s.losses++; else if (opt.result === 'draw') s.draws++;
-  if (opt.best != null) { const g = GAMES.find(x => x.id === gid); if (s.best == null || (g.best === 'high' ? opt.best > s.best : opt.best < s.best)) s.best = opt.best; }
+  if (opt.best != null) { const dir = (GAMES.find(x => x.id === gid) || boardGames().find(x => x.id === gid) || {}).best || 'high';
+    if (s.best == null || (dir === 'high' ? opt.best > s.best : opt.best < s.best)) s.best = opt.best; }
   save(); refreshStat(gid);
 }
 function refreshStat(gid) { const el = document.getElementById('gameBest'); if (el) { const g = GAMES.find(x => x.id === gid); if (g) el.textContent = g.fmtStat(getStat(gid)); } }
@@ -256,6 +257,8 @@ const GAMES = [
     fmtStat: s => s ? `${s.plays}경기·${s.wins}승 · 최고 ${s.best || 0}단계 격파` : '아직 기록 없음', start: startArchery },
   { id: 'pocket', name: '포켓볼', emoji: '🎱', color: '#16a34a', best: 'low',
     fmtStat: s => s ? `${s.plays}판·${s.wins}클리어 · 최소 ${s.best != null ? s.best + '타' : '-'}` : '아직 기록 없음', start: startPocket },
+  { id: 'fourball', name: '4구', emoji: '🔴', color: '#b91c1c', best: 'high',
+    fmtStat: () => fourAggFmt(), start: startFourball },
   { id: 'tetris', name: '테트리스', emoji: '🟦', color: '#0ea5e9', best: 'high',
     fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startTetris },
 ];
@@ -292,6 +295,18 @@ const CHESS_LEVELS = [
   { key: 'chess_adv',  label: '고급', ai: 3, desc: '어려움' },
   { key: 'chess_pro',  label: '프로', ai: 4, desc: '매우 어려움' },
 ];
+// 4구 — 연습(10샷 도전 점수)과 대결(vs 컴퓨터 승패)을 따로 기록. 2인 대결은 기록하지 않음
+const FOUR_MODES = [
+  { key: 'four_solo', name: '4구 연습', fmt: s => s ? `${s.plays}판 · 최고 ${s.best || 0}점` : '아직 기록 없음' },
+  { key: 'four_vs',   name: '4구 대결', fmt: s => s ? `${s.plays}판 · ${s.wins}승 ${s.losses}패` : '아직 기록 없음' },
+];
+function fourAggFmt() {
+  const u = getCurrentUser(); if (!u) return '아직 기록 없음';
+  const solo = getStat('four_solo', u), vs = getStat('four_vs', u), parts = [];
+  if (solo && solo.plays) parts.push(`연습 최고 ${solo.best || 0}점`);
+  if (vs && vs.plays) parts.push(`대결 ${vs.wins}승 ${vs.losses}패`);
+  return parts.length ? parts.join(' · ') : '아직 기록 없음';
+}
 const chessFmt = s => s ? `${s.plays}판 · ${s.wins}승 ${s.losses}패 ${s.draws}무` : '아직 기록 없음';
 function chessAggFmt() {
   const u = getCurrentUser(); if (!u) return '아직 기록 없음';
@@ -306,6 +321,7 @@ function boardGames() {
     if (g.id === 'omok') for (const l of OMOK_LEVELS) out.push({ id: l.key, emoji: '⚫', name: `오목 ${l.label}`, best: 'high', fmtStat: omokFmt });
     else if (g.id === 'janggi') for (const l of JANGGI_LEVELS) out.push({ id: l.key, emoji: '漢', name: `장기 ${l.label}`, best: 'high', fmtStat: janggiFmt });
     else if (g.id === 'chess') for (const l of CHESS_LEVELS) out.push({ id: l.key, emoji: '♞', name: `체스 ${l.label}`, best: 'high', fmtStat: chessFmt });
+    else if (g.id === 'fourball') for (const m of FOUR_MODES) out.push({ id: m.key, emoji: '🔴', name: m.name, best: 'high', fmtStat: m.fmt });
     else out.push(g);
   }
   return out;
@@ -316,7 +332,7 @@ function boardGames() {
 const HUB_CATEGORIES = [
   { label: '🎨 자유',  ids: ['color', 'brush', 'roulette'] },
   { label: '♟️ 보드',  ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot'] },
-  { label: '⚾ 스포츠', ids: ['kbo', 'archery', 'pocket'] },
+  { label: '⚾ 스포츠', ids: ['kbo', 'archery', 'pocket', 'fourball'] },
   { label: '🕹️ 레트로', ids: ['timer10', 'rps', 'guess'] },
   { label: '🧠 퀴즈',  ids: ['flags', 'capital', 'mapq'] },
 ];
@@ -2374,12 +2390,31 @@ function startKbo(el){
     if (G.bases[0]) G.bases[1]=true;
     G.bases[0]=true; scoreRun(r); return r; }
   const HITNAME = { single:'안타', double:'2루타', triple:'3루타', hr:'홈런' };
+  const OUTNAME = { flyout:'뜬공 아웃', groundout:'땅볼 아웃', lineout:'직선타 아웃', out:'범타 아웃' };
+  const isOut = t => t==='out'||t==='flyout'||t==='groundout'||t==='lineout';
+  // 잘 맞은 타구도 야수 정면이면 잡힌다 — 타구질이 좋을수록 살아나갈 확률이 높다.
+  // 값을 올리면 투수전, 내리면 타격전이 된다.
+  const FIELD_OUT = { single:0.36, double:0.24, triple:0.14, hr:0.05 };
+  function fieldedOut(q){                                   // q: 타구질(0~5) — 강할수록 뜬공/직선타
+    if (q>=4) return Math.random()<0.72 ? 'flyout' : 'lineout';
+    if (q===3) return Math.random()<0.50 ? 'flyout' : (Math.random()<0.55 ? 'lineout' : 'groundout');
+    return Math.random()<0.66 ? 'groundout' : 'flyout';
+  }
+  const fieldTeam = ()=> G.half===0 ? G.home : G.away;      // 수비 팀(유니폼 색)
 
   function outcome(type){
     if (type==='ball'){ G.b++; if (G.b>=4){ const r=advanceWalk(); G.msg='볼넷! 출루'+(r?` (${r}점)`:''); resetCount(); return afterPlay(); } G.msg='볼'; }
     else if (type==='strike'){ G.s++; if (G.s>=3){ G.outs++; G.msg='삼진 아웃! ⚾'; resetCount(); return afterOut(); } G.msg='스트라이크'; }
     else if (type==='foul'){ if (G.s<2) G.s++; G.msg='파울'; }
-    else if (type==='out'){ G.outs++; G.msg='범타 아웃!'; resetCount(); return afterOut(); }
+    else if (isOut(type)){
+      resetCount(); G.outs++; let extra='';
+      if (type==='groundout' && G.bases[0] && G.outs<3 && Math.random()<0.42){
+        G.bases[0]=false; G.outs++; extra=' 병살타… 😱';                 // 1루 주자 있으면 병살
+      } else if (type==='flyout' && G.bases[2] && G.outs<3 && Math.random()<0.55){
+        G.bases[2]=false; scoreRun(1); extra=' 희생플라이 1점! 🏃';       // 3루 주자는 태그업 득점
+      }
+      G.msg = (OUTNAME[type]||'범타 아웃')+'! 🧤'+extra;
+      return afterOut(); }
     else if (type==='single'||type==='double'||type==='triple'||type==='hr'){
       const n = type==='single'?1 : type==='double'?2 : type==='triple'?3 : 4;
       const r = advanceN(n); G.msg = `${HITNAME[type]}${type==='hr'?'!! 💥':'! 🙌'}` + (r?` ${r}점`:''); resetCount(); return afterPlay(); }
@@ -2493,6 +2528,28 @@ function startKbo(el){
     c.fillStyle=skin; c.beginPath(); c.arc(x,y-13.4,4,0,7); c.fill();               // 머리
     c.fillStyle=cap; c.beginPath(); c.arc(x,y-14.2,4.2,Math.PI*0.97,Math.PI*2.03); c.fill();
     c.fillStyle=cap; rr(c,x-6,y-15.2,4.5,2,1); c.fill();                            // 모자 챙
+    c.restore(); }
+  // 야수 — 타구 낙하지점에서 기다리다 마지막에 글러브를 들어 잡는다(뜬공은 위로·땅볼은 아래로)
+  function fielderFig(c,x,y,catching,low){
+    const t=KBO_TEAMS[fieldTeam()], body=t.c1, cap=t.c2;
+    shadow(c,x,y+5,7);
+    c.save(); c.lineCap='round';
+    c.strokeStyle='#20293a'; c.lineWidth=2.6;                                       // 다리
+    c.beginPath(); c.moveTo(x,y-1); c.lineTo(x-3,y+5); c.stroke();
+    c.beginPath(); c.moveTo(x,y-1); c.lineTo(x+3,y+5); c.stroke();
+    c.fillStyle=body; rr(c,x-4,y-11,8,11,3); c.fill();                              // 몸통
+    const gy = low ? (catching? y+2 : y-4) : (catching? y-21 : y-10);               // 글러브 높이
+    c.strokeStyle=skin; c.lineWidth=2.4;                                            // 글러브 든 팔
+    c.beginPath(); c.moveTo(x-2,y-9); c.lineTo(x-5,gy+3); c.stroke();
+    c.beginPath(); c.moveTo(x+2,y-9); c.lineTo(x+4,y-4); c.stroke();
+    c.fillStyle=skin; c.beginPath(); c.arc(x,y-14.4,4.2,0,7); c.fill();             // 머리
+    c.fillStyle=cap; c.beginPath(); c.arc(x,y-15.2,4.4,Math.PI*0.97,Math.PI*2.03); c.fill();
+    c.fillStyle=cap; rr(c,x-6,y-16.2,4.5,2,1); c.fill();                            // 모자 챙
+    c.fillStyle='#8b5a2b'; c.beginPath(); c.arc(x-6.5,gy,4,0,7); c.fill();          // 글러브
+    if(catching){ c.strokeStyle='#fde047'; c.lineWidth=2; c.globalAlpha=0.9;        // 포구 임팩트
+      for(let i=0;i<6;i++){ const a=i*Math.PI/3; c.beginPath();
+        c.moveTo(x-6.5+Math.cos(a)*6, gy+Math.sin(a)*6);
+        c.lineTo(x-6.5+Math.cos(a)*11, gy+Math.sin(a)*11); c.stroke(); } }
     c.restore(); }
   // 주루 경로: 홈 → 1루 → 2루 → 3루 → 홈
   const BPATH=[HB,B1,B2,B3,HB];
@@ -2646,6 +2703,7 @@ function startKbo(el){
     const st = o.runners ? [false,false,false] : G.bases;   // 주루 중엔 베이스 위 정지 주자를 그리지 않는다
     base(c,B1,st[0]); base(c,B2,st[1]); base(c,B3,st[2]); homeplate(c);
     if(o.runners) for(const r of o.runners) runnerFig(c,r.x,r.y,r.run);
+    if(o.fielder) fielderFig(c,o.fielder.x,o.fielder.y,o.fielder.catching,o.fielder.low);
     if(!o.hideBatter) bigBatter(c,SW/2-44,210,o.batter||'#1d4ed8','#0b2a6b',1);
     if(o.ball) ball(c,o.ball.x,o.ball.y,o.ball.r); }
   // 타구 낙하지점 — 페어는 외야 그라운드, 파울은 파울라인 바깥, 홈런은 펜스 너머 관중석
@@ -2653,7 +2711,11 @@ function startKbo(el){
     const R2=(a,b)=>a+Math.random()*(b-a), cx=x=>Math.max(48,Math.min(272,x));
     if(type==='hr') return { x:cx(R2(70,250)), y:R2(52,76) };
     const y = type==='triple' ? R2(92,108) : type==='double' ? R2(104,126)
-            : type==='foul'   ? R2(140,175) : R2(126,152);
+            : type==='foul'   ? R2(140,175)
+            : type==='flyout' ? R2(94,122)                     // 외야 뜬공
+            : type==='lineout'? R2(116,138)                    // 외야 앞 직선타
+            : type==='groundout' ? R2(146,166)                 // 내야 땅볼
+            : R2(126,152);
     const half = 154*(HB[1]-y)/106;                       // 그 깊이에서 홈~파울라인까지의 거리
     if(type==='foul') return { x:cx(HB[0] + (Math.random()<0.5?-1:1)*(half+R2(14,54))), y };
     const inner = Math.max(10, half-14);
@@ -2664,13 +2726,18 @@ function startKbo(el){
   // 타구가 외야로 포물선을 그리며 날아가고, 그동안 주자들이 각 베이스로 달려간다
   function hitAnim(c, type, batC, cb){
     const bl=document.getElementById('kboBelow');
-    const label = type==='hr'?'홈런!! 💥' : type==='foul'?'파울! 😬' : type==='out'?'타구… 아웃! 🧤' : HITNAME[type]+'! 🙌';
+    const label = type==='hr'?'홈런!! 💥' : type==='foul'?'파울! 😬'
+                : isOut(type) ? (OUTNAME[type]||'범타 아웃')+'! 🧤' : HITNAME[type]+'! 🙌';
     if(bl) bl.innerHTML=`<div class="kbo-note kbo-hit">${label}</div>`;
-    const n = { single:1, double:2, triple:3, hr:4 }[type] || 0;                  // 파울·범타는 진루 없음
-    const FR = type==='hr'?150 : type==='triple'?128 : type==='double'?96 : type==='foul'?64 : 70;
+    const n = { single:1, double:2, triple:3, hr:4 }[type] || 0;                  // 파울·아웃은 진루 없음
+    const FR = type==='hr'?150 : type==='triple'?128 : type==='double'?96 : type==='foul'?64
+             : type==='flyout'?116 : type==='lineout'?66 : type==='groundout'?74 : 70;
     const BF = Math.round(FR*0.9);                                                // 타구 비행 — 종전(0.6)보다 50% 느리게
-    const arc = type==='hr'?78 : type==='triple'?52 : type==='double'?42 : type==='foul'?30 : 32;
+    const arc = type==='hr'?78 : type==='triple'?52 : type==='double'?42 : type==='foul'?30
+              : type==='flyout'?66 : type==='lineout'?10 : type==='groundout'?5 : 32;
     const land = landSpot(type);
+    // 아웃 타구는 낙하지점에 야수가 서 있다가 공이 닿는 순간 잡는다
+    const fld = isOut(type) ? { x:land.x, y:land.y+3, low: type!=='flyout' } : null;
     const runs = n ? runnersFor(n) : null;
     const maxSeg = runs ? Math.max(...runs.map(r => r.to-r.from)) : 1;            // 모든 주자가 같은 속도로 달리고
     const sx=HB[0]-6, sy=HB[1]-8; let f=0;
@@ -2685,6 +2752,7 @@ function startKbo(el){
           const [x,y]=runnerPos(r,ur); ru.push({ x, y, run: ur>=1 ? 0 : f*0.11 });
         } }
       drawHitView(c,{ batter:batC, runners:ru, hideBatter: !!runs && f>9,
+        fielder: fld && tb>0.12 ? Object.assign({ catching: tb>0.9 }, fld) : null,
         ball: { x: sx+(land.x-sx)*tb,
                 y: sy+(land.y-sy)*tb - arc*Math.sin(Math.PI*tb),                  // 포물선
                 r: Math.max(2.2, 7-4.6*tb) } });
@@ -2749,8 +2817,12 @@ function startKbo(el){
       let z = d===0?2:1;
       if(!land.inZone){ z--; if(t>2) t=2; }                              // 유인구는 제대로 맞히기 어렵다
       const q=t+z;
-      return q>=5?'hr' : q===4?'triple' : q===3?'double' : q===2?'single'
-           : q===1?'foul' : (Math.random()<0.5?'foul':'out');
+      if (q<=0) return Math.random()<0.5 ? 'foul' : fieldedOut(0);       // 빗맞은 타구
+      if (q===1) return 'foul';
+      const hit = q>=5?'hr' : q===4?'triple' : q===3?'double' : 'single';
+      // 안타성 타구여도 수비에 걸릴 수 있다 — 타구가 강할수록 잡힐 확률이 낮다
+      if (Math.random() < FIELD_OUT[hit]) return fieldedOut(q);
+      return hit;
     }
     // 스윙은 한 타석에 한 번. 배트와 공은 서로 독립적으로 움직인다 —
     // 공보다 일찍 휘두르면 배트만 먼저 헛돌고, 공은 제 속도로 계속 날아와 존을 지나간다.
@@ -2842,7 +2914,9 @@ function startKbo(el){
       let cell=aim, inZone=true;
       if(Math.random() > acc*0.8+0.15){ cell=Math.random()*9|0; if(Math.random()>acc) inZone=Math.random()<0.5; }
       const tgt = inZone ? cellXY(cell) : { x: cellXY(cell).x+(Math.random()<.5?-24:24), y: cellXY(cell).y+(Math.random()<.5?-6:14) };
-      const res = cpuBat(pitch.key, inZone, cell);
+      let res = cpuBat(pitch.key, inZone, cell);
+      if (res==='out') res = fieldedOut(Math.random()<0.35 ? 4 : 2);       // 범타도 뜬공·땅볼·직선타로 갈린다
+      else if (HITNAME[res] && Math.random() < FIELD_OUT[res]*0.5) res = fieldedOut(3);  // CPU 안타성도 가끔 잡힘
       const swing = (res!=='ball'&&res!=='strike') || (res==='strike'&&Math.random()<0.55);
       const sx=SW/2, sy=SH-24; let p=0;
       (function fr(){ p+=0.030;
@@ -3440,6 +3514,427 @@ function startPocket(el){
   }
   holdRot(el.querySelector('#pkL'), -1);
   holdRot(el.querySelector('#pkR'), +1);
+  $act.onclick = () => {
+    if(G.over) return;
+    if(G.phase === 'aim'){ G.power = 0; G.pdir = 1; setPhase('power'); }
+    else if(G.phase === 'power') shoot();
+  };
+  $cancel.onclick = () => { if(G.phase === 'power') setPhase('aim'); };
+
+  newGame();
+  G.raf = requestAnimationFrame(loop);
+}
+
+// ══════════════════════════ 🔴 4구(사구) ══════════════════════════
+// 포켓 없는 캐롬 테이블 · 공 4개 — 흰공 2개(각 플레이어의 수구)와 빨간공 2개(적구).
+// 규칙: 내 수구로 빨간공 2개를 모두 맞히면 1점(계속 침). 하나만 맞히거나 못 맞히면 차례가 넘어간다.
+//       내 수구가 상대 흰공을 맞히면 파울 — 빨간공 2개를 다 맞혔더라도 무득점이고 차례가 넘어간다.
+// 모드: 연습(혼자 10샷 도전 — 득점 합계가 기록) / 대결(vs 컴퓨터 3단계 · 같은 기기 2인, 먼저 5점).
+// 물리·조작은 포켓볼과 동일: 등질량 탄성충돌 + 구름마찰 + 쿠션 반발, 조준 → 파워 게이지 → 발사.
+// 컴퓨터는 후보 샷을 실제 물리로 미리 굴려보고(롤아웃) 가장 좋은 것을 고른다 — 난이도 = 후보 수 + 조준 오차.
+// 배치·물리가 결정론적이라 한 턴이 {수구, 각도, 파워}만으로 재현된다.
+// TODO(다음 단계): 이 턴 데이터를 Worker로 주고받아 다른 휴대폰 사용자와 온라인 대결(방 만들기/참가).
+const FOUR_TARGET = 5;    // 대결: 먼저 이 점수에 닿으면 승리
+const FOUR_SHOTS  = 10;   // 연습: 한 판에 칠 수 있는 샷 수
+const FOUR_AIS = [   // samples=넓게 훑는 후보 수 · refine=주변을 다듬는 횟수 · noise=조준 흔들림(라디안)
+  { key: 'easy', label: '초급', desc: '실수가 잦아요',       samples: 12,  refine: 0, noise: 0.07 },
+  { key: 'mid',  label: '중급', desc: '제법 잘 쳐요',        samples: 45,  refine: 2, noise: 0.025 },
+  { key: 'hard', label: '고급', desc: '좀처럼 놓치지 않아요', samples: 110, refine: 4, noise: 0 },
+];
+
+function startFourball(el){
+  const back = document.getElementById('gameBack'); if (back) back.onclick = () => showView('hub');
+  el.innerHTML = `<div class="mg jg-pick">
+    <div class="mg-msg">모드를 골라요 🔴</div>
+    <div class="omok-levels">
+      <button data-m="solo">연습<small>혼자 ${FOUR_SHOTS}샷 도전 · 기록 저장</small></button>
+      ${FOUR_AIS.map(a => `<button data-m="cpu" data-k="${a.key}">대결 · vs 컴퓨터 ${a.label}<small>${a.desc} · 먼저 ${FOUR_TARGET}점</small></button>`).join('')}
+      <button data-m="two">대결 · 2인<small>한 기기에서 번갈아 치기</small></button>
+    </div>
+  </div>`;
+  el.querySelectorAll('.omok-levels button').forEach(b => b.onclick = () => {
+    const m = b.dataset.m;
+    runFour(el, { mode: m, ai: m === 'cpu' ? FOUR_AIS.find(a => a.key === b.dataset.k) : null });
+  });
+}
+
+function runFour(el, cfg){
+  const W = 320, H = 568;                 // 캔버스 크기(세로형 테이블)
+  const CU = 15;                          // 쿠션(레일) 두께
+  const L = CU, T = CU, RT = W - CU, BT = H - CU;   // 플레이 영역 경계
+  const R = 8.6;                          // 공 반지름
+  const SUB = 8;                          // 프레임당 물리 서브스텝(빠른 공이 서로 통과하지 않게)
+  const DECEL = 0.062;                    // 구름 마찰(프레임당 등감속)
+  const STOP = 0.05;                      // 정지 임계 속도
+  const CUSH_E = 0.78, BALL_E = 0.96;     // 쿠션/공 반발계수 — 캐롬은 쿠션을 많이 쓰므로 포켓볼보다 잘 튄다
+  const PMIN = 3.0, PMAX = 20;            // 발사 속도(px/프레임)
+  const PSPD = 0.022;                     // 파워 게이지 왕복 속도(프레임당)
+  const CUE = 0, OPP = 1;                 // 공 인덱스: 0=민무늬 흰공(1P) 1=점박이 흰공(2P) 2,3=빨간공
+  const solo = cfg.mode === 'solo';
+  const who = i => cfg.mode === 'cpu' ? (i === 0 ? '나' : '컴퓨터') : `${i + 1}P`;
+
+  const G = { balls: [], turn: 0, score: [0, 0], phase: 'aim', angle: -Math.PI/2, power: 0, pdir: 1,
+              shotsLeft: FOUR_SHOTS, run: 0, bestRun: 0, hits: [], over: false, recorded: false, raf: null };
+  let cv, ctx, $hud, $msg, $fill, $act, $cancel, $tip;
+
+  // ── 초기 배치: 빨간공 2개는 중앙선 스팟, 흰공 2개는 하단에 좌우 대칭(양쪽 조건 동일) ──
+  function rack(){
+    const cx = W/2, h = BT - T;
+    G.balls = [
+      { k:'w',   x: cx + 34, y: T + h*0.80, vx:0, vy:0 },
+      { k:'wm',  x: cx - 34, y: T + h*0.80, vx:0, vy:0 },
+      { k:'red', x: cx,      y: T + h*0.25, vx:0, vy:0 },
+      { k:'red', x: cx,      y: T + h*0.50, vx:0, vy:0 },
+    ];
+  }
+  const cue = () => G.balls[G.turn];
+  const alive = () => !!(cv && document.body.contains(cv));
+
+  // ── 물리 한 프레임 ─────────────────────────────────
+  // bs=공 배열 · ci=수구 인덱스 · hits=수구가 접촉한 공 인덱스(중복 없이 누적) — 실제 진행과 CPU 시뮬레이션이 같은 코드를 쓴다
+  function physFrame(bs, sub, hits, ci){
+    for(let s=0;s<sub;s++){
+      for(const b of bs){
+        if(!b.vx && !b.vy) continue;
+        b.x += b.vx/sub; b.y += b.vy/sub;
+        const sp = Math.hypot(b.vx, b.vy);                  // 등감속: 방향은 유지하고 속력만 일정하게 깎는다
+        if(sp > 0){ const ns = Math.max(0, sp - DECEL/sub); b.vx = b.vx/sp*ns; b.vy = b.vy/sp*ns; }
+        if(b.x-R < L){ b.x = L+R; b.vx = -b.vx*CUSH_E; b.vy *= 0.99; }        // 쿠션(포켓이 없으니 항상 튕긴다)
+        else if(b.x+R > RT){ b.x = RT-R; b.vx = -b.vx*CUSH_E; b.vy *= 0.99; }
+        if(b.y-R < T){ b.y = T+R; b.vy = -b.vy*CUSH_E; b.vx *= 0.99; }
+        else if(b.y+R > BT){ b.y = BT-R; b.vy = -b.vy*CUSH_E; b.vx *= 0.99; }
+      }
+      for(let i=0;i<bs.length;i++){                          // 공끼리 충돌(등질량 탄성) — 법선 방향 운동량 교환 + 겹침 보정
+        for(let j=i+1;j<bs.length;j++){
+          const a = bs[i], b = bs[j];
+          const dx = b.x-a.x, dy = b.y-a.y, d = Math.hypot(dx,dy);
+          if(d <= 0 || d >= 2*R) continue;
+          const nx = dx/d, ny = dy/d, ov = (2*R - d)/2;
+          a.x -= nx*ov; a.y -= ny*ov; b.x += nx*ov; b.y += ny*ov;
+          const rel = (b.vx-a.vx)*nx + (b.vy-a.vy)*ny;
+          if(rel >= 0) continue;
+          const imp = -(1+BALL_E)*rel/2;
+          a.vx -= imp*nx; a.vy -= imp*ny; b.vx += imp*nx; b.vy += imp*ny;
+          if(hits && (i === ci || j === ci)){ const o = (i === ci) ? j : i; if(!hits.includes(o)) hits.push(o); }
+        }
+      }
+      for(const b of bs) if(Math.hypot(b.vx,b.vy) < STOP){ b.vx = 0; b.vy = 0; }
+    }
+  }
+  const moving = bs => bs.some(b => b.vx || b.vy);
+
+  // ── 샷 판정: 빨간공 2개 모두 = 득점 · 상대 흰공 접촉 = 파울 ──
+  function judge(hits){
+    const reds = hits.filter(i => G.balls[i].k === 'red').length;
+    const foul = hits.some(i => G.balls[i].k !== 'red');
+    return { reds, foul, scored: !foul && reds >= 2 };
+  }
+
+  // ── 조준 예측(점선이 닿는 지점 + 목적구 진행 방향) ──
+  function predict(){
+    const c = cue(), dx = Math.cos(G.angle), dy = Math.sin(G.angle);
+    let bestT = Infinity, target = null;
+    for(const b of G.balls){
+      if(b === c) continue;
+      const ex = b.x-c.x, ey = b.y-c.y, t = ex*dx + ey*dy;
+      if(t <= 0) continue;
+      const perp2 = ex*ex + ey*ey - t*t, rr = (2*R)*(2*R);
+      if(perp2 > rr) continue;
+      const th = t - Math.sqrt(rr - perp2);
+      if(th > 0 && th < bestT){ bestT = th; target = b; }
+    }
+    let wallT = Infinity;
+    if(dx > 0) wallT = Math.min(wallT, (RT-R-c.x)/dx); else if(dx < 0) wallT = Math.min(wallT, (L+R-c.x)/dx);
+    if(dy > 0) wallT = Math.min(wallT, (BT-R-c.y)/dy); else if(dy < 0) wallT = Math.min(wallT, (T+R-c.y)/dy);
+    if(!target || wallT < bestT) return { x: c.x+dx*Math.max(0,wallT), y: c.y+dy*Math.max(0,wallT), target:null };
+    return { x: c.x+dx*bestT, y: c.y+dy*bestT, target };
+  }
+
+  // ── 컴퓨터: 후보 샷을 물리로 미리 굴려보고 가장 좋은 것 고르기 ──
+  function simulate(ang, pw, ci){
+    const bs = G.balls.map(b => ({ ...b })), hits = [];
+    const sp = PMIN + (PMAX-PMIN)*pw;
+    bs[ci].vx = Math.cos(ang)*sp; bs[ci].vy = Math.sin(ang)*sp;
+    for(let f=0; f<700 && moving(bs); f++) physFrame(bs, 4, hits, ci);   // 미리보기는 서브스텝을 줄여 가볍게
+    return { hits, bs };
+  }
+  function shotValue(hits, bs, ci){
+    const j = judge(hits);
+    if(j.foul) return -100 + j.reds;                       // 파울은 무조건 피한다
+    let v = j.reds * 100;
+    const c = bs[ci];                                       // 다음 샷 편의 — 수구와 적구가 가까울수록 소폭 가점
+    for(const b of bs) if(b.k === 'red') v += 30/(1 + Math.hypot(b.x-c.x, b.y-c.y)/60);
+    return v;
+  }
+  function cpuPick(){
+    const ci = G.turn, c = G.balls[ci], reds = G.balls.filter(b => b.k === 'red');
+    const tryShot = (ang, pw) => { const r = simulate(ang, pw, ci); return { v: shotValue(r.hits, r.bs, ci), ang, pw }; };
+    let best = null;
+    for(let i=0;i<cfg.ai.samples;i++){                      // 1) 넓게 훑기
+      let ang;
+      if(Math.random() < 0.75){                             // 적구 쪽을 겨냥한 후보(±약간)를 주로 보고
+        const t = reds[Math.floor(Math.random()*reds.length)];
+        ang = Math.atan2(t.y-c.y, t.x-c.x) + (Math.random()-0.5)*0.5;
+      } else ang = Math.random()*Math.PI*2;                 // 가끔은 쿠션을 노리는 무작위 후보도 섞는다
+      const r = tryShot(ang, 0.25 + Math.random()*0.7);
+      if(!best || r.v > best.v) best = r;
+    }
+    if(!best) return { ang: G.angle, pw: 0.6 };
+    for(let pass=0; pass<cfg.ai.refine; pass++){            // 2) 찾은 샷 주변을 점점 좁혀가며 다듬기(정밀도 = 난이도)
+      const sp = 0.06 / (pass + 1);
+      for(let i=0;i<8;i++){
+        const r = tryShot(best.ang + (Math.random()-0.5)*sp*2, Math.min(0.98, Math.max(0.15, best.pw + (Math.random()-0.5)*0.2)));
+        if(r.v > best.v) best = r;
+      }
+    }
+    return { ang: best.ang + (Math.random()-0.5)*cfg.ai.noise, pw: best.pw };   // 난이도만큼 손이 흔들린다
+  }
+
+  // ── 그리기 ────────────────────────────────────────
+  function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+  function drawTable(){
+    ctx.fillStyle = '#3f2513'; roundRect(0,0,W,H,16); ctx.fill();                  // 나무 프레임
+    ctx.fillStyle = '#14532d'; roundRect(4,4,W-8,H-8,12); ctx.fill();              // 레일
+    const fg = ctx.createLinearGradient(0,T,0,BT);
+    fg.addColorStop(0,'#15803d'); fg.addColorStop(0.5,'#177f45'); fg.addColorStop(1,'#136136');
+    ctx.fillStyle = fg; ctx.fillRect(L,T,RT-L,BT-T);                                // 천(felt)
+    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 2; ctx.strokeRect(L,T,RT-L,BT-T);
+    ctx.fillStyle = 'rgba(255,255,255,.30)';                                        // 스팟(초구 자리)
+    for(const f of [0.25, 0.5, 0.75]){ ctx.beginPath(); ctx.arc(W/2, T+(BT-T)*f, 2, 0, 7); ctx.fill(); }
+    ctx.fillStyle = 'rgba(255,255,255,.45)';                                        // 레일 다이아몬드
+    for(let i=1;i<=3;i++){ const y = T + (BT-T)*i/4;
+      ctx.beginPath(); ctx.arc(CU/2,y,1.6,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(W-CU/2,y,1.6,0,7); ctx.fill(); }
+    for(let i=1;i<=3;i++){ const x = L + (RT-L)*i/4;
+      ctx.beginPath(); ctx.arc(x,CU/2,1.6,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(x,H-CU/2,1.6,0,7); ctx.fill(); }
+  }
+  function drawBall(b, isCue){
+    ctx.beginPath(); ctx.ellipse(b.x+1.6, b.y+2.4, R*0.95, R*0.8, 0, 0, 7);          // 그림자
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.arc(b.x,b.y,R,0,7); ctx.clip();
+    ctx.fillStyle = b.k === 'red' ? '#dc2626' : '#f8fafc';
+    ctx.fillRect(b.x-R, b.y-R, 2*R, 2*R);
+    if(b.k === 'wm'){ ctx.beginPath(); ctx.arc(b.x,b.y,R*0.34,0,7); ctx.fillStyle = '#dc2626'; ctx.fill(); }   // 점박이 흰공(2P 수구)
+    const g = ctx.createRadialGradient(b.x-R*0.4, b.y-R*0.45, R*0.05, b.x-R*0.1, b.y-R*0.1, R*1.3);
+    g.addColorStop(0,'rgba(255,255,255,.55)'); g.addColorStop(0.38,'rgba(255,255,255,.05)'); g.addColorStop(1,'rgba(0,0,0,.42)');
+    ctx.fillStyle = g; ctx.fillRect(b.x-R, b.y-R, 2*R, 2*R);
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(b.x,b.y,R,0,7); ctx.lineWidth = 0.9; ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.stroke();
+    if(isCue){                                                                       // 지금 칠 수구 표시
+      ctx.save(); ctx.setLineDash([3,3]); ctx.beginPath(); ctx.arc(b.x,b.y,R+3.4,0,7);
+      ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(253,224,71,.95)'; ctx.stroke(); ctx.restore();
+    }
+  }
+  function drawAim(){
+    const c = cue(), p = predict(), dx = Math.cos(G.angle), dy = Math.sin(G.angle);
+    ctx.save();
+    ctx.setLineDash([6,6]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.beginPath(); ctx.moveTo(c.x+dx*R, c.y+dy*R); ctx.lineTo(p.x, p.y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, 7);                                     // 고스트 볼(충돌 시점 수구 위치)
+    ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 1.4; ctx.stroke();
+    if(p.target){                                                                    // 목적구가 튀어나갈 방향
+      const ox = p.target.x-p.x, oy = p.target.y-p.y, od = Math.hypot(ox,oy) || 1;
+      ctx.beginPath(); ctx.moveTo(p.target.x, p.target.y);
+      ctx.lineTo(p.target.x + ox/od*34, p.target.y + oy/od*34);
+      ctx.strokeStyle = 'rgba(253,224,71,.9)'; ctx.lineWidth = 2; ctx.stroke();
+    }
+    const pull = 8 + (G.phase==='power' ? G.power*26 : 0);                           // 큐대(파워만큼 뒤로 당겨짐)
+    const bx = c.x - dx*(R+pull), by = c.y - dy*(R+pull);
+    const tx = c.x - dx*(R+pull+96), ty = c.y - dy*(R+pull+96);
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(tx,ty); ctx.lineWidth = 4.4; ctx.strokeStyle = '#c8873f'; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx-dx*10, by-dy*10); ctx.lineWidth = 4.4; ctx.strokeStyle = '#e0f2fe'; ctx.stroke();
+    ctx.restore();
+  }
+  function draw(){
+    drawTable();
+    G.balls.forEach((b,i) => drawBall(b, i === G.turn && !G.over));
+    if((G.phase==='aim' || G.phase==='power' || G.phase==='cpu') && !G.over) drawAim();
+  }
+
+  // ── 루프 ──────────────────────────────────────────
+  function loop(){
+    if(!alive()){ if(G.raf) cancelAnimationFrame(G.raf); G.raf = null; return; }
+    if(G.phase==='power'){
+      G.power += G.pdir*PSPD;
+      if(G.power >= 1){ G.power = 1; G.pdir = -1; }
+      else if(G.power <= 0){ G.power = 0; G.pdir = 1; }
+      $fill.style.width = Math.round(G.power*100) + '%';
+    } else if(G.phase==='roll'){
+      physFrame(G.balls, SUB, G.hits, G.turn);
+      if(!moving(G.balls)) endShot();
+    }
+    draw();
+    G.raf = requestAnimationFrame(loop);
+  }
+
+  // ── 샷 처리 ───────────────────────────────────────
+  function shoot(){
+    const c = cue(), sp = PMIN + (PMAX-PMIN)*G.power;
+    c.vx = Math.cos(G.angle)*sp; c.vy = Math.sin(G.angle)*sp;
+    G.hits = [];
+    setPhase('roll');
+  }
+  function endShot(){
+    const j = judge(G.hits);
+    const why = j.foul ? '상대 흰공을 맞혔어요 — 파울!'
+              : j.reds >= 2 ? '득점! 🔴🔴'
+              : j.reds === 1 ? '빨간공 하나만… 아쉽다'
+              : '헛샷! 빨간공을 못 맞혔어요';
+    if(solo){
+      G.shotsLeft--;
+      if(j.scored){ G.score[0]++; G.run++; G.bestRun = Math.max(G.bestRun, G.run); } else G.run = 0;
+      updateHud();
+      if(G.shotsLeft <= 0) finishSolo();
+      else setPhase('aim', j.scored ? `${why} (연속 ${G.run}점)` : why);
+      return;
+    }
+    if(j.scored){
+      G.score[G.turn]++; updateHud();
+      if(G.score[G.turn] >= FOUR_TARGET){ finishVs(G.turn); return; }
+      proceed(`${who(G.turn)} 득점! 이어서 칩니다`, false);
+    } else {
+      proceed(`${who(G.turn)} — ${why}`, true);
+    }
+  }
+  // 다음 차례로(pass=true면 상대에게 넘김). 컴퓨터 차례면 스스로 조준·발사한다.
+  function proceed(msg, pass){
+    if(pass) G.turn = 1 - G.turn;
+    updateHud();
+    aimDefault();
+    if(cfg.mode === 'cpu' && G.turn === 1) cpuTurn(msg);
+    else setPhase('aim', msg);
+  }
+  function aimDefault(){                                    // 차례가 바뀌면 가까운 빨간공 쪽으로 초기 조준
+    const c = cue();
+    let best = null;
+    G.balls.forEach(b => { if(b.k !== 'red') return; const d = Math.hypot(b.x-c.x, b.y-c.y); if(!best || d < best.d) best = { b, d }; });
+    if(best) G.angle = Math.atan2(best.b.y-c.y, best.b.x-c.x);
+  }
+  function cpuTurn(msg){
+    setPhase('cpu', (msg ? msg + ' · ' : '') + '컴퓨터가 조준 중…');
+    setTimeout(() => {
+      if(!alive() || G.over || G.phase !== 'cpu') return;
+      const pick = cpuPick();
+      G.angle = pick.ang;
+      setTimeout(() => {
+        if(!alive() || G.over || G.phase !== 'cpu') return;
+        G.power = pick.pw; $fill.style.width = Math.round(G.power*100) + '%';
+        shoot();
+      }, 620);
+    }, 380);
+  }
+  function endButtons(){
+    return `<button class="btn primary" id="fbAgain">다시하기</button>
+            <button class="btn ghost small" id="fbToMode">모드 변경</button>`;
+  }
+  function bindEnd(){
+    const a = el.querySelector('#fbAgain'); if(a) a.onclick = newGame;
+    const m = el.querySelector('#fbToMode'); if(m) m.onclick = () => startFourball(el);
+  }
+  function finishSolo(){
+    G.over = true; setPhase('over', `${FOUR_SHOTS}샷 도전 끝 — 다시하기로 한 판 더!`);
+    if(!G.recorded){ G.recorded = true; recordStat('four_solo', { best: G.score[0], result: G.score[0] > 0 ? 'win' : undefined }); }
+    $msg.innerHTML = `🎯 연습 끝!<br><b>${G.score[0]}점</b>
+      <span class="pk-why">${FOUR_SHOTS}샷 · 최고 연속 ${G.bestRun}점</span><br>${endButtons()}`;
+    $msg.classList.remove('hidden'); bindEnd();
+  }
+  function finishVs(w){
+    G.over = true; setPhase('over', '한 판 더 치려면 다시하기를 누르세요');
+    if(cfg.mode === 'cpu' && !G.recorded){ G.recorded = true; recordStat('four_vs', { result: w === 0 ? 'win' : 'loss' }); }
+    const head = cfg.mode === 'cpu' ? (w === 0 ? '🎉 이겼다!' : '아쉽다 — 컴퓨터 승리') : `🎉 ${who(w)} 승리!`;
+    $msg.innerHTML = `${head}<br><b>${G.score[0]} : ${G.score[1]}</b>
+      <span class="pk-why">${cfg.mode === 'cpu' ? '컴퓨터 ' + cfg.ai.label : '2인 대결'} · ${FOUR_TARGET}점 내기</span><br>${endButtons()}`;
+    $msg.classList.remove('hidden'); bindEnd();
+  }
+
+  // ── 화면/조작 상태 ────────────────────────────────
+  function updateHud(){
+    if(solo){
+      const best = getStat('four_solo')?.best;
+      $hud.innerHTML = `<span>남은 샷 <b>${G.shotsLeft}</b></span>
+        <span>득점 <b>${G.score[0]}</b></span>
+        <span>최고 <b>${best != null ? best + '점' : '-'}</b></span>`;
+    } else {
+      const chip = i => `<span class="fb-p ${G.turn === i && !G.over ? 'on' : ''}">
+        <i class="fb-dot ${i === 1 ? 'mark' : ''}"></i>${escapeHtml(who(i))} <b>${G.score[i]}</b></span>`;
+      $hud.innerHTML = `${chip(0)}<span>${FOUR_TARGET}점 내기</span>${chip(1)}`;
+    }
+  }
+  function setPhase(p, msg){
+    G.phase = p;
+    if(p !== 'power'){ G.power = 0; G.pdir = 1; if($fill) $fill.style.width = '0%'; }
+    $act.disabled = (p !== 'aim' && p !== 'power');
+    $act.textContent = p==='power' ? '발사! 🎯' : p==='roll' ? '구르는 중…' : p==='cpu' ? '컴퓨터 차례…' : '파워 ▶';
+    $act.classList.toggle('shoot', p==='power');
+    $cancel.classList.toggle('hidden', p!=='power');
+    el.querySelectorAll('.pk-rot').forEach(b => b.disabled = (p !== 'aim'));
+    if(msg !== undefined) $tip.textContent = msg;
+    else if(p==='aim') $tip.textContent = '화면을 터치·드래그해 방향을 맞춘 뒤 파워를 누르세요';
+    else if(p==='power') $tip.textContent = '게이지가 왔다 갔다 하는 동안 원하는 세기에서 발사!';
+  }
+  function newGame(){
+    rack(); G.turn = 0; G.score = [0,0]; G.shotsLeft = FOUR_SHOTS; G.run = 0; G.bestRun = 0;
+    G.hits = []; G.over = false; G.recorded = false;
+    $msg.classList.add('hidden'); $msg.innerHTML = '';
+    updateHud(); aimDefault();
+    setPhase('aim', solo ? `빨간공 2개를 모두 맞히면 1점! ${FOUR_SHOTS}샷 도전`
+                         : `${who(0)}부터 시작 — 먼저 ${FOUR_TARGET}점!`);
+  }
+
+  const sub = solo ? '연습' : cfg.mode === 'cpu' ? `vs 컴퓨터 ${cfg.ai.label}` : '2인 대결';
+  el.innerHTML = `<div class="mg fourball">
+    <div class="pk-hud" id="fbHud"></div>
+    <div class="pk-stage">
+      <canvas id="fbCv" width="${W}" height="${H}"></canvas>
+      <div class="pk-msg hidden" id="fbMsg"></div>
+    </div>
+    <div class="pk-gaugewrap">
+      <div class="pk-gauge"><i id="fbFill"></i></div>
+      <button class="pk-cancel hidden" id="fbCancel">취소</button>
+    </div>
+    <div class="pk-ctrl">
+      <button class="btn pk-rot" id="fbL">◀</button>
+      <button class="btn primary pk-act" id="fbAct">파워 ▶</button>
+      <button class="btn pk-rot" id="fbR">▶</button>
+    </div>
+    <p class="pk-tip" id="fbTip"></p>
+  </div>`;
+  document.getElementById('gameTitle').textContent = `🔴 4구 · ${sub}`;
+  const back = document.getElementById('gameBack'); if (back) back.onclick = () => startFourball(el);   // 뒤로 = 모드 선택
+
+  cv = el.querySelector('#fbCv'); ctx = cv.getContext('2d');
+  $hud = el.querySelector('#fbHud'); $msg = el.querySelector('#fbMsg'); $fill = el.querySelector('#fbFill');
+  $act = el.querySelector('#fbAct'); $cancel = el.querySelector('#fbCancel'); $tip = el.querySelector('#fbTip');
+
+  // 캔버스 터치/드래그 → 수구 기준 방향
+  function aimAt(e){
+    if(G.phase !== 'aim' || G.over) return;
+    const r = cv.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (W / r.width), y = (e.clientY - r.top) * (H / r.height);
+    const c = cue(), dx = x - c.x, dy = y - c.y;
+    if(Math.hypot(dx,dy) < 4) return;
+    G.angle = Math.atan2(dy, dx);
+  }
+  let dragging = false;
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); dragging = true; try{ cv.setPointerCapture(e.pointerId); }catch(_){} aimAt(e); });
+  cv.addEventListener('pointermove', e => { if(dragging) aimAt(e); });
+  cv.addEventListener('pointerup', () => { dragging = false; });
+  cv.addEventListener('pointercancel', () => { dragging = false; });
+  cv.oncontextmenu = e => { e.preventDefault(); return false; };
+
+  // 미세 조준(꾹 누르면 연속 회전)
+  function holdRot(btn, dir){
+    let t = null;
+    const stepA = () => { if(G.phase === 'aim' && !G.over) G.angle += dir*0.009; };
+    const stop = () => { if(t){ clearInterval(t); t = null; } };
+    btn.onpointerdown = e => { e.preventDefault(); stepA(); stop(); t = setInterval(stepA, 40); };
+    btn.onpointerup = stop; btn.onpointercancel = stop; btn.onpointerleave = stop;
+    btn.oncontextmenu = e => { e.preventDefault(); return false; };
+  }
+  holdRot(el.querySelector('#fbL'), -1);
+  holdRot(el.querySelector('#fbR'), +1);
   $act.onclick = () => {
     if(G.over) return;
     if(G.phase === 'aim'){ G.power = 0; G.pdir = 1; setPhase('power'); }
