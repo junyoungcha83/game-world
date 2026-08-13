@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b95';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b96';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -3598,6 +3598,8 @@ function startFourball(el){
   const back = document.getElementById('gameBack'); if (back) back.onclick = () => showView('hub');
   el.innerHTML = `<div class="mg jg-pick">
     <div class="mg-msg">모드를 골라요 🔴</div>
+    <label class="fb-opt"><input type="checkbox" id="fbSpinOpt"> <b>당점(회전) 사용</b>
+      <small>정면 큐볼에서 칠 위치를 골라 팔로·드로·사이드 스핀 — 충돌·쿠션 반사가 달라져요</small></label>
     <div class="omok-levels">
       <button data-m="solo">연습<small>혼자 ${FOUR_SHOTS}샷 도전 · 기록 저장</small></button>
       ${FOUR_AIS.map(a => `<button data-m="cpu" data-k="${a.key}">대결 · vs 컴퓨터 ${a.label}<small>${a.desc} · 먼저 ${FOUR_TARGET}점</small></button>`).join('')}
@@ -3606,7 +3608,8 @@ function startFourball(el){
   </div>`;
   el.querySelectorAll('.omok-levels button').forEach(b => b.onclick = () => {
     const m = b.dataset.m;
-    runFour(el, { mode: m, ai: m === 'cpu' ? FOUR_AIS.find(a => a.key === b.dataset.k) : null });
+    const spin = !!el.querySelector('#fbSpinOpt')?.checked;
+    runFour(el, { mode: m, ai: m === 'cpu' ? FOUR_AIS.find(a => a.key === b.dataset.k) : null, spin });
   });
 }
 
@@ -3623,10 +3626,23 @@ function runFour(el, cfg){
   const PSPD = 0.022;                     // 파워 게이지 왕복 속도(프레임당)
   const CUE = 0, OPP = 1;                 // 공 인덱스: 0=민무늬 흰공(1P) 1=점박이 흰공(2P) 2,3=빨간공
   const solo = cfg.mode === 'solo';
+  const useSpin = !!cfg.spin;             // 당점(회전) 사용
+  const FOLLOW_K = 0.55, THROW_K = 0.28, CUSH_ENG = 0.34;   // 팔로·드로 / 사이드 스로 / 쿠션 잉글리시 세기
   const who = i => cfg.mode === 'cpu' ? (i === 0 ? '나' : '컴퓨터') : `${i + 1}P`;
 
   const G = { balls: [], turn: 0, score: [0, 0], phase: 'aim', angle: -Math.PI/2, power: 0, pdir: 1,
-              shotsLeft: FOUR_SHOTS, run: 0, bestRun: 0, hits: [], over: false, recorded: false, raf: null };
+              shotsLeft: FOUR_SHOTS, run: 0, bestRun: 0, hits: [], over: false, recorded: false, raf: null,
+              spin: { f: 0, s: 0 } };
+  // 당점(스핀) — 접촉 시 수구에 팔로/드로 + 사이드 스로 적용(대부분 소모). 수구만 spF/spS 를 가진다.
+  function applySpin(b){
+    if(!b.spF && !b.spS) return;
+    const d = b.dir || { x: 0, y: 0 }, v0 = b.v0 || 0;
+    b.vx += d.x * b.spF * v0 * FOLLOW_K; b.vy += d.y * b.spF * v0 * FOLLOW_K;   // 팔로(+)/드로(-)
+    const tx = -d.y, ty = d.x;                                                  // 진행 접선(사이드)
+    b.vx += tx * b.spS * v0 * THROW_K; b.vy += ty * b.spS * v0 * THROW_K;
+    b.spF *= 0.12; b.spS *= 0.45;
+  }
+  function resetSpin(){ G.spin = { f: 0, s: 0 }; if(G._drawSpin) G._drawSpin(); }
   let cv, ctx, $hud, $msg, $fill, $act, $cancel, $tip;
 
   // ── 초기 배치: 빨간공 2개는 중앙선 스팟, 흰공 2개는 하단에 좌우 대칭(양쪽 조건 동일) ──
@@ -3651,10 +3667,16 @@ function runFour(el, cfg){
         b.x += b.vx/sub; b.y += b.vy/sub;
         const sp = Math.hypot(b.vx, b.vy);                  // 등감속: 방향은 유지하고 속력만 일정하게 깎는다
         if(sp > 0){ const ns = Math.max(0, sp - DECEL/sub); b.vx = b.vx/sp*ns; b.vy = b.vy/sp*ns; }
-        if(b.x-R < L){ b.x = L+R; b.vx = -b.vx*CUSH_E; b.vy *= 0.99; }        // 쿠션(포켓이 없으니 항상 튕긴다)
-        else if(b.x+R > RT){ b.x = RT-R; b.vx = -b.vx*CUSH_E; b.vy *= 0.99; }
-        if(b.y-R < T){ b.y = T+R; b.vy = -b.vy*CUSH_E; b.vx *= 0.99; }
-        else if(b.y+R > BT){ b.y = BT-R; b.vy = -b.vy*CUSH_E; b.vx *= 0.99; }
+        let vwall = false, hwall = false;
+        if(b.x-R < L){ b.x = L+R; b.vx = -b.vx*CUSH_E; b.vy *= 0.99; vwall = true; }        // 쿠션(포켓이 없으니 항상 튕긴다)
+        else if(b.x+R > RT){ b.x = RT-R; b.vx = -b.vx*CUSH_E; b.vy *= 0.99; vwall = true; }
+        if(b.y-R < T){ b.y = T+R; b.vy = -b.vy*CUSH_E; b.vx *= 0.99; hwall = true; }
+        else if(b.y+R > BT){ b.y = BT-R; b.vy = -b.vy*CUSH_E; b.vx *= 0.99; hwall = true; }
+        if(b.spS){                                                            // 사이드 스핀 → 쿠션 반사각이 달라진다(잉글리시)
+          if(vwall){ b.vy += b.spS * Math.abs(b.vx) * CUSH_ENG; b.spS *= 0.7; }
+          if(hwall){ b.vx += b.spS * Math.abs(b.vy) * CUSH_ENG; b.spS *= 0.7; }
+        }
+        if(b.spF) b.spF *= 0.994; if(b.spS) b.spS *= 0.994;                    // 미사용 스핀은 서서히 사라짐
       }
       for(let i=0;i<bs.length;i++){                          // 공끼리 충돌(등질량 탄성) — 법선 방향 운동량 교환 + 겹침 보정
         for(let j=i+1;j<bs.length;j++){
@@ -3667,6 +3689,7 @@ function runFour(el, cfg){
           if(rel >= 0) continue;
           const imp = -(1+BALL_E)*rel/2;
           a.vx -= imp*nx; a.vy -= imp*ny; b.vx += imp*nx; b.vy += imp*ny;
+          applySpin(a); applySpin(b);                            // 당점(팔로/드로/사이드) — 충돌 후 수구 진행이 달라진다
           if(hits && (i === ci || j === ci)){ const o = (i === ci) ? j : i; if(!hits.includes(o)) hits.push(o); }
         }
       }
@@ -3705,6 +3728,7 @@ function runFour(el, cfg){
   // ── 컴퓨터: 후보 샷을 물리로 미리 굴려보고 가장 좋은 것 고르기 ──
   function simulate(ang, pw, ci){
     const bs = G.balls.map(b => ({ ...b })), hits = [];
+    bs.forEach(b => { b.spF = 0; b.spS = 0; });   // 컴퓨터는 당점 없이(중앙) 계산
     const sp = PMIN + (PMAX-PMIN)*pw;
     bs[ci].vx = Math.cos(ang)*sp; bs[ci].vy = Math.sin(ang)*sp;
     for(let f=0; f<700 && moving(bs); f++) physFrame(bs, 4, hits, ci);   // 미리보기는 서브스텝을 줄여 가볍게
@@ -3825,6 +3849,8 @@ function runFour(el, cfg){
   function shoot(){
     const c = cue(), sp = PMIN + (PMAX-PMIN)*G.power;
     c.vx = Math.cos(G.angle)*sp; c.vy = Math.sin(G.angle)*sp;
+    c.dir = { x: Math.cos(G.angle), y: Math.sin(G.angle) }; c.v0 = sp;   // 당점 계산용
+    c.spF = useSpin ? G.spin.f : 0; c.spS = useSpin ? G.spin.s : 0;
     G.hits = [];
     setPhase('roll');
   }
@@ -3839,7 +3865,7 @@ function runFour(el, cfg){
       if(j.scored){ G.score[0]++; G.run++; G.bestRun = Math.max(G.bestRun, G.run); } else G.run = 0;
       updateHud();
       if(G.shotsLeft <= 0) finishSolo();
-      else setPhase('aim', j.scored ? `${why} (연속 ${G.run}점)` : why);
+      else { resetSpin(); setPhase('aim', j.scored ? `${why} (연속 ${G.run}점)` : why); }
       return;
     }
     if(j.scored){
@@ -3854,7 +3880,7 @@ function runFour(el, cfg){
   function proceed(msg, pass){
     if(pass) G.turn = 1 - G.turn;
     updateHud();
-    aimDefault();
+    aimDefault(); resetSpin();
     if(cfg.mode === 'cpu' && G.turn === 1) cpuTurn(msg);
     else setPhase('aim', msg);
   }
@@ -3930,7 +3956,7 @@ function runFour(el, cfg){
     rack(); G.turn = 0; G.score = [0,0]; G.shotsLeft = FOUR_SHOTS; G.run = 0; G.bestRun = 0;
     G.hits = []; G.over = false; G.recorded = false;
     $msg.classList.add('hidden'); $msg.innerHTML = '';
-    updateHud(); aimDefault();
+    updateHud(); aimDefault(); resetSpin();
     setPhase('aim', solo ? `빨간공 2개를 모두 맞히면 1점! ${FOUR_SHOTS}샷 도전`
                          : `${who(0)}부터 시작 — 먼저 ${FOUR_TARGET}점!`);
   }
@@ -3947,6 +3973,7 @@ function runFour(el, cfg){
       <button class="pk-cancel hidden" id="fbCancel">취소</button>
     </div>
     <div class="pk-ctrl">
+      ${useSpin ? `<canvas class="fb-spin" id="fbSpin" width="120" height="120" title="당점 — 드래그로 회전 지정 (↑팔로 ↓드로 ←→사이드)"></canvas>` : ''}
       <button class="btn pk-rot" id="fbL">◀</button>
       <button class="btn primary pk-act" id="fbAct">파워 ▶</button>
       <button class="btn pk-rot" id="fbR">▶</button>
@@ -3993,6 +4020,40 @@ function runFour(el, cfg){
     else if(G.phase === 'power') shoot();
   };
   $cancel.onclick = () => { if(G.phase === 'power') setPhase('aim'); };
+
+  // ── 당점(정면 큐볼) 선택기 ──
+  if(useSpin){
+    const sc = el.querySelector('#fbSpin'), sctx = sc.getContext('2d');
+    const SR = 50, CX = 60, CY = 60, LIM = SR*0.82;   // 볼 반지름 · 중심 · 당점 이동 한계
+    function drawSpin(){
+      sctx.clearRect(0,0,120,120);
+      const g = sctx.createRadialGradient(CX-16,CY-18,4, CX,CY,SR+12);
+      g.addColorStop(0,'#ffffff'); g.addColorStop(1,'#cbd5e1');
+      sctx.beginPath(); sctx.arc(CX,CY,SR,0,7); sctx.fillStyle = g; sctx.fill();
+      sctx.lineWidth = 2; sctx.strokeStyle = '#94a3b8'; sctx.stroke();
+      sctx.strokeStyle = 'rgba(0,0,0,.12)'; sctx.lineWidth = 1;
+      sctx.beginPath(); sctx.moveTo(CX-SR,CY); sctx.lineTo(CX+SR,CY); sctx.moveTo(CX,CY-SR); sctx.lineTo(CX,CY+SR); sctx.stroke();
+      const px = CX + G.spin.s*LIM, py = CY - G.spin.f*LIM;
+      sctx.beginPath(); sctx.arc(px,py,9,0,7); sctx.fillStyle = '#dc2626'; sctx.fill();
+      sctx.lineWidth = 2; sctx.strokeStyle = '#fff'; sctx.stroke();
+    }
+    function setSpin(e){
+      if(G.phase!=='aim' && G.phase!=='power') return;
+      const r = sc.getBoundingClientRect();
+      const x = (e.clientX-r.left)*(120/r.width), y = (e.clientY-r.top)*(120/r.height);
+      let s = (x-CX)/LIM, f = -(y-CY)/LIM;
+      const m = Math.hypot(s,f); if(m > 1){ s /= m; f /= m; }   // 원 안으로 제한
+      G.spin.s = s; G.spin.f = f; drawSpin();
+    }
+    let spDrag = false;
+    sc.addEventListener('pointerdown', e => { e.preventDefault(); spDrag = true; try{ sc.setPointerCapture(e.pointerId); }catch(_){} setSpin(e); });
+    sc.addEventListener('pointermove', e => { if(spDrag) setSpin(e); });
+    sc.addEventListener('pointerup', () => { spDrag = false; });
+    sc.addEventListener('pointercancel', () => { spDrag = false; });
+    sc.oncontextmenu = e => { e.preventDefault(); return false; };
+    G._drawSpin = drawSpin;
+    drawSpin();
+  }
 
   newGame();
   G.raf = requestAnimationFrame(loop);
