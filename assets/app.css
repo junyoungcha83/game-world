@@ -393,7 +393,7 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .rl-result { text-align: center; }
 
 /* ── 프로야구(KBO) ───────────────────────────── */
-.kbo { display:flex; flex-direction:column; gap:12px; width:100%; max-width:460px; margin:0 auto; }
+.kbo { display:flex; flex-direction:column; gap:12px; width:100%; max-width:598px; margin:0 auto; }
 .kbo-teamsel { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
 .kbo-teamsel button { display:flex; align-items:center; gap:8px; padding:12px 10px; border-radius:12px;
   border:2px solid var(--tc); background:#fff; font-weight:800; color:#0f172a; cursor:pointer; }
@@ -433,8 +433,14 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .kbo-pbtns button:disabled { opacity:.5; }
 .kbo-final { text-align:center; font-size:1.25rem; font-weight:800; padding:14px; line-height:1.6; }
 .kbo-again { padding:14px; border-radius:12px; font-weight:800; border:none; cursor:pointer; background:#2563eb; color:#fff; }
-.kbo-canvas { width:100%; max-width:440px; aspect-ratio:320/232; display:block; margin:0 auto; border-radius:12px;
+/* 화면을 꽉 채우되(기존보다 30% 크게), 작은 폰에서 스윙 버튼이 화면 밖으로 밀리지 않게 높이 상한을 둔다.
+   가로폭을 제한하면 aspect-ratio가 높이를 따라오므로 비율이 깨지지 않는다(290px = 스코어보드+메시지+버튼 몫). */
+.kbo-canvas { width:100%; aspect-ratio:320/302; display:block; margin:0 auto; border-radius:12px;
+  max-width:clamp(200px, calc((100vh - var(--header-h) - var(--tab-h) - 290px) * 1.06), 572px);
   background:#4fb857; border:3px solid #0f172a; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.25); }
+@supports (height:1dvh) {
+  .kbo-canvas { max-width:clamp(200px, calc((100dvh - var(--header-h) - var(--tab-h) - 290px) * 1.06), 572px); }
+}
 .kbo-below { display:flex; flex-direction:column; gap:10px; margin-top:10px; }
 /* 팀선택 화면 배경 */
 .kbo-select { border-color:#0f172a; justify-content:flex-start; gap:14px; min-height:470px; }
