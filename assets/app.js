@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b94';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b95';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -3172,6 +3172,19 @@ function startArchery(el){
 //       흰공이 빠지면(스크래치) 헤드스팟 복귀 + 벌타 1.
 // TODO(다음 단계): 양궁처럼 컴퓨터와 번갈아 치는 대전 모드(색공/줄공 그룹 배정, CPU 조준 정확도 = 난이도).
 function startPocket(el){
+  const back = document.getElementById('gameBack'); if (back) back.onclick = () => showView('hub');
+  el.innerHTML = `<div class="mg jg-pick">
+    <div class="mg-msg">모드를 골라요 🎱</div>
+    <div class="omok-levels">
+      <button data-m="solo">연습<small>혼자 최소타 도전 · 기록 저장</small></button>
+      <button data-m="two">대결 · 2인<small>한 기기에서 번갈아 치기 · 많이 넣는 사람 승</small></button>
+    </div>
+  </div>`;
+  el.querySelectorAll('.omok-levels button').forEach(b => b.onclick = () => runPocket(el, { mode: b.dataset.m }));
+}
+function runPocket(el, cfg){
+  const two = cfg.mode === 'two';         // 2인 핫시트 대결
+  const who = i => `${i + 1}P`;
   const W = 320, H = 568;                 // 캔버스 크기(세로형 테이블)
   const CU = 15;                          // 쿠션(레일) 두께
   const L = CU, T = CU, RT = W - CU, BT = H - CU;   // 플레이 영역 경계
@@ -3194,8 +3207,16 @@ function startPocket(el){
   const CUE_SPOT = { x: W/2, y: T + (BT-T)*0.80 };
 
   const G = { balls:[], phase:'aim', angle:-Math.PI/2, power:0, pdir:1, shots:0,
-              evt:null, over:false, raf:null };
-  let cv, ctx, $shots, $left, $msg, $fill, $act, $cancel, $tip;
+              turn:0, score:[0,0], evt:null, over:false, raf:null };
+  let cv, ctx, $shots, $left, $msg, $fill, $act, $cancel, $tip, $s0, $s1, $hud;
+  function updateHud(){
+    if(two){
+      if($s0) $s0.textContent = G.score[0];
+      if($s1) $s1.textContent = G.score[1];
+      if($hud){ $hud.classList.toggle('t0', G.turn===0); $hud.classList.toggle('t1', G.turn===1); }
+    } else if($shots){ $shots.textContent = G.shots; }
+    if($left) $left.textContent = ballsLeft();
+  }
 
   // ── 초기 배치: 9구 다이아몬드 랙(1·2·3·2·1), 정중앙에 검은 8번 ──
   function rack(){
@@ -3394,7 +3415,7 @@ function startPocket(el){
   function shoot(){
     const c = cue(), sp = PMIN + (PMAX-PMIN)*G.power;
     c.vx = Math.cos(G.angle)*sp; c.vy = Math.sin(G.angle)*sp;
-    G.shots++; $shots.textContent = G.shots;
+    G.shots++; if($shots) $shots.textContent = G.shots;
     G.evt = { cueIn:false, eightIn:false, potted:[], firstHit:null };
     setPhase('roll');
   }
@@ -3409,6 +3430,7 @@ function startPocket(el){
     }
   }
   function endShot(){
+    if(two){ resolveTwo(G.evt); return; }
     const e = G.evt, left = objLeft();
     if(e.eightIn){
       if(left === 0 && !e.cueIn) finish(true);
@@ -3423,6 +3445,27 @@ function startPocket(el){
     if(left === 0) msg = (e.cueIn ? '스크래치(벌타 +1) — ' : '') + '이제 검은 8번을 넣으면 클리어! 🎱';
     $left.textContent = ballsLeft();
     setPhase('aim', msg);
+  }
+  // ── 2인 대결: 넣으면 계속·못 넣으면 차례 넘김. 스크래치는 흰공 복귀 + 차례 넘김. 넣은 공만큼 득점(공 9개 = 무승부 없음) ──
+  function resolveTwo(e){
+    const potted = e.potted.length + (e.eightIn ? 1 : 0);
+    if(potted > 0) G.score[G.turn] += potted;
+    let pass, msg;
+    if(e.cueIn){ respotCue(); pass = true; msg = `스크래치! ${potted ? `+${potted}점 · ` : ''}흰공 복귀 — ${who(1-G.turn)} 차례`; }
+    else if(potted > 0){ pass = false; msg = `${who(G.turn)} +${potted}점! 한 번 더 🎯`; }
+    else { pass = true; msg = `${e.firstHit ? '아쉽다' : '헛샷'} — ${who(1-G.turn)} 차례`; }
+    if(pass) G.turn = 1 - G.turn;
+    updateHud();
+    if(ballsLeft() === 0){ finishTwo(); return; }
+    setPhase('aim', msg);
+  }
+  function finishTwo(){
+    G.over = true;
+    const a = G.score[0], b = G.score[1];
+    const title = a === b ? '무승부!' : `🎉 ${who(a > b ? 0 : 1)} 승리!`;
+    $msg.innerHTML = `${title}<br><b>${a} : ${b}</b><br><button class="btn primary" id="pkAgain">다시하기</button>`;
+    $msg.classList.remove('hidden'); setPhase('over');
+    const ag = el.querySelector('#pkAgain'); if(ag) ag.onclick = newGame;
   }
   function finish(win, why){
     G.over = true;
@@ -3453,19 +3496,27 @@ function startPocket(el){
   }
   function newGame(){
     rack(); G.shots = 0; G.over = false; G.angle = -Math.PI/2;
+    G.turn = 0; G.score = [0,0];
     G.evt = { cueIn:false, eightIn:false, potted:[], firstHit:null };
-    $shots.textContent = '0'; $left.textContent = ballsLeft();
+    updateHud();
     $msg.classList.add('hidden'); $msg.innerHTML = '';
-    setPhase('aim', '브레이크 샷! 세게 쳐서 랙을 흩뜨려 보세요');
+    setPhase('aim', two ? '1P 브레이크 샷! 세게 쳐서 흩뜨려요' : '브레이크 샷! 세게 쳐서 랙을 흩뜨려 보세요');
   }
 
   const pbest = getStat('pocket')?.best;
+  const hudHtml = two
+    ? `<div class="pk-hud pk-hud-two t0" id="pkHud">
+        <span class="pk-p pk-p0"><b>1P</b> <b id="pkS0">0</b></span>
+        <span>남은 <b id="pkLeft">9</b></span>
+        <span class="pk-p pk-p1"><b>2P</b> <b id="pkS1">0</b></span>
+      </div>`
+    : `<div class="pk-hud">
+        <span>샷 <b id="pkShots">0</b></span>
+        <span>남은 공 <b id="pkLeft">9</b></span>
+        <span>최소 <b id="pkBest">${pbest != null ? pbest + '타' : '-'}</b></span>
+      </div>`;
   el.innerHTML = `<div class="mg pocket">
-    <div class="pk-hud">
-      <span>샷 <b id="pkShots">0</b></span>
-      <span>남은 공 <b id="pkLeft">9</b></span>
-      <span>최소 <b id="pkBest">${pbest != null ? pbest + '타' : '-'}</b></span>
-    </div>
+    ${hudHtml}
     <div class="pk-stage">
       <canvas id="pkCv" width="${W}" height="${H}"></canvas>
       <div class="pk-msg hidden" id="pkMsg"></div>
@@ -3484,6 +3535,7 @@ function startPocket(el){
 
   cv = el.querySelector('#pkCv'); ctx = cv.getContext('2d');
   $shots = el.querySelector('#pkShots'); $left = el.querySelector('#pkLeft');
+  $s0 = el.querySelector('#pkS0'); $s1 = el.querySelector('#pkS1'); $hud = el.querySelector('#pkHud');
   $msg = el.querySelector('#pkMsg'); $fill = el.querySelector('#pkFill');
   $act = el.querySelector('#pkAct'); $cancel = el.querySelector('#pkCancel'); $tip = el.querySelector('#pkTip');
 
