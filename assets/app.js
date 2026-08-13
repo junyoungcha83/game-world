@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b98';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b99';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -258,6 +258,7 @@ const GAMES = [
   { id: 'pocket', name: '포켓볼', emoji: '🎱', color: '#16a34a', best: 'low',
     fmtStat: s => s ? `${s.plays}판·${s.wins}클리어 · 최소 ${s.best != null ? s.best + '타' : '-'}` : '아직 기록 없음', start: startPocket },
   { id: 'fourball', name: '4구', emoji: '🔴', color: '#b91c1c', best: 'high',
+    svg: '<svg viewBox="0 0 100 100" width="100%" height="100%"><g stroke-linecap="round"><line x1="18" y1="18" x2="82" y2="82" stroke="#6b3f18" stroke-width="11"/><line x1="82" y1="18" x2="18" y2="82" stroke="#6b3f18" stroke-width="11"/><line x1="18" y1="18" x2="82" y2="82" stroke="#d8a05a" stroke-width="6.5"/><line x1="82" y1="18" x2="18" y2="82" stroke="#d8a05a" stroke-width="6.5"/></g><g stroke="rgba(0,0,0,.4)" stroke-width="1"><circle cx="50" cy="20" r="11" fill="#facc15"/><circle cx="80" cy="50" r="11" fill="#f8fafc"/><circle cx="50" cy="80" r="11" fill="#22c55e"/><circle cx="20" cy="50" r="11" fill="#38bdf8"/></g><g fill="rgba(255,255,255,.6)"><circle cx="46" cy="16" r="2.6"/><circle cx="76" cy="46" r="2.6"/><circle cx="46" cy="76" r="2.6"/><circle cx="16" cy="46" r="2.6"/></g></svg>',
     fmtStat: () => fourAggFmt(), start: startFourball },
   { id: 'tetris', name: '테트리스', emoji: '🟦', color: '#0ea5e9', best: 'high',
     fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startTetris },
@@ -352,7 +353,7 @@ function renderHub() {
           <div class="hub-grid">
             ${cat.ids.map(byId).filter(Boolean).map(g => `
               <button class="game-card" data-id="${g.id}">
-                <span class="gc-emoji" style="background:${g.color}">${g.emoji}</span>
+                <span class="gc-emoji" style="background:${g.color}">${g.svg || g.emoji}</span>
                 <span class="gc-name">${escapeHtml(g.name)}</span>
               </button>`).join('')}
           </div>
