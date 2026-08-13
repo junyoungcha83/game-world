@@ -428,13 +428,7 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .kbo-course { display:flex; gap:8px; }
 .kbo-course button { flex:1; padding:10px; border-radius:10px; border:2px solid #cbd5e1; font-weight:800; background:#fff; cursor:pointer; }
 .kbo-course button.on { border-color:#2563eb; background:#dbeafe; }
-/* 투구 코스 조준 D-패드 (가운데가 결정) */
-.kbo-dpad { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
-.kbo-dpad button { padding:13px 0; border-radius:10px; font-weight:800; font-size:1.05rem;
-  border:none; cursor:pointer; background:#e2e8f0; }
-.kbo-dpad button.sp { visibility:hidden; pointer-events:none; }
-.kbo-dpad button.prime { background:#16a34a; color:#fff; }
-/* 타석 컨트롤러 — 왼쪽 원형키=스윙, 오른쪽 원형키=코스(상하좌우). 화면(캔버스) 아래쪽에 겹쳐 놓는다 */
+/* 타석 컨트롤러 — 왼쪽 원형키=코스 조준 스틱, 오른쪽 원형키=스윙. 화면(캔버스) 아래쪽에 겹쳐 놓는다 */
 .kbo-pads { position:absolute; left:0; right:0; bottom:8px; display:flex; align-items:flex-end;
   justify-content:space-between; padding:0 8px; pointer-events:none; }
 .kbo-pads:empty { display:none; }
@@ -445,17 +439,19 @@ body.playing .app-main { overscroll-behavior-y: contain; }
   cursor:pointer; font-size:1.7rem; color:#fff; background:radial-gradient(circle at 34% 28%, #f87171, #dc2626 62%, #991b1b); }
 .kbo-swingpad b { font-size:.86rem; font-weight:800; letter-spacing:.02em; }
 .kbo-swingpad:active { transform:scale(.95); filter:brightness(1.08); }
-.kbo-dpadr { background:radial-gradient(circle at 34% 28%, #475569, #1e293b 65%, #0f172a); }
-.kbo-dpadr button { position:absolute; width:38%; height:38%; border:none; padding:0; cursor:pointer;
-  background:rgba(255,255,255,.12); color:#e2e8f0; font-size:1rem; font-weight:800; border-radius:12px;
-  -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
-.kbo-dpadr button:active { background:#fde047; color:#0f172a; }
-.kbo-dpadr button[data-d="u"] { top:2%;  left:31%; }
-.kbo-dpadr button[data-d="d"] { bottom:2%; left:31%; }
-.kbo-dpadr button[data-d="l"] { left:2%;  top:31%; }
-.kbo-dpadr button[data-d="r"] { right:2%; top:31%; }
-.kbo-padhub { position:absolute; left:50%; top:50%; width:19%; height:19%; transform:translate(-50%,-50%);
-  border-radius:50%; background:rgba(253,224,71,.85); pointer-events:none; }
+/* 조준 스틱 — 누른 채 손가락을 움직이면 민 방향 그대로 존 칸이 잡힌다(9칸 절대 대응).
+   touch-action:none 이라야 드래그 도중 화면이 스크롤되지 않는다. */
+.kbo-stickpad { touch-action:none; cursor:grab;
+  background:radial-gradient(circle at 34% 28%, #475569, #1e293b 65%, #0f172a); }
+.kbo-stickpad:active { cursor:grabbing; }
+.kbo-stickpad .ar { position:absolute; color:rgba(226,232,240,.5); font-size:.82rem; font-weight:800; pointer-events:none; }
+.kbo-stickpad .ar[data-d="u"] { top:5%;  left:50%; transform:translateX(-50%); }
+.kbo-stickpad .ar[data-d="d"] { bottom:5%; left:50%; transform:translateX(-50%); }
+.kbo-stickpad .ar[data-d="l"] { left:5%;  top:50%; transform:translateY(-50%); }
+.kbo-stickpad .ar[data-d="r"] { right:5%; top:50%; transform:translateY(-50%); }
+.kbo-knob { position:absolute; left:50%; top:50%; width:38%; height:38%; margin:-19% 0 0 -19%;
+  border-radius:50%; background:radial-gradient(circle at 36% 30%, #fef08a, #fde047 60%, #eab308);
+  box-shadow:0 3px 8px rgba(15,23,42,.35); pointer-events:none; }
 .kbo-pbtns { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
 .kbo-pbtns button { padding:14px; border-radius:12px; font-weight:800; border:none; cursor:pointer; background:#1e293b; color:#fff; }
 .kbo-pbtns button:disabled { opacity:.5; }

@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b92';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b93';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -2715,12 +2715,13 @@ function startKbo(el){
     const { ctx, cv, below, pads } = makeCanvas(act);
     const myC=KBO_TEAMS[G.away].c1, opC=KBO_TEAMS[G.home].c1;
     let cursor = G.aimCell==null ? 4 : G.aimCell;
-    below.innerHTML=`<div class="kbo-note"><b>${pitch.name}!</b> 오른쪽 키로 코스를 맞추고 왼쪽 키로 스윙</div>`;
-    pads.innerHTML=`<button class="kbo-pad kbo-swingpad" id="swPad">🏏<b>스윙</b></button>
-      <div class="kbo-pad kbo-dpadr">
-        <button data-d="u">▲</button><button data-d="l">◀</button>
-        <button data-d="r">▶</button><button data-d="d">▼</button><span class="kbo-padhub"></span>
-      </div>`;
+    below.innerHTML=`<div class="kbo-note"><b>${pitch.name}!</b> 왼쪽 스틱을 밀어 코스를 맞추고 오른쪽 키로 스윙</div>`;
+    pads.innerHTML=`<div class="kbo-pad kbo-stickpad" id="aimStick">
+        <span class="ar" data-d="u">▲</span><span class="ar" data-d="l">◀</span>
+        <span class="ar" data-d="r">▶</span><span class="ar" data-d="d">▼</span>
+        <span class="kbo-knob" id="aimKnob"></span>
+      </div>
+      <button class="kbo-pad kbo-swingpad" id="swPad">🏏<b>스윙</b></button>`;
     const WIND=0.30;                                   // 와인드업 구간(나머지가 공이 날아오는 구간)
     let p=0, done=false, swung=false, wait=PREP; const step=stepOf(pitch.key);
     let sw=0, swType=null, bpSwing=0;                  // 배트 스윙 진행도 / 스윙 결과 / 휘두른 시점
@@ -2779,8 +2780,25 @@ function startKbo(el){
         paint({ phase:1, ball:ballToZone(1,aim,arr), swing:sw, hit:land.cell });
         return setTimeout(()=>outcome(res),420); }
       G.raf=requestAnimationFrame(fr); })();
-    pads.querySelectorAll('.kbo-dpadr button').forEach(b=>
-      b.onpointerdown=e=>{ e.preventDefault(); move(b.dataset.d); });
+    // 조준 스틱 — 누른 채 손가락을 떼지 않고 움직이면 민 방향 그대로 커서가 따라온다.
+    // 스틱 중심 기준 오프셋을 3×3으로 양자화해 존 칸에 1:1로 대응시킨다(가운데를 누르면 한가운데 칸).
+    const stick=pads.querySelector('#aimStick'), knob=pads.querySelector('#aimKnob');
+    const aimAt=(px,py)=>{ if(done||swung) return;
+      const r=stick.getBoundingClientRect(), RX=r.width/2, RY=r.height/2;
+      const dx=(px-(r.left+RX))/RX, dy=(py-(r.top+RY))/RY, T=0.33;
+      cursor=(dy<-T?0:dy>T?2:1)*3 + (dx<-T?0:dx>T?2:1); G.aimCell=cursor;
+      const m=Math.hypot(dx,dy), k=m>0.62?0.62/m:1;    // 노브는 패드 밖으로 나가지 않게 잡아둔다
+      knob.style.transform=`translate(${dx*k*RX}px, ${dy*k*RY}px)`; };
+    let dragId=null;                                   // 캡처가 풀려도 조준이 끊기지 않게 직접 추적한다
+    stick.onpointerdown=e=>{ e.preventDefault(); dragId=e.pointerId;
+      try{ stick.setPointerCapture(e.pointerId); }catch(_){}   // 스틱 밖으로 손가락이 나가도 계속 따라오도록
+      aimAt(e.clientX,e.clientY); };
+    stick.onpointermove=e=>{ if(dragId===null||e.pointerId!==dragId) return;
+      e.preventDefault(); aimAt(e.clientX,e.clientY); };
+    const drop=e=>{ if(dragId===null) return; dragId=null;
+      try{ stick.releasePointerCapture(e.pointerId); }catch(_){}
+      knob.style.transform=''; };                      // 손을 떼면 노브만 중앙 복귀(고른 칸은 유지)
+    stick.onpointerup=drop; stick.onpointercancel=drop;
     pads.querySelector('#swPad').onpointerdown=e=>{ e.preventDefault(); doSwing(); };
     cv.onclick=e=>{ if(done||swung) return;            // 존을 직접 눌러 커서를 옮겨도 된다
       const r=cv.getBoundingClientRect();
@@ -2801,20 +2819,10 @@ function startKbo(el){
       below.innerHTML=`<div class="kbo-note">${KBO_TEAMS[G.home].name} 타석 — 구종 선택</div>
         <div class="kbo-pbtns">${KBO_PITCHES.map(p=>`<button data-k="${p.key}">${p.name}</button>`).join('')}</div>`;
       below.querySelectorAll('button').forEach(b=>b.onclick=()=>{ pitch=KBO_PITCHES.find(x=>x.key===b.dataset.k); aimPhase(); }); }
-    // 조준: 자동으로 도는 커서 대신 상하좌우로 직접 옮긴다(캔버스를 직접 눌러도 됨)
+    // 조준: 방향키 없이 존을 손으로 직접 눌러 코스를 고른다
     function aimPhase(){ phase='aim'; cursor=4; stopAnim(); draw();
-      below.innerHTML=`<div class="kbo-note">${pitch.name} — 커서를 원하는 코스로 옮기고 '결정' (존을 직접 눌러도 돼요)</div>
-        <div class="kbo-dpad">
-          <button class="sp"></button><button data-d="u">▲</button><button class="sp"></button>
-          <button data-d="l">◀</button><button id="aimBtn" class="prime">결정</button><button data-d="r">▶</button>
-          <button class="sp"></button><button data-d="d">▼</button><button class="sp"></button>
-        </div>`;
-      const move=d=>{ if(phase!=='aim') return;
-        const cx=cursor%3, cy=(cursor/3)|0;
-        const nx=Math.max(0,Math.min(2, cx + (d==='l'?-1:d==='r'?1:0)));
-        const ny=Math.max(0,Math.min(2, cy + (d==='u'?-1:d==='d'?1:0)));
-        cursor=ny*3+nx; draw(); };
-      below.querySelectorAll('button').forEach(b=>{ if(b.dataset.d) b.onclick=()=>move(b.dataset.d); });
+      below.innerHTML=`<div class="kbo-note">${pitch.name} — 던질 코스를 존에서 직접 누르고 '결정'</div>
+        <div class="kbo-btns"><button id="aimBtn" class="prime">결정</button></div>`;
       cv.onclick=e=>{ if(phase!=='aim') return;                       // 캔버스 좌표 → 월드 좌표 → 존 칸
         const r=cv.getBoundingClientRect();
         const wx=(e.clientX-r.left)*(CW/r.width)/ZOOM + VX, wy=(e.clientY-r.top)*(CH/r.height)/ZOOM;
