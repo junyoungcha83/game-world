@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b97';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b98';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -3600,6 +3600,8 @@ function startFourball(el){
     <div class="mg-msg">모드를 골라요 🔴</div>
     <label class="fb-opt"><input type="checkbox" id="fbSpinOpt"> <b>당점(회전) 사용</b>
       <small>정면 큐볼에서 칠 위치를 골라 팔로·드로·사이드 스핀 — 충돌·쿠션 반사가 달라져요</small></label>
+    <label class="fb-opt"><input type="checkbox" id="fbCourseOpt"> <b>코스 자세히</b>
+      <small>예상 괘적을 쿠션 반사까지 최대 3개 표시</small></label>
     <div class="omok-levels">
       <button data-m="solo">연습<small>혼자 ${FOUR_SHOTS}샷 도전 · 기록 저장</small></button>
       ${FOUR_AIS.map(a => `<button data-m="cpu" data-k="${a.key}">대결 · vs 컴퓨터 ${a.label}<small>${a.desc} · 먼저 ${FOUR_TARGET}점</small></button>`).join('')}
@@ -3609,7 +3611,8 @@ function startFourball(el){
   el.querySelectorAll('.omok-levels button').forEach(b => b.onclick = () => {
     const m = b.dataset.m;
     const spin = !!el.querySelector('#fbSpinOpt')?.checked;
-    runFour(el, { mode: m, ai: m === 'cpu' ? FOUR_AIS.find(a => a.key === b.dataset.k) : null, spin });
+    const course = !!el.querySelector('#fbCourseOpt')?.checked;
+    runFour(el, { mode: m, ai: m === 'cpu' ? FOUR_AIS.find(a => a.key === b.dataset.k) : null, spin, course });
   });
 }
 
@@ -3627,6 +3630,7 @@ function runFour(el, cfg){
   const CUE = 0, OPP = 1;                 // 공 인덱스: 0=민무늬 흰공(1P) 1=점박이 흰공(2P) 2,3=빨간공
   const solo = cfg.mode === 'solo';
   const useSpin = !!cfg.spin;             // 당점(회전) 사용
+  const detailCourse = !!cfg.course;      // 코스 자세히(예상 괘적 최대 3개)
   const FOLLOW_K = 0.55, THROW_K = 0.28, CUSH_ENG = 0.34;   // 팔로·드로 / 사이드 스로 / 쿠션 잉글리시 세기
   const who = i => cfg.mode === 'cpu' ? (i === 0 ? '나' : '컴퓨터') : `${i + 1}P`;
 
@@ -3741,6 +3745,37 @@ function runFour(el, cfg){
     return { x: c.x+dx*bestT, y: c.y+dy*bestT, target };
   }
 
+  // ── 예상 괘적(수구 중심 기준, 쿠션 반사 포함 최대 maxSeg 구간) ──
+  function predictPath(ox, oy, dx, dy, maxSeg){
+    const c = cue(), pts = [{ x: ox, y: oy }];
+    let target = null;
+    for(let seg = 0; seg < maxSeg; seg++){
+      let tBall = Infinity, tgt = null;                       // 가장 가까운 공까지
+      for(const b of G.balls){
+        if(b === c) continue;
+        const ex = b.x-ox, ey = b.y-oy, t = ex*dx + ey*dy;
+        if(t <= 0) continue;
+        const perp2 = ex*ex + ey*ey - t*t, rr = (2*R)*(2*R);
+        if(perp2 > rr) continue;
+        const th = t - Math.sqrt(rr - perp2);
+        if(th > 0.02 && th < tBall){ tBall = th; tgt = b; }
+      }
+      let tW = Infinity, wx = false, wy = false;              // 가장 가까운 쿠션까지(수구 중심 경계)
+      if(dx > 0){ const t = (RT-R-ox)/dx; if(t < tW){ tW = t; wx = true; wy = false; } }
+      else if(dx < 0){ const t = (L+R-ox)/dx; if(t < tW){ tW = t; wx = true; wy = false; } }
+      if(dy > 0){ const t = (BT-R-oy)/dy; if(t < tW){ tW = t; wx = false; wy = true; } }
+      else if(dy < 0){ const t = (T+R-oy)/dy; if(t < tW){ tW = t; wx = false; wy = true; } }
+      if(tgt && tBall <= tW){                                 // 공에 먼저 → 거기서 종료
+        ox += dx*tBall; oy += dy*tBall; pts.push({ x: ox, y: oy }); target = tgt; break;
+      }
+      const t = Math.max(0, tW);                              // 쿠션에 먼저 → 반사 후 계속
+      ox += dx*t; oy += dy*t; pts.push({ x: ox, y: oy, bounce: true });
+      if(wx) dx = -dx; if(wy) dy = -dy;
+      ox += dx*0.02; oy += dy*0.02;                           // 같은 벽 재충돌 방지 살짝 밀기
+    }
+    return { points: pts, target };
+  }
+
   // ── 컴퓨터: 후보 샷을 물리로 미리 굴려보고 가장 좋은 것 고르기 ──
   function simulate(ang, pw, ci){
     const bs = G.balls.map(b => ({ ...b })), hits = [];
@@ -3818,17 +3853,22 @@ function runFour(el, cfg){
     }
   }
   function drawAim(){
-    const c = cue(), p = predict(), dx = Math.cos(G.angle), dy = Math.sin(G.angle);
+    const c = cue(), dx = Math.cos(G.angle), dy = Math.sin(G.angle);
+    const path = predictPath(c.x, c.y, dx, dy, detailCourse ? 3 : 1);
+    const pts = path.points, last = pts[pts.length-1];
     ctx.save();
-    ctx.setLineDash([6,6]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.85)';
-    ctx.beginPath(); ctx.moveTo(c.x+dx*R, c.y+dy*R); ctx.lineTo(p.x, p.y); ctx.stroke();
+    ctx.setLineDash([6,6]); ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.beginPath(); ctx.moveTo(c.x+dx*R, c.y+dy*R);                                 // 큐볼 가장자리에서 시작
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
     ctx.setLineDash([]);
-    ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, 7);                                     // 고스트 볼(충돌 시점 수구 위치)
-    ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 1.4; ctx.stroke();
-    if(p.target){                                                                    // 목적구가 튀어나갈 방향
-      const ox = p.target.x-p.x, oy = p.target.y-p.y, od = Math.hypot(ox,oy) || 1;
-      ctx.beginPath(); ctx.moveTo(p.target.x, p.target.y);
-      ctx.lineTo(p.target.x + ox/od*34, p.target.y + oy/od*34);
+    for(let i=1;i<pts.length-1;i++){ if(pts[i].bounce){                              // 쿠션 반사점
+      ctx.beginPath(); ctx.arc(pts[i].x, pts[i].y, 2.6, 0, 7); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fill(); } }
+    if(path.target){                                                                 // 공에 닿는 지점: 고스트 + 목적구 진행방향
+      ctx.beginPath(); ctx.arc(last.x, last.y, R, 0, 7); ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 1.4; ctx.stroke();
+      const ox = path.target.x-last.x, oy = path.target.y-last.y, od = Math.hypot(ox,oy) || 1;
+      ctx.beginPath(); ctx.moveTo(path.target.x, path.target.y);
+      ctx.lineTo(path.target.x + ox/od*34, path.target.y + oy/od*34);
       ctx.strokeStyle = 'rgba(253,224,71,.9)'; ctx.lineWidth = 2; ctx.stroke();
     }
     const pull = 8 + (G.phase==='power' ? G.power*26 : 0);                           // 큐대(파워만큼 뒤로 당겨짐)
