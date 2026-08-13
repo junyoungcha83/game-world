@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b90';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b91';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -2436,7 +2436,8 @@ function startKbo(el){
   // 세로는 장면 전체(232)를 그대로 담고, 가로만 양옆 VX씩 잘라낸다(잘리는 건 외야 잔디·관중석뿐).
   const SW=320, SH=232, TARGET_P=0.94;
   const ZOOM=1.3, CW=SW, CH=Math.round(SH*ZOOM), VX=(SW-CW/ZOOM)/2;
-  const stepOf = k => k==='ff'?0.020 : k==='sl'?0.016 : k==='ch'?0.013 : 0.011;
+  const stepOf = k => k==='ff'?0.013 : k==='sl'?0.0105 : k==='ch'?0.0085 : 0.0072;   // 공이 날아오는 속도(작을수록 느림)
+  const PREP = 46;                        // 투구와 투구 사이 인터벌(프레임) — 다음 공까지 한 박자 쉬어간다
   const ZC=18, ZGX=SW/2-27, ZGY=52;
   const cellXY=i=>({ x: ZGX+(i%3)*ZC+ZC/2, y: ZGY+((i/3|0))*ZC+ZC/2 });
   const HB=[SW/2,196], B1=[SW/2+64,152], B2=[SW/2,120], B3=[SW/2-64,152], MND=[SW/2,140];
@@ -2600,28 +2601,46 @@ function startKbo(el){
     if(o.runners) for(const r of o.runners) runnerFig(c,r.x,r.y,r.run);
     if(!o.hideBatter) bigBatter(c,SW/2-44,210,o.batter||'#1d4ed8','#0b2a6b',1);
     if(o.ball) ball(c,o.ball.x,o.ball.y,o.ball.r); }
-  // 타구가 뻗는 동안 타자주자·기존 주자가 각 베이스로 달려가고, 끝나면 도달한 베이스에 서 있는다
+  // 타구 낙하지점 — 페어는 외야 그라운드, 파울은 파울라인 바깥, 홈런은 펜스 너머 관중석
+  function landSpot(type){
+    const R2=(a,b)=>a+Math.random()*(b-a), cx=x=>Math.max(48,Math.min(272,x));
+    if(type==='hr') return { x:cx(R2(70,250)), y:R2(52,76) };
+    const y = type==='triple' ? R2(92,108) : type==='double' ? R2(104,126)
+            : type==='foul'   ? R2(140,175) : R2(126,152);
+    const half = 154*(HB[1]-y)/106;                       // 그 깊이에서 홈~파울라인까지의 거리
+    if(type==='foul') return { x:cx(HB[0] + (Math.random()<0.5?-1:1)*(half+R2(14,54))), y };
+    const inner = Math.max(10, half-14);
+    const x = type==='triple' ? HB[0] + (Math.random()<0.5?-1:1)*R2(inner*0.72, inner)   // 3루타는 라인 쪽으로
+                              : HB[0] + R2(-inner, inner);
+    return { x:cx(x), y };
+  }
+  // 타구가 외야로 포물선을 그리며 날아가고, 그동안 주자들이 각 베이스로 달려간다
   function hitAnim(c, type, batC, cb){
     const bl=document.getElementById('kboBelow');
-    if(bl) bl.innerHTML=`<div class="kbo-note kbo-hit">${type==='hr'?'홈런!! 💥':HITNAME[type]+'! 🙌'}</div>`;
-    const n = type==='hr'?4 : type==='triple'?3 : type==='double'?2 : 1;
-    const D = type==='hr'?1.02 : type==='triple'?0.82 : type==='double'?0.66 : 0.46;
-    const FR = type==='hr'?150 : type==='triple'?128 : type==='double'?96 : 64;   // 진루 수에 맞춘 주루 시간
-    const BF = Math.round(FR*0.6);                                                // 타구가 날아가는 구간
-    const runs = runnersFor(n);
-    const maxSeg = Math.max(...runs.map(r => r.to-r.from));                       // 모든 주자가 같은 속도로 달리고
-    const dir=(Math.random()*0.7-0.35), sx=HB[0]-6, sy=HB[1]-6; let f=0;
+    const label = type==='hr'?'홈런!! 💥' : type==='foul'?'파울! 😬' : type==='out'?'타구… 아웃! 🧤' : HITNAME[type]+'! 🙌';
+    if(bl) bl.innerHTML=`<div class="kbo-note kbo-hit">${label}</div>`;
+    const n = { single:1, double:2, triple:3, hr:4 }[type] || 0;                  // 파울·범타는 진루 없음
+    const FR = type==='hr'?150 : type==='triple'?128 : type==='double'?96 : type==='foul'?64 : 70;
+    const BF = Math.round(FR*0.9);                                                // 타구 비행 — 종전(0.6)보다 50% 느리게
+    const arc = type==='hr'?78 : type==='triple'?52 : type==='double'?42 : type==='foul'?30 : 32;
+    const land = landSpot(type);
+    const runs = n ? runnersFor(n) : null;
+    const maxSeg = runs ? Math.max(...runs.map(r => r.to-r.from)) : 1;            // 모든 주자가 같은 속도로 달리고
+    const sx=HB[0]-6, sy=HB[1]-8; let f=0;
     (function fr(){ f++;
       const tb=Math.min(1,f/BF), u=Math.min(1,f/FR);
-      const ru=[];
-      for(const r of runs){
-        const segs = r.to-r.from;
-        const ur = Math.min(1, u*maxSeg/segs);                                    // 가까운 베이스면 먼저 도착해 선다
-        if(ur>=1 && r.to>=4) continue;                                            // 홈까지 들어온 주자는 득점 처리
-        const [x,y]=runnerPos(r,ur); ru.push({ x, y, run: ur>=1 ? 0 : f*0.11 });
-      }
-      drawHitView(c,{ batter:batC, runners:ru, hideBatter:f>9,
-        ball: tb<1 ? { x:sx+dir*SW*0.6*tb, y:sy-Math.sin(tb*Math.PI)*D*(SH+30), r:Math.max(2.5,7-tb*4) } : null });
+      let ru=null;
+      if(runs){ ru=[];
+        for(const r of runs){
+          const segs = r.to-r.from;
+          const ur = Math.min(1, u*maxSeg/segs);                                  // 가까운 베이스면 먼저 도착해 선다
+          if(ur>=1 && r.to>=4) continue;                                          // 홈까지 들어온 주자는 득점 처리
+          const [x,y]=runnerPos(r,ur); ru.push({ x, y, run: ur>=1 ? 0 : f*0.11 });
+        } }
+      drawHitView(c,{ batter:batC, runners:ru, hideBatter: !!runs && f>9,
+        ball: { x: sx+(land.x-sx)*tb,
+                y: sy+(land.y-sy)*tb - arc*Math.sin(Math.PI*tb),                  // 포물선
+                r: Math.max(2.2, 7-4.6*tb) } });
       if(f<FR){ G.raf=requestAnimationFrame(fr);} else { stopAnim(); setTimeout(cb,560); } })(); }
   function makeCanvas(act){
     act.innerHTML = `<canvas class="kbo-canvas" width="${CW}" height="${CH}"></canvas><div class="kbo-below" id="kboBelow"></div>`;
@@ -2638,8 +2657,12 @@ function startKbo(el){
     below.innerHTML=`<div class="kbo-note">${pitch.name}! 타이밍 맞춰 스윙 (안 치면 볼/스트라이크)</div>
       <div class="kbo-btns"><button id="sw" class="prime">🏏 스윙</button><button id="tk">지켜보기</button></div>`;
     const WIND=0.30;                                   // 와인드업 구간(나머지가 공이 날아오는 구간)
-    let p=0, done=false, swung=false; const step=stepOf(pitch.key);
-    (function fr(){ if(done||swung)return; p+=step;
+    let p=0, done=false, swung=false, wait=PREP; const step=stepOf(pitch.key);
+    (function fr(){ if(done||swung)return;
+      if(wait>0){                                      // 투구 사이 인터벌 — 투수가 셋업하는 동안 잠깐 쉼
+        wait--; drawBatterView(ctx,{batter:myC,pitcher:opC,phase:0});
+        G.raf=requestAnimationFrame(fr); return; }
+      p+=step;
       const phase=Math.min(1,p/WIND);
       const bp = p>WIND ? (p-WIND)/(1-WIND) : null;
       const b = bp!=null ? ballApproach(bp,pitch.key) : null;
@@ -2652,8 +2675,8 @@ function startKbo(el){
       const b0=ballApproach(Math.min(1,bp||0.9),pitch.key); let s=0;
       (function sa(){ s+=0.25; drawBatterView(ctx,{batter:myC,pitcher:opC,ball:{x:b0.x,y:b0.y,r:b0.r},swing:Math.min(1,s),phase:1});
         if(s<1){ G.raf=requestAnimationFrame(sa);} else { stopAnim();
-          if(type==='hr'||type==='single'||type==='double'||type==='triple') hitAnim(ctx,type,myC,()=>outcome(type));
-          else setTimeout(()=>outcome(type),200); } })(); };
+          if(type!=='strike') hitAnim(ctx,type,myC,()=>outcome(type));   // 파울도 타구가 날아가는 걸 보여준다
+          else setTimeout(()=>outcome(type),500); } })(); };
     below.querySelector('#sw').onclick=doSwing; cv.onclick=doSwing;
     below.querySelector('#tk').onclick=()=>{ if(done||swung)return; done=true; stopAnim(); outcome(isStrike?'strike':'ball'); };
   }
@@ -2669,11 +2692,27 @@ function startKbo(el){
       below.innerHTML=`<div class="kbo-note">${KBO_TEAMS[G.home].name} 타석 — 구종 선택</div>
         <div class="kbo-pbtns">${KBO_PITCHES.map(p=>`<button data-k="${p.key}">${p.name}</button>`).join('')}</div>`;
       below.querySelectorAll('button').forEach(b=>b.onclick=()=>{ pitch=KBO_PITCHES.find(x=>x.key===b.dataset.k); aimPhase(); }); }
-    function aimPhase(){ phase='aim'; cursor=0;
-      below.innerHTML=`<div class="kbo-note">${pitch.name} — 도는 커서를 '조준'으로 멈춰 코스 결정</div>
-        <div class="kbo-btns"><button id="aimBtn" class="prime">🎯 조준</button></div>`;
-      let t=0; (function loop(){ if(phase!=='aim')return; t++; if(t%5===0){ cursor=(cursor+1+(Math.random()*2|0))%9; draw(); } G.raf=requestAnimationFrame(loop); })();
-      below.querySelector('#aimBtn').onclick=()=>{ if(phase!=='aim')return; stopAnim(); aim=cursor; gaugePhase(); }; }
+    // 조준: 자동으로 도는 커서 대신 상하좌우로 직접 옮긴다(캔버스를 직접 눌러도 됨)
+    function aimPhase(){ phase='aim'; cursor=4; stopAnim(); draw();
+      below.innerHTML=`<div class="kbo-note">${pitch.name} — 커서를 원하는 코스로 옮기고 '결정' (존을 직접 눌러도 돼요)</div>
+        <div class="kbo-dpad">
+          <button class="sp"></button><button data-d="u">▲</button><button class="sp"></button>
+          <button data-d="l">◀</button><button id="aimBtn" class="prime">결정</button><button data-d="r">▶</button>
+          <button class="sp"></button><button data-d="d">▼</button><button class="sp"></button>
+        </div>`;
+      const move=d=>{ if(phase!=='aim') return;
+        const cx=cursor%3, cy=(cursor/3)|0;
+        const nx=Math.max(0,Math.min(2, cx + (d==='l'?-1:d==='r'?1:0)));
+        const ny=Math.max(0,Math.min(2, cy + (d==='u'?-1:d==='d'?1:0)));
+        cursor=ny*3+nx; draw(); };
+      below.querySelectorAll('button').forEach(b=>{ if(b.dataset.d) b.onclick=()=>move(b.dataset.d); });
+      cv.onclick=e=>{ if(phase!=='aim') return;                       // 캔버스 좌표 → 월드 좌표 → 존 칸
+        const r=cv.getBoundingClientRect();
+        const wx=(e.clientX-r.left)*(CW/r.width)/ZOOM + VX, wy=(e.clientY-r.top)*(CH/r.height)/ZOOM;
+        const gx=Math.floor((wx-ZGX)/ZC), gy=Math.floor((wy-ZGY)/ZC);
+        if(gx<0||gx>2||gy<0||gy>2) return;
+        cursor=gy*3+gx; draw(); };
+      below.querySelector('#aimBtn').onclick=()=>{ if(phase!=='aim')return; stopAnim(); cv.onclick=null; aim=cursor; gaugePhase(); }; }
     function gaugePhase(){ phase='gauge'; draw();
       below.innerHTML=`<div class="kbo-note">가운데일수록 겨냥한 코스로! '던지기'</div>
         <div class="kbo-meter"><div class="kbo-marker" id="gm"></div></div>
@@ -2689,14 +2728,14 @@ function startKbo(el){
       const res = cpuBat(pitch.key, inZone, cell);
       const swing = (res!=='ball'&&res!=='strike') || (res==='strike'&&Math.random()<0.55);
       const sx=SW/2, sy=SH-24; let p=0;
-      (function fr(){ p+=0.045;
+      (function fr(){ p+=0.030;
         // 멀어지는 공: 손을 떠날 땐 빠르고 크게, 타석에 닿을수록 느리고 작게(원근)
         const e=1-Math.pow(1-Math.min(1,p),1.9), q=Math.pow(1-Math.min(1,p),1.5);
         const x=sx+(tgt.x-sx)*e, y=sy+(tgt.y-sy)*e, r=2+4.6*q;
         drawPitcherView(ctx,{batter:batC,grid:true,aim:inZone?cell:undefined,ball:{x,y,r},swing: swing&&p>0.72?Math.min(1,(p-0.72)/0.28):0});
         if(p<1){ G.raf=requestAnimationFrame(fr);} else { stopAnim();
-          if(res==='hr'||res==='single'||res==='double'||res==='triple') hitAnim(ctx,res,batC,()=>outcome(res));
-          else setTimeout(()=>outcome(res),350); } })(); }
+          if(res!=='ball' && res!=='strike') hitAnim(ctx,res,batC,()=>outcome(res));   // 파울·범타도 타구를 보여준다
+          else setTimeout(()=>outcome(res),550); } })(); }
     pick();
   }
   const gb = () => document.getElementById('gameBack');

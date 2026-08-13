@@ -428,6 +428,12 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .kbo-course { display:flex; gap:8px; }
 .kbo-course button { flex:1; padding:10px; border-radius:10px; border:2px solid #cbd5e1; font-weight:800; background:#fff; cursor:pointer; }
 .kbo-course button.on { border-color:#2563eb; background:#dbeafe; }
+/* 투구 코스 조준 D-패드 (가운데가 결정) */
+.kbo-dpad { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+.kbo-dpad button { padding:13px 0; border-radius:10px; font-weight:800; font-size:1.05rem;
+  border:none; cursor:pointer; background:#e2e8f0; }
+.kbo-dpad button.sp { visibility:hidden; pointer-events:none; }
+.kbo-dpad button.prime { background:#16a34a; color:#fff; }
 .kbo-pbtns { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
 .kbo-pbtns button { padding:14px; border-radius:12px; font-weight:800; border:none; cursor:pointer; background:#1e293b; color:#fff; }
 .kbo-pbtns button:disabled { opacity:.5; }
