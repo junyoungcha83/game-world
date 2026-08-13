@@ -434,6 +434,28 @@ body.playing .app-main { overscroll-behavior-y: contain; }
   border:none; cursor:pointer; background:#e2e8f0; }
 .kbo-dpad button.sp { visibility:hidden; pointer-events:none; }
 .kbo-dpad button.prime { background:#16a34a; color:#fff; }
+/* 타석 컨트롤러 — 왼쪽 원형키=스윙, 오른쪽 원형키=코스(상하좌우). 화면(캔버스) 아래쪽에 겹쳐 놓는다 */
+.kbo-pads { position:absolute; left:0; right:0; bottom:8px; display:flex; align-items:flex-end;
+  justify-content:space-between; padding:0 8px; pointer-events:none; }
+.kbo-pads:empty { display:none; }
+.kbo-pad { pointer-events:auto; position:relative; width:clamp(84px,25%,116px); aspect-ratio:1; border-radius:50%; flex:none;
+  border:none; padding:0; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation; box-shadow:0 6px 14px rgba(15,23,42,.22), inset 0 2px 0 rgba(255,255,255,.25); }
+.kbo-swingpad { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  cursor:pointer; font-size:1.7rem; color:#fff; background:radial-gradient(circle at 34% 28%, #f87171, #dc2626 62%, #991b1b); }
+.kbo-swingpad b { font-size:.86rem; font-weight:800; letter-spacing:.02em; }
+.kbo-swingpad:active { transform:scale(.95); filter:brightness(1.08); }
+.kbo-dpadr { background:radial-gradient(circle at 34% 28%, #475569, #1e293b 65%, #0f172a); }
+.kbo-dpadr button { position:absolute; width:38%; height:38%; border:none; padding:0; cursor:pointer;
+  background:rgba(255,255,255,.12); color:#e2e8f0; font-size:1rem; font-weight:800; border-radius:12px;
+  -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
+.kbo-dpadr button:active { background:#fde047; color:#0f172a; }
+.kbo-dpadr button[data-d="u"] { top:2%;  left:31%; }
+.kbo-dpadr button[data-d="d"] { bottom:2%; left:31%; }
+.kbo-dpadr button[data-d="l"] { left:2%;  top:31%; }
+.kbo-dpadr button[data-d="r"] { right:2%; top:31%; }
+.kbo-padhub { position:absolute; left:50%; top:50%; width:19%; height:19%; transform:translate(-50%,-50%);
+  border-radius:50%; background:rgba(253,224,71,.85); pointer-events:none; }
 .kbo-pbtns { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
 .kbo-pbtns button { padding:14px; border-radius:12px; font-weight:800; border:none; cursor:pointer; background:#1e293b; color:#fff; }
 .kbo-pbtns button:disabled { opacity:.5; }
@@ -441,12 +463,14 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .kbo-again { padding:14px; border-radius:12px; font-weight:800; border:none; cursor:pointer; background:#2563eb; color:#fff; }
 /* 화면을 꽉 채우되(기존보다 30% 크게), 작은 폰에서 스윙 버튼이 화면 밖으로 밀리지 않게 높이 상한을 둔다.
    가로폭을 제한하면 aspect-ratio가 높이를 따라오므로 비율이 깨지지 않는다(290px = 스코어보드+메시지+버튼 몫). */
-.kbo-canvas { width:100%; aspect-ratio:320/302; display:block; margin:0 auto; border-radius:12px;
-  max-width:clamp(200px, calc((100vh - var(--header-h) - var(--tab-h) - 290px) * 1.06), 572px);
-  background:#4fb857; border:3px solid #0f172a; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.25); }
+/* 캔버스 무대 — 타석에선 원형키가 이 위에 겹쳐 올라간다 */
+.kbo-stage { position:relative; width:100%; margin:0 auto;
+  max-width:clamp(200px, calc((100vh - var(--header-h) - var(--tab-h) - 300px) * 1.06), 572px); }
 @supports (height:1dvh) {
-  .kbo-canvas { max-width:clamp(200px, calc((100dvh - var(--header-h) - var(--tab-h) - 290px) * 1.06), 572px); }
+  .kbo-stage { max-width:clamp(200px, calc((100dvh - var(--header-h) - var(--tab-h) - 300px) * 1.06), 572px); }
 }
+.kbo-canvas { width:100%; aspect-ratio:320/302; display:block; border-radius:12px;
+  background:#4fb857; border:3px solid #0f172a; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.25); }
 .kbo-below { display:flex; flex-direction:column; gap:10px; margin-top:10px; }
 /* 팀선택 화면 배경 */
 .kbo-select { border-color:#0f172a; justify-content:flex-start; gap:14px; min-height:470px; }

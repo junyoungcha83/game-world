@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b91';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b92';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -2357,7 +2357,9 @@ function startKbo(el){
   const G = { away:0, home:1, inning:1, half:0, outs:0, b:0, s:0, bases:[false,false,false],
               rA:0, rH:0, over:false, raf:null, msg:'' };
   const stopAnim = ()=>{ if (G.raf){ cancelAnimationFrame(G.raf); G.raf=null; } };
-  const battingIsUser = ()=> G.half===0;             // 유저=원정: 초 공격 / 말 수비
+  let keyoff=null;                                   // 타석 키보드 조작 해제 함수(화면 전환 때 정리)
+  const killKeys = ()=>{ if (keyoff){ keyoff(); keyoff=null; } };
+  const battingIsUser = ()=> G.half===0;           // 유저=원정: 초 공격 / 말 수비
   const battingTeam   = ()=> G.half===0 ? G.away : G.home;
   const scoreRun = (n)=>{ if (G.half===0) G.rA+=n; else G.rH+=n; };
   const resetCount = ()=>{ G.b=0; G.s=0; };
@@ -2506,12 +2508,22 @@ function startKbo(el){
   function homeplate(c){ const [x,y]=HB; c.fillStyle='#fff'; c.beginPath();
     c.moveTo(x-8,y-5); c.lineTo(x+8,y-5); c.lineTo(x+8,y+1); c.lineTo(x,y+8); c.lineTo(x-8,y+1); c.closePath(); c.fill(); }
   // ── 캐릭터(둥근 파워프로풍) ──
-  function pitcherFar(c,x,y,body,cap,ph){ shadow(c,x,y+10,9);
-    c.fillStyle=body; rr(c,x-6,y-4,12,14,4); c.fill();
-    if(ph>0.2&&ph<0.7){ c.fillStyle=body; rr(c,x+3,y+6,5,6,2); c.fill(); }
-    c.save(); c.translate(x-1,y-3); c.rotate(-1.3+(ph||0)*2.6); c.fillStyle=skin; rr(c,0,-2.5,10,5,2.5); c.fill(); c.restore();
-    c.fillStyle=skin; c.beginPath(); c.arc(x,y-9,6,0,7); c.fill();
-    c.fillStyle=cap; c.beginPath(); c.arc(x,y-10,6.2,Math.PI*0.98,Math.PI*2.02); c.fill(); c.fillStyle=cap; rr(c,x-8,y-11,7,3,1.5); c.fill(); }
+  // 타석에서 마주보는 투수(정면) — ph: 0 셋업 → 1 릴리스, s: 축척(멀수록 작게)
+  function pitcherBig(c,x,y,body,cap,ph,s){ ph=ph||0;
+    c.save(); c.translate(x,y); c.scale(s||1,s||1); c.translate(-x,-y);
+    shadow(c,x,y+3,17);
+    c.fillStyle='#20293a'; rr(c,x-8,y-15,7,16,3); c.fill();                          // 다리
+    if(ph>0.15&&ph<0.72){ c.save(); c.translate(x+3,y-13); c.rotate(-0.75);          // 들어올린 다리
+      c.fillStyle='#20293a'; rr(c,0,-3.5,16,7,3.5); c.fill(); c.restore(); }
+    else { c.fillStyle='#20293a'; rr(c,x+1,y-15,7,16,3); c.fill(); }
+    c.fillStyle=body; rr(c,x-11,y-35,22,22,7); c.fill();                             // 몸통
+    c.save(); c.translate(x-3,y-31); c.rotate(-2.45+ph*3.05);                        // 투구 팔
+    c.fillStyle=body; rr(c,0,-3,13,6,3); c.fill();
+    c.fillStyle=skin; c.beginPath(); c.arc(14,0,3.8,0,7); c.fill(); c.restore();
+    c.fillStyle=skin; c.beginPath(); c.arc(x,y-42,8.2,0,7); c.fill();                // 머리
+    c.fillStyle=cap; c.beginPath(); c.arc(x,y-43,8.5,Math.PI*0.97,Math.PI*2.03); c.fill();
+    c.fillStyle=cap; rr(c,x-9,y-44.4,18,3.4,1.7); c.fill();                          // 모자 챙(정면)
+    c.restore(); }
   function batterFront(c,x,y,body,cap,sw){ shadow(c,x,y+11,10);
     c.fillStyle='#20293a'; rr(c,x-5,y,4,10,2); c.fill(); rr(c,x+2,y,4,10,2); c.fill();
     c.fillStyle=body; rr(c,x-7,y-13,14,15,5); c.fill();
@@ -2547,36 +2559,71 @@ function startKbo(el){
     c.strokeStyle='rgba(255,255,255,.9)'; c.lineWidth=1;
     for(let k=0;k<=3;k++){ c.beginPath(); c.moveTo(ZGX+k*ZC,ZGY); c.lineTo(ZGX+k*ZC,ZGY+3*ZC); c.stroke();
       c.beginPath(); c.moveTo(ZGX,ZGY+k*ZC); c.lineTo(ZGX+3*ZC,ZGY+k*ZC); c.stroke(); } c.restore(); }
-  // 타자 시점(등 뒤) — 1·2·3루 베이스 보임
-  function drawBatterView(c,o){ o=o||{}; bg(c); infield(c);
-    base(c,B1,G.bases[0]); base(c,B2,G.bases[1]); base(c,B3,G.bases[2]); homeplate(c);
-    pitcherFar(c,MND[0],MND[1]-4,o.pitcher||'#1e3a8a','#0e2350',o.phase||0);
-    umpire(c,SW/2+22,180); catcher(c,SW/2+4,190);
-    bigBatter(c,SW/2-44,210,o.batter||'#1d4ed8','#0b2a6b',o.swing||0);
+  // ══ 타자 시점(정면) — 9분할 존 화면에 투수가 겹쳐 보인다 ══
+  // 존은 화면 아래쪽(타자 앞), 투수는 그보다 위에 작게 — 겹쳐 보이지 않게 위아래로 갈라 놓는다.
+  const ZC2=38, ZGX2=SW/2-ZC2*1.5, ZGY2=112;                // 타석 존(투수 시점보다 크게)
+  const PMB=[SW/2,98], PSC=0.70;                            // 정면 투수 발 위치·축척(멀리 있어 작다)
+  const cell2XY=i=>({ x: ZGX2+(i%3)*ZC2+ZC2/2, y: ZGY2+((i/3|0))*ZC2+ZC2/2 });
+  function cellOfPt(x,y){                                   // 도착 지점 → 존 칸(+스트라이크 여부)
+    const gx=Math.floor((x-ZGX2)/ZC2), gy=Math.floor((y-ZGY2)/ZC2);
+    return { cell: Math.max(0,Math.min(2,gy))*3+Math.max(0,Math.min(2,gx)),
+             inZone: gx>=0&&gx<=2&&gy>=0&&gy<=2 }; }
+  function zoneGrid2(c,cursor,hit){                         // hit: 공이 지나간 칸(파란 표시)
+    c.save();
+    c.globalAlpha=0.20; c.fillStyle='#0b1020'; rr(c,ZGX2,ZGY2,ZC2*3,ZC2*3,6); c.fill(); c.globalAlpha=1;
+    if(hit!=null){ const h=cell2XY(hit); c.globalAlpha=0.42; c.fillStyle='#38bdf8';
+      c.fillRect(h.x-ZC2/2,h.y-ZC2/2,ZC2,ZC2); c.globalAlpha=1; }
+    c.strokeStyle='rgba(255,255,255,.9)'; c.lineWidth=1.2;
+    for(let k=0;k<=3;k++){ c.beginPath(); c.moveTo(ZGX2+k*ZC2,ZGY2); c.lineTo(ZGX2+k*ZC2,ZGY2+3*ZC2); c.stroke();
+      c.beginPath(); c.moveTo(ZGX2,ZGY2+k*ZC2); c.lineTo(ZGX2+3*ZC2,ZGY2+k*ZC2); c.stroke(); }
+    c.strokeStyle='rgba(255,255,255,.95)'; c.lineWidth=2.4; c.strokeRect(ZGX2,ZGY2,ZC2*3,ZC2*3);
+    if(cursor!=null){ const p=cell2XY(cursor);               // 노란 조준 커서(오른쪽 원형키로 이동)
+      c.strokeStyle='#fde047'; c.lineWidth=3; c.strokeRect(p.x-ZC2/2+2,p.y-ZC2/2+2,ZC2-4,ZC2-4);
+      c.strokeStyle='rgba(253,224,71,.7)'; c.lineWidth=1.6;
+      c.beginPath(); c.arc(p.x,p.y,ZC2*0.28,0,7); c.stroke();
+      c.beginPath(); c.moveTo(p.x-7,p.y); c.lineTo(p.x+7,p.y); c.moveTo(p.x,p.y-7); c.lineTo(p.x,p.y+7); c.stroke(); }
+    c.restore(); }
+  // 1인칭 배트 — sw: 0 코킹 → 1 스윙 완료(오른쪽에서 왼쪽으로 쓸어친다)
+  function frontBat(c,sw){ const px=SW/2+72, py=SH+16, L=168, a=-1.12-(sw||0)*1.78;
+    c.save(); c.translate(px,py); c.rotate(a);
+    if(sw>0.08&&sw<0.98){ c.save(); c.globalAlpha=0.15; c.fillStyle='#fff';           // 스윙 잔상
+      for(let i=1;i<=3;i++){ c.save(); c.rotate(i*0.17); rr(c,0,-8,L,16,8); c.fill(); c.restore(); } c.restore(); }
+    c.fillStyle='#0f1520'; rr(c,0,-6.5,30,13,6.5); c.fill();                          // 그립
+    c.fillStyle='#a5713c'; rr(c,24,-5,L-46,10,5); c.fill();                           // 배트
+    c.fillStyle='#c8956a'; rr(c,L-26,-6.5,26,13,6.5); c.fill();                       // 배트 헤드
+    c.restore(); }
+  function drawBatterZoneView(c,o){ o=o||{}; bg(c);
+    c.strokeStyle='rgba(255,255,255,.75)'; c.lineWidth=2;                             // 파울라인(원근)
+    c.beginPath(); c.moveTo(SW/2,SH+26); c.lineTo(-34,96); c.stroke();
+    c.beginPath(); c.moveTo(SW/2,SH+26); c.lineTo(SW+34,96); c.stroke();
+    c.fillStyle='#cf9a5e'; c.beginPath(); c.ellipse(PMB[0],PMB[1]+4,33,10,0,0,7); c.fill();   // 마운드
+    c.beginPath(); c.ellipse(SW/2,SH+34,146,64,0,0,7); c.fill();                      // 타석 주변 흙(전경)
+    pitcherBig(c,PMB[0],PMB[1],o.pitcher||'#1e3a8a','#0e2350',o.phase||0,PSC);
+    zoneGrid2(c,o.cursor,o.hit);
     if(o.trail) for(const t of o.trail) ballGhost(c,t.x,t.y,t.r,t.a);
-    if(o.ball) ball(c,o.ball.x,o.ball.y,o.ball.r); }
-  // 투구 궤적 — 원근감: 멀리선 천천히·작게 보이다가 가까워질수록 급격히 커지며 빨라진다(거듭제곱 이징).
-  // 릴리스는 투수 손 위치에서 시작하고, 구종별로 휘어지며 홈플레이트 앞으로 들어온다.
-  const REL=[MND[0]+7, MND[1]-15];        // 릴리스 포인트(투수 손)
-  const PLT=[HB[0]-7, HB[1]-17];          // 홈플레이트 통과 지점
-  function ballApproach(p, key){
+    if(o.ball) ball(c,o.ball.x,o.ball.y,o.ball.r);
+    frontBat(c,o.swing||0);
+    if(o.contact){ c.save(); c.globalAlpha=0.9; c.strokeStyle='#fde047'; c.lineWidth=3;   // 타격 임팩트
+      for(let i=0;i<8;i++){ const a=i*Math.PI/4; c.beginPath();
+        c.moveTo(o.contact.x+Math.cos(a)*11,o.contact.y+Math.sin(a)*11);
+        c.lineTo(o.contact.x+Math.cos(a)*22,o.contact.y+Math.sin(a)*22); c.stroke(); } c.restore(); } }
+  // 투구 궤적(정면) — 원근감: 손을 떠날 땐 작고 천천히, 가까워질수록 급격히 커진다(거듭제곱 이징).
+  // 구종별 변화는 '겉보기 조준점(aim)'으로 오다가 도착 직전에 실제 도착점(arr)으로 휘는 방식.
+  const REL2=[SW/2+6, 82];                                   // 릴리스 포인트(정면 투수의 손)
+  const PITCH_BREAK={ ff:[0,-6], sl:[-30,9], cu:[5,32], ch:[12,19] };   // 존 한 칸 = 38px
+  function ballToZone(p, aim, arr){
     p = Math.max(0, Math.min(1, p));
-    const e = Math.pow(p, 1.75);                     // 위치 이징
-    const s = Math.pow(p, 2.25);                     // 크기 이징
-    let bx=0, by=0;
-    if(key==='cu'){ by = 9*p*p; }                    // 커브: 뚝 떨어진다
-    else if(key==='sl'){ bx = -10*p*p; by = 3*p*p; } // 슬라이더: 옆으로 미끄러진다
-    else if(key==='ch'){ bx = 4*p*p; by = 5*p*p; }   // 체인지업: 살짝 가라앉는다
-    else { by = -2*p*p; }                            // 직구: 떠오르는 느낌
-    return { x: REL[0] + (PLT[0]-REL[0])*e + bx,
-             y: REL[1] + (PLT[1]-REL[1])*e + by,
-             r: 2.1 + 8.8*s };
+    const e = Math.pow(p, 1.55);                     // 위치 이징
+    const s = Math.pow(p, 2.30);                     // 크기 이징(막판에 확 커진다)
+    const b = Math.pow(p, 2.80);                     // 변화량 — 홈플레이트 앞에서 급격히 휜다
+    return { x: REL2[0] + (aim.x-REL2[0])*e + (arr.x-aim.x)*b,
+             y: REL2[1] + (aim.y-REL2[1])*e + (arr.y-aim.y)*b,
+             r: 2.0 + 10.5*s };
   }
-  // 잔상(빠른 공일수록 길게 보이도록)
-  function trailOf(bp, key){
+  function trailOf2(bp, aim, arr){
     if(bp==null) return null;
-    return [0.09,0.18,0.28].map((d,i)=>{ const q=bp-d; if(q<=0) return null;
-      const g=ballApproach(q,key); g.a=0.30-i*0.09; return g; }).filter(Boolean);
+    return [0.07,0.15,0.24].map((d,i)=>{ const q=bp-d; if(q<=0) return null;
+      const g=ballToZone(q,aim,arr); g.a=0.32-i*0.09; return g; }).filter(Boolean);
   }
   function ballGhost(c,x,y,r,a){ c.save(); c.globalAlpha=a; c.fillStyle='#fff';
     c.beginPath(); c.arc(x,y,Math.max(1.5,r*0.92),0,7); c.fill(); c.restore(); }
@@ -2643,42 +2690,104 @@ function startKbo(el){
                 r: Math.max(2.2, 7-4.6*tb) } });
       if(f<FR){ G.raf=requestAnimationFrame(fr);} else { stopAnim(); setTimeout(cb,560); } })(); }
   function makeCanvas(act){
-    act.innerHTML = `<canvas class="kbo-canvas" width="${CW}" height="${CH}"></canvas><div class="kbo-below" id="kboBelow"></div>`;
+    act.innerHTML = `<div class="kbo-stage"><canvas class="kbo-canvas" width="${CW}" height="${CH}"></canvas>
+      <div class="kbo-pads" id="kboPads"></div></div><div class="kbo-below" id="kboBelow"></div>`;
     const cv=act.querySelector('.kbo-canvas'), ctx=cv.getContext('2d');
     ctx.setTransform(ZOOM,0,0,ZOOM,-VX*ZOOM,0);        // 이후 모든 그리기는 월드 좌표 그대로 쓴다
-    return { ctx, cv, below:act.querySelector('#kboBelow') }; }
+    return { ctx, cv, below:act.querySelector('#kboBelow'), pads:act.querySelector('#kboPads') }; }
 
-  // 타자 시점: 투수 폼 → 공 접근 → 스윙 타이밍
+  // 타자 시점: 9분할 존 화면(투수 겹침) — 오른쪽 원형키로 코스를 맞추고 왼쪽 원형키로 스윙.
+  // 구종마다 도착 직전 휘는 방향이 다르므로, 그 변화를 읽고 커서를 미리 옮겨두면 잘 맞는다.
   function batUI(act){
     const pitch=KBO_PITCHES[Math.floor(Math.random()*KBO_PITCHES.length)];
-    const isStrike=Math.random()<0.62;
-    const { ctx, cv, below } = makeCanvas(act);
+    const BRK=PITCH_BREAK[pitch.key];
+    const R2=(a,b)=>a+Math.random()*(b-a);
+    const base0=cell2XY(Math.random()*9|0);
+    let arr;                                           // 실제 도착 지점
+    if(Math.random()<0.60) arr={ x:base0.x+R2(-7,7), y:base0.y+R2(-7,7) };                      // 스트라이크 존
+    else if(Math.random()<0.5) arr={ x:base0.x+(Math.random()<0.5?-1:1)*R2(ZC2,ZC2*1.5), y:base0.y+R2(-10,10) };
+    else arr={ x:base0.x+R2(-10,10), y:base0.y+(Math.random()<0.5?-1:1)*R2(ZC2,ZC2*1.5) };      // 유인구
+    arr={ x:Math.max(ZGX2-ZC2*1.4,Math.min(ZGX2+ZC2*4.4,arr.x)),
+          y:Math.max(ZGY2-ZC2*1.4,Math.min(ZGY2+ZC2*4.4,arr.y)) };
+    const aim={ x:arr.x-BRK[0], y:arr.y-BRK[1] };      // 겉보기 조준점(변화 전)
+    const land=cellOfPt(arr.x,arr.y);
+
+    const { ctx, cv, below, pads } = makeCanvas(act);
     const myC=KBO_TEAMS[G.away].c1, opC=KBO_TEAMS[G.home].c1;
-    below.innerHTML=`<div class="kbo-note">${pitch.name}! 타이밍 맞춰 스윙 (안 치면 볼/스트라이크)</div>
-      <div class="kbo-btns"><button id="sw" class="prime">🏏 스윙</button><button id="tk">지켜보기</button></div>`;
+    let cursor = G.aimCell==null ? 4 : G.aimCell;
+    below.innerHTML=`<div class="kbo-note"><b>${pitch.name}!</b> 오른쪽 키로 코스를 맞추고 왼쪽 키로 스윙</div>`;
+    pads.innerHTML=`<button class="kbo-pad kbo-swingpad" id="swPad">🏏<b>스윙</b></button>
+      <div class="kbo-pad kbo-dpadr">
+        <button data-d="u">▲</button><button data-d="l">◀</button>
+        <button data-d="r">▶</button><button data-d="d">▼</button><span class="kbo-padhub"></span>
+      </div>`;
     const WIND=0.30;                                   // 와인드업 구간(나머지가 공이 날아오는 구간)
     let p=0, done=false, swung=false, wait=PREP; const step=stepOf(pitch.key);
-    (function fr(){ if(done||swung)return;
-      if(wait>0){                                      // 투구 사이 인터벌 — 투수가 셋업하는 동안 잠깐 쉼
-        wait--; drawBatterView(ctx,{batter:myC,pitcher:opC,phase:0});
-        G.raf=requestAnimationFrame(fr); return; }
-      p+=step;
-      const phase=Math.min(1,p/WIND);
-      const bp = p>WIND ? (p-WIND)/(1-WIND) : null;
-      const b = bp!=null ? ballApproach(bp,pitch.key) : null;
-      drawBatterView(ctx,{batter:myC,pitcher:opC,ball:b,trail:trailOf(bp,pitch.key),phase});
-      if(p>=1){ done=true; stopAnim(); return outcome(isStrike?'strike':'ball'); }
+    let sw=0, swType=null, bpSwing=0;                  // 배트 스윙 진행도 / 스윙 결과 / 휘두른 시점
+    const paint=o=> drawBatterZoneView(ctx, Object.assign({ pitcher:opC, cursor }, o||{}));
+    const move=d=>{ if(done||swung) return;
+      const cx=cursor%3, cy=(cursor/3|0);
+      const nx=Math.max(0,Math.min(2, cx+(d==='l'?-1:d==='r'?1:0)));
+      const ny=Math.max(0,Math.min(2, cy+(d==='u'?-1:d==='d'?1:0)));
+      cursor=ny*3+nx; G.aimCell=cursor; };
+    const key=e=>{ const k=e.key;
+      if(k==='ArrowUp') move('u'); else if(k==='ArrowDown') move('d');
+      else if(k==='ArrowLeft') move('l'); else if(k==='ArrowRight') move('r');
+      else if(k===' '||k==='Enter') doSwing(); else return;
+      e.preventDefault(); };
+    const unbind=()=> killKeys();
+    killKeys(); document.addEventListener('keydown',key);
+    keyoff=()=> document.removeEventListener('keydown',key);
+    // 맞히기 판정 — 타이밍(3단계) + 코스 일치(커서와 도착 칸의 거리)
+    function judge(bp){
+      const d=Math.max(Math.abs(cursor%3-land.cell%3), Math.abs((cursor/3|0)-(land.cell/3|0)));
+      if(d>=2) return 'strike';                                          // 코스가 크게 어긋남 → 헛스윙
+      const err=Math.abs(bp-TARGET_P);
+      let t = err<=0.05?3 : err<=0.10?2 : err<=0.17?1 : err<=0.26?0 : -1;
+      if(t<0) return 'strike';                                           // 타이밍 실패 → 헛스윙
+      let z = d===0?2:1;
+      if(!land.inZone){ z--; if(t>2) t=2; }                              // 유인구는 제대로 맞히기 어렵다
+      const q=t+z;
+      return q>=5?'hr' : q===4?'triple' : q===3?'double' : q===2?'single'
+           : q===1?'foul' : (Math.random()<0.5?'foul':'out');
+    }
+    // 스윙은 한 타석에 한 번. 배트와 공은 서로 독립적으로 움직인다 —
+    // 공보다 일찍 휘두르면 배트만 먼저 헛돌고, 공은 제 속도로 계속 날아와 존을 지나간다.
+    function doSwing(){ if(done||swung) return; swung=true; unbind();
+      bpSwing = p>WIND ? (p-WIND)/(1-WIND) : 0;        // 휘두른 순간 공이 와 있던 지점
+      swType = judge(bpSwing);                         // 타이밍·코스가 어긋나면 'strike'(헛스윙)
+      sw = 0.001; }                                    // 루프가 배트를 휘두르기 시작한다
+    (function fr(){ if(done) return;
+      if(wait>0) wait--;                               // 투구 사이 인터벌 — 투수가 셋업하는 동안 잠깐 쉼
+      else if(p<1) p+=step;
+      const phase = wait>0 ? 0 : Math.min(1,p/WIND);
+      const bp = (wait<=0 && p>WIND) ? (p-WIND)/(1-WIND) : null;
+      const b  = bp!=null ? ballToZone(Math.min(1,bp),aim,arr) : null;
+      if(sw>0 && sw<1){
+        if(swType==='strike' || bpSwing>=TARGET_P) sw=Math.min(1,sw+0.16);   // 헛스윙·늦은 스윙 — 그대로 휘두른다
+        else {                                         // 맞는 스윙 — 공이 오는 만큼 배트를 끌고 와 도착 시점에 만나게 한다
+          const prog=(bp==null?0:(bp-bpSwing)/Math.max(0.001,TARGET_P-bpSwing));
+          sw=Math.min(1, Math.max(sw+0.02, 0.6*Math.max(0,prog))); } }
+      // 맞는 스윙: 공이 배트에 닿는 순간 타구 화면으로 넘어간다
+      if(swType && swType!=='strike' && bp!=null && bp>=TARGET_P){
+        done=true; stopAnim();
+        paint({ phase:1, ball:b, swing:Math.max(sw,0.6), hit:land.cell, contact:b });
+        return setTimeout(()=>hitAnim(ctx,swType,myC,()=>outcome(swType)),200); }
+      paint({ phase, ball:b, trail:trailOf2(bp,aim,arr), swing:sw });
+      if(p>=1){ done=true; stopAnim(); unbind();       // 공이 포수 미트까지 도달 — 도착 칸을 보여준다
+        const res = swung ? 'strike' : (land.inZone?'strike':'ball');   // 헛스윙은 코스와 무관하게 스트라이크
+        paint({ phase:1, ball:ballToZone(1,aim,arr), swing:sw, hit:land.cell });
+        return setTimeout(()=>outcome(res),420); }
       G.raf=requestAnimationFrame(fr); })();
-    const doSwing=()=>{ if(done||swung)return; swung=true; stopAnim();
-      const bp=Math.max(0,(p-WIND)/(1-WIND)), err=Math.abs(bp-TARGET_P);
-      const type = err<=0.03?'hr' : err<=0.06?'triple' : err<=0.10?'double' : err<=0.15?'single' : err<=0.24?'foul' : 'strike';
-      const b0=ballApproach(Math.min(1,bp||0.9),pitch.key); let s=0;
-      (function sa(){ s+=0.25; drawBatterView(ctx,{batter:myC,pitcher:opC,ball:{x:b0.x,y:b0.y,r:b0.r},swing:Math.min(1,s),phase:1});
-        if(s<1){ G.raf=requestAnimationFrame(sa);} else { stopAnim();
-          if(type!=='strike') hitAnim(ctx,type,myC,()=>outcome(type));   // 파울도 타구가 날아가는 걸 보여준다
-          else setTimeout(()=>outcome(type),500); } })(); };
-    below.querySelector('#sw').onclick=doSwing; cv.onclick=doSwing;
-    below.querySelector('#tk').onclick=()=>{ if(done||swung)return; done=true; stopAnim(); outcome(isStrike?'strike':'ball'); };
+    pads.querySelectorAll('.kbo-dpadr button').forEach(b=>
+      b.onpointerdown=e=>{ e.preventDefault(); move(b.dataset.d); });
+    pads.querySelector('#swPad').onpointerdown=e=>{ e.preventDefault(); doSwing(); };
+    cv.onclick=e=>{ if(done||swung) return;            // 존을 직접 눌러 커서를 옮겨도 된다
+      const r=cv.getBoundingClientRect();
+      const wx=(e.clientX-r.left)*(CW/r.width)/ZOOM + VX, wy=(e.clientY-r.top)*(CH/r.height)/ZOOM;
+      const gx=Math.floor((wx-ZGX2)/ZC2), gy=Math.floor((wy-ZGY2)/ZC2);
+      if(gx<0||gx>2||gy<0||gy>2) return;
+      cursor=gy*3+gx; G.aimCell=cursor; };
   }
 
   // 투수 시점: 구종 선택 → 9칸 커서 조준 → 게이지 → 투구 → CPU 타자 결과
@@ -2741,7 +2850,7 @@ function startKbo(el){
   const gb = () => document.getElementById('gameBack');
   function showQuit(){
     if (el.querySelector('.kbo-quit')) return;
-    stopAnim();
+    stopAnim(); killKeys();
     const ov=document.createElement('div'); ov.className='kbo-quit';
     ov.innerHTML=`<div class="kbo-quit-box"><p>게임을 종료하시겠습니까?</p>
       <div class="kbo-quit-btns"><button id="qYes" class="prime">네</button><button id="qNo">아니오</button></div></div>`;
@@ -2750,7 +2859,7 @@ function startKbo(el){
     ov.querySelector('#qNo').onclick=()=>{ ov.remove(); render(); };
   }
   function render(){
-    stopAnim();
+    stopAnim(); killKeys();
     if (gb()) gb().onclick = G.over ? (()=>showView('hub')) : (()=>showQuit());
     if (G.over){
       el.innerHTML = `<div class="mg kbo">${scoreboard()}
@@ -2767,14 +2876,14 @@ function startKbo(el){
     if (battingIsUser()) batUI(act); else pitchUI(act);
   }
   function selectScreen(){
-    stopAnim();
+    stopAnim(); killKeys();
     if (gb()) gb().onclick = () => showView('hub');   // 팀선택 화면에선 뒤로가기=허브
-    Object.assign(G, { away:0, home:1, inning:1, half:0, outs:0, b:0, s:0, bases:[false,false,false], rA:0, rH:0, over:false, msg:'' });
+    Object.assign(G, { away:0, home:1, inning:1, half:0, outs:0, b:0, s:0, bases:[false,false,false], rA:0, rH:0, over:false, msg:'', aimCell:4 });
     el.innerHTML = `<div class="mg kbo kbo-select">
       <div class="kbo-banner"><div class="kbo-msg">응원할 팀을 골라요 (선공·원정)</div></div>
       <div class="kbo-teamsel">${KBO_TEAMS.map((t,i)=>
         `<button data-i="${i}" style="--tc:${t.c1};--tc2:${t.c2}"><span class="kbo-cap"></span>${escapeHtml(t.name)}</button>`).join('')}</div>
-      <div class="kbo-note">3볼 2스트라이크·3아웃 · 1회초~9회말 · 타격은 타이밍 스윙, 수비는 구종 선택</div>
+      <div class="kbo-note">3볼 2스트라이크·3아웃 · 1회초~9회말<br>타격은 9분할 존 조준(오른쪽 키)+스윙(왼쪽 키), 수비는 구종 선택</div>
     </div>`;
     el.querySelectorAll('.kbo-teamsel button').forEach(b=> b.onclick=()=>{
       G.away=+b.dataset.i;
