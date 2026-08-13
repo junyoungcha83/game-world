@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b87';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b89';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -254,8 +254,8 @@ const GAMES = [
     fmtStat: s => s ? `${s.plays}경기·${s.wins}승 · 최다 ${s.best || 0}점` : '아직 기록 없음', start: startKbo },
   { id: 'archery', name: '양궁', emoji: '🎯', color: '#dc2626', best: 'high',
     fmtStat: s => s ? `${s.plays}경기·${s.wins}승 · 최고 ${s.best || 0}단계 격파` : '아직 기록 없음', start: startArchery },
-  { id: 'pinball', name: '핀볼', emoji: '🔴', color: '#f97316', best: 'high',
-    fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startPinball },
+  { id: 'pocket', name: '포켓볼', emoji: '🎱', color: '#16a34a', best: 'low',
+    fmtStat: s => s ? `${s.plays}판·${s.wins}클리어 · 최소 ${s.best != null ? s.best + '타' : '-'}` : '아직 기록 없음', start: startPocket },
   { id: 'tetris', name: '테트리스', emoji: '🟦', color: '#0ea5e9', best: 'high',
     fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startTetris },
 ];
@@ -316,7 +316,7 @@ function boardGames() {
 const HUB_CATEGORIES = [
   { label: '🎨 자유',  ids: ['color', 'brush', 'roulette'] },
   { label: '♟️ 보드',  ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot'] },
-  { label: '⚾ 스포츠', ids: ['kbo', 'archery', 'pinball'] },
+  { label: '⚾ 스포츠', ids: ['kbo', 'archery', 'pocket'] },
   { label: '🕹️ 레트로', ids: ['timer10', 'rps', 'guess'] },
   { label: '🧠 퀴즈',  ids: ['flags', 'capital', 'mapq'] },
 ];
@@ -1580,177 +1580,6 @@ function startRoulette(el) {
   el.querySelector('#rlPlus').onclick = () => setN(n + 1);
 
   renderItems(); draw();
-}
-
-// ── 미니게임: 핀볼 (스포츠) ───────────────────────────
-// 정통 플런저 발사(당겨서 발사) + 팝범퍼·슬링샷·타깃·롤오버·중앙 라이트링. 공 3개.
-// 물리: 얇은 벽(정확한 충돌) + 원웨이 게이트 + 레인 상단 결정적 배출(항상 플레이 진입).
-function startPinball(el) {
-  const W = 320, H = 540, R = 7;
-  const GRAV = 0.22, WALL_E = 0.6, FLIP_E = 0.5, SUB = 5, DT = 3 / SUB;
-  const WHT = 2, FHT = 4.5, SHT = 4;   // 벽/플리퍼/슬링 반두께
-  const BALLS_START = 3;
-
-  el.innerHTML = `<div class="mg pinball">
-    <div class="pin-hud">
-      <span>점수 <b id="pinScore">0</b></span>
-      <span>공 <b id="pinBalls">${BALLS_START}</b></span>
-      <span>최고 <b id="pinBest">${(getStat('pinball')?.best || 0).toLocaleString('ko-KR')}</b></span>
-    </div>
-    <div class="pin-stage">
-      <canvas id="pinCv" width="${W}" height="${H}"></canvas>
-      <div class="pin-msg hidden" id="pinMsg"></div>
-    </div>
-    <div class="pin-ctrl">
-      <button class="btn flip" id="pinL">◀</button>
-      <button class="btn launch" id="pinLaunch">🚀 발사</button>
-      <button class="btn flip" id="pinR">▶</button>
-    </div>
-    <div class="pin-tip">🚀 <b>길게 눌렀다 놓아</b> 발사(Space) · ◀▶(화면 좌/우 터치, ←→) 플리퍼</div>
-  </div>`;
-
-  const cv = el.querySelector('#pinCv'), ctx = cv.getContext('2d');
-  const $score = el.querySelector('#pinScore'), $balls = el.querySelector('#pinBalls'), $msg = el.querySelector('#pinMsg');
-  const alive = () => !!el.querySelector('.pinball');
-
-  // 벽 [x1,y1,x2,y2, oneway?]  oneway=1 → 왼쪽(vx<0)으로 나갈 땐 통과(플레이볼 유입만 차단)
-  const WALLS = [
-    [16,430,16,150],
-    [16,150,34,96],[34,96,84,54],[84,54,150,38],[150,38,214,46],[214,46,262,92],[262,92,296,150], // 돔
-    [300,150,316,150],            // 레인 입구 지붕
-    [316,150,316,524],            // 레인 밖 벽
-    [296,150,296,430,1],          // 원웨이 게이트(돔~하단)
-    [296,430,296,524],[296,524,316,524],   // 레인 안 하단 + 바닥
-    [16,430,106,476],[296,430,214,476],    // 하단 유도 → 플리퍼 피벗(데드포켓 없음)
-  ];
-  const BUMPERS = [
-    { x:110, y:150, r:19, pts:100, flash:0 },
-    { x:210, y:150, r:19, pts:100, flash:0 },
-    { x:160, y:205, r:19, pts:100, flash:0 },
-  ];
-  const TARGETS = [
-    { x:52, y:150, r:7, pts:50, cd:0 }, { x:52, y:182, r:7, pts:50, cd:0 }, { x:52, y:214, r:7, pts:50, cd:0 },
-    { x:250, y:250, r:7, pts:50, cd:0 }, { x:70, y:300, r:7, pts:50, cd:0 },
-  ];
-  const SLINGS = [
-    { seg:[80,404,116,378], pts:20, flash:0 },
-    { seg:[240,404,204,378], pts:20, flash:0 },
-  ];
-  const LANES = [
-    { x:96, y:60, w:26, h:16, pts:30, hit:false, lit:0 },
-    { x:147, y:52, w:26, h:16, pts:30, hit:false, lit:0 },
-    { x:198, y:60, w:26, h:16, pts:30, hit:false, lit:0 },
-  ];
-  const RING = { x:160, y:360, r:52, n:14, phase:0 };
-  const CENTER = { x:160, y:360, r:14, pts:25, hit:false, lit:0 };
-
-  const FL = 52;
-  const flipL = { px:106, py:476, rest:0.6, act:-0.48, a:0.6, pressed:false };
-  const flipR = { px:214, py:476, rest:Math.PI-0.6, act:Math.PI+0.48, a:Math.PI-0.6, pressed:false };
-  const flipTip = f => ({ x:f.px+FL*Math.cos(f.a), y:f.py+FL*Math.sin(f.a) });
-
-  let ball, score=0, balls=BALLS_START, over=false, inLane=true, charging=false, pwr=0;
-  function newBall(){ ball={ x:306, y:508, vx:0, vy:0 }; inLane=true; charging=false; pwr=0; }
-  newBall();
-
-  function closestOnSeg(px,py,ax,ay,bx,by){ const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy||1; let t=((px-ax)*dx+(py-ay)*dy)/L2; t=Math.max(0,Math.min(1,t)); return {x:ax+t*dx,y:ay+t*dy}; }
-  function bounceSeg(ax,ay,bx,by,e,ht,boost,ow){
-    if(ow && ball.vx<0) return false;
-    const c=closestOnSeg(ball.x,ball.y,ax,ay,bx,by);
-    let nx=ball.x-c.x,ny=ball.y-c.y,d=Math.hypot(nx,ny);
-    if(d>=R+ht) return false;
-    if(d<0.01){nx=0;ny=-1;d=1;}
-    nx/=d;ny/=d;
-    const ov=(R+ht)-d; ball.x+=nx*ov; ball.y+=ny*ov;
-    const vn=ball.vx*nx+ball.vy*ny;
-    if(vn<0){ ball.vx-=(1+e)*vn*nx; ball.vy-=(1+e)*vn*ny; }
-    if(boost){ ball.vx+=nx*boost; ball.vy+=ny*boost; }
-    return true;
-  }
-  function circleHit(cx,cy,cr,e,kick){
-    let nx=ball.x-cx,ny=ball.y-cy,d=Math.hypot(nx,ny);
-    if(d>=R+cr) return false;
-    if(d<0.01){nx=0;ny=-1;d=1;}
-    nx/=d;ny/=d;
-    ball.x=cx+nx*(R+cr); ball.y=cy+ny*(R+cr);
-    const vn=ball.vx*nx+ball.vy*ny;
-    ball.vx-=(1+e)*vn*nx; ball.vy-=(1+e)*vn*ny;
-    if(kick){ ball.vx+=nx*kick; ball.vy+=ny*kick; }
-    return true;
-  }
-  function addScore(p){ score+=p; $score.textContent=score.toLocaleString('ko-KR'); }
-
-  function step(){
-    for(const f of [flipL,flipR]){ const t=f.pressed?f.act:f.rest; f.a+=(t-f.a)*0.55; }
-    if(charging && inLane) pwr=Math.min(pwr+0.6,22);
-    for(let i=0;i<SUB;i++){
-      ball.vy += GRAV*DT;
-      const sp=Math.hypot(ball.vx,ball.vy), MAX=inLane?32:15; if(sp>MAX){ ball.vx*=MAX/sp; ball.vy*=MAX/sp; }
-      ball.x += ball.vx*DT; ball.y += ball.vy*DT;
-      // 레인 상단 도달 → 필드 입구로 결정적 배출(항상 플레이 진입)
-      if(inLane && ball.y<188){ ball.x=282; ball.y=176; ball.vx=-3; ball.vy=1.5; inLane=false; }
-      for(const w of WALLS) bounceSeg(w[0],w[1],w[2],w[3],WALL_E,WHT,0,w[4]);
-      for(const b of BUMPERS){ if(circleHit(b.x,b.y,b.r,1.0,1.6)){ b.flash=8; addScore(b.pts); } }
-      for(const t of TARGETS){ if(circleHit(t.x,t.y,t.r,0.4,0)){ if(t.cd<=0) addScore(t.pts); t.cd=24; } }
-      for(const s of SLINGS){ if(bounceSeg(s.seg[0],s.seg[1],s.seg[2],s.seg[3],0.6,SHT,5,0)){ s.flash=8; addScore(s.pts); } }
-      for(const f of [flipL,flipR]){ const t=flipTip(f); bounceSeg(f.px,f.py,t.x,t.y,FLIP_E,FHT,0,0); }
-      if(ball.x<6){ball.x=6;ball.vx=Math.abs(ball.vx)*.5;} if(ball.x>W-6){ball.x=W-6;ball.vx=-Math.abs(ball.vx)*.5;} if(ball.y<6){ball.y=6;ball.vy=Math.abs(ball.vy)*.5;}
-    }
-    for(const t of TARGETS) if(t.cd>0) t.cd--;
-    for(const L of LANES){ const inside=ball.x>L.x&&ball.x<L.x+L.w&&ball.y>L.y&&ball.y<L.y+L.h; if(inside&&!L.hit){ addScore(L.pts); L.hit=true; L.lit=40; } else if(!inside){ L.hit=false; } if(L.lit>0)L.lit--; }
-    { const d=Math.hypot(ball.x-CENTER.x,ball.y-CENTER.y); if(d<CENTER.r&&!CENTER.hit){ addScore(CENTER.pts); CENTER.hit=true; CENTER.lit=30; } else if(d>=CENTER.r){ CENTER.hit=false; } if(CENTER.lit>0)CENTER.lit--; }
-    if(ball.y-R>H) loseBall();
-  }
-  function loseBall(){ balls--; $balls.textContent=Math.max(0,balls); if(balls<=0){ gameOver(); return; } newBall(); }
-  function gameOver(){
-    over=true;
-    recordStat('pinball',{ best:score, result: score>0?'win':undefined });
-    $msg.innerHTML=`게임 오버<br><b>${score.toLocaleString('ko-KR')}점</b><br><button class="btn" id="pinAgain">다시하기</button>`;
-    $msg.classList.remove('hidden');
-    const a=el.querySelector('#pinAgain'); if(a) a.onclick=()=>{ score=0;balls=BALLS_START;over=false;$score.textContent='0';$balls.textContent=balls;$msg.classList.add('hidden'); for(const t of TARGETS)t.cd=0; newBall(); };
-  }
-
-  function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
-  function draw(){
-    const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#1e1b4b'); g.addColorStop(0.6,'#312e81'); g.addColorStop(1,'#4c1d95');
-    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-    RING.phase+=0.05;
-    for(let i=0;i<RING.n;i++){ const an=RING.phase+i/RING.n*Math.PI*2; const x=RING.x+Math.cos(an)*RING.r, y=RING.y+Math.sin(an)*RING.r; const hue=(i/RING.n*360+RING.phase*40)%360; ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fillStyle=`hsl(${hue},90%,65%)`; ctx.fill(); }
-    ctx.beginPath(); ctx.arc(CENTER.x,CENTER.y,CENTER.r,0,7); ctx.fillStyle=CENTER.lit>0?'#fde047':'#0ea5e9'; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle='#e0f2fe'; ctx.stroke();
-    for(const L of LANES){ ctx.fillStyle=L.lit>0?'rgba(250,204,21,.85)':'rgba(148,163,184,.35)'; roundRect(L.x,L.y,L.w,L.h,5); ctx.fill(); }
-    for(const w of WALLS){ ctx.strokeStyle= w[4] ? 'rgba(148,163,184,.45)' : '#38bdf8'; ctx.lineWidth= w[4]?2:4; ctx.setLineDash(w[4]?[5,5]:[]); ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(w[0],w[1]); ctx.lineTo(w[2],w[3]); ctx.stroke(); }
-    ctx.setLineDash([]);
-    for(const s of SLINGS){ ctx.strokeStyle=s.flash>0?'#fde047':'#22d3ee'; ctx.lineWidth=7; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(s.seg[0],s.seg[1]); ctx.lineTo(s.seg[2],s.seg[3]); ctx.stroke(); if(s.flash>0)s.flash--; }
-    for(const t of TARGETS){ ctx.beginPath(); ctx.arc(t.x,t.y,t.r,0,7); ctx.fillStyle=t.cd>0?'#fde047':'#f43f5e'; ctx.fill(); }
-    for(const b of BUMPERS){ ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,7); ctx.fillStyle=b.flash>0?'#fde047':'#f97316'; ctx.fill(); ctx.beginPath(); ctx.arc(b.x,b.y,b.r*0.6,0,7); ctx.fillStyle=b.flash>0?'#fff7ed':'#fdba74'; ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle='#fff7ed'; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,7); ctx.stroke(); if(b.flash>0)b.flash--; }
-    ctx.strokeStyle='#facc15'; ctx.lineWidth=9; ctx.lineCap='round';
-    for(const f of [flipL,flipR]){ const t=flipTip(f); ctx.beginPath(); ctx.moveTo(f.px,f.py); ctx.lineTo(t.x,t.y); ctx.stroke(); }
-    // 플런저(발사 스프링) + 파워 게이지
-    if(inLane){ const ph=Math.min(pwr/22,1)*70; ctx.fillStyle='#22c55e'; ctx.fillRect(303,520-ph,8,ph); ctx.strokeStyle='#334155'; ctx.lineWidth=2; ctx.strokeRect(303,450,8,70); }
-    ctx.beginPath(); ctx.arc(ball.x,ball.y,R,0,7); ctx.fillStyle='#f1f5f9'; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle='#94a3b8'; ctx.stroke();
-  }
-
-  function loop(){
-    if(!alive()){ window.removeEventListener('keydown',onKey); window.removeEventListener('keyup',onKeyUp); return; }
-    if(!over) step();
-    draw();
-    requestAnimationFrame(loop);
-  }
-
-  const setL=v=>flipL.pressed=v, setR=v=>flipR.pressed=v;
-  const doLaunch=()=>{ if(inLane){ ball.vy=-Math.max(pwr,14); } charging=false; pwr=0; };
-  const bindHold=(id,dn,up)=>{ const b=el.querySelector(id); b.addEventListener('pointerdown',e=>{e.preventDefault();dn();}); b.addEventListener('pointerup',up); b.addEventListener('pointerleave',up); b.addEventListener('pointercancel',up); };
-  bindHold('#pinL',()=>setL(true),()=>setL(false));
-  bindHold('#pinR',()=>setR(true),()=>setR(false));
-  bindHold('#pinLaunch',()=>{ if(inLane)charging=true; },()=>doLaunch());
-  cv.addEventListener('pointerdown',e=>{ const r=cv.getBoundingClientRect(); (e.clientX-r.left<r.width/2?setL:setR)(true); });
-  cv.addEventListener('pointerup',()=>{setL(false);setR(false);});
-  cv.addEventListener('pointercancel',()=>{setL(false);setR(false);});
-  function onKey(e){ if(e.key==='ArrowLeft')setL(true); else if(e.key==='ArrowRight')setR(true); else if(e.key===' '||e.key==='ArrowUp'){ if(inLane)charging=true; } }
-  function onKeyUp(e){ if(e.key==='ArrowLeft')setL(false); else if(e.key==='ArrowRight')setR(false); else if(e.key===' '||e.key==='ArrowUp'){ doLaunch(); } }
-  window.addEventListener('keydown',onKey); window.addEventListener('keyup',onKeyUp);
-
-  requestAnimationFrame(loop);
 }
 
 // ── 미니게임: 테트리스 (보드) ─────────────────────────
@@ -3025,6 +2854,367 @@ function startArchery(el){
   }
 
   newMatch();
+}
+
+// ══════════════════════════ 🎱 포켓볼 ══════════════════════════
+// 6포켓 테이블 · 공 10개(색공4·줄공4·검은8번 + 흰 큐볼).
+// 진행: 조준(점선으로 방향 조절) → 파워(게이지가 최저↔최고 왕복) → 발사 → 공이 다 멈추면 다음 샷.
+// 물리: 등질량 탄성충돌 + 구름마찰 + 쿠션 반발. 프레임당 서브스텝으로 통과(터널링) 방지.
+// 규칙: 색공·줄공 8개를 먼저 모두 넣고 마지막에 8번(검은공) → 클리어. 8번을 먼저 넣으면 패배.
+//       흰공이 빠지면(스크래치) 헤드스팟 복귀 + 벌타 1.
+// TODO(다음 단계): 양궁처럼 컴퓨터와 번갈아 치는 대전 모드(색공/줄공 그룹 배정, CPU 조준 정확도 = 난이도).
+function startPocket(el){
+  const W = 320, H = 568;                 // 캔버스 크기(세로형 테이블)
+  const CU = 15;                          // 쿠션(레일) 두께
+  const L = CU, T = CU, RT = W - CU, BT = H - CU;   // 플레이 영역 경계
+  const R = 8.6;                          // 공 반지름
+  const AIM_CONE = 0.6;                   // 쿠션에 닿을 때 이 정도로 포켓을 향하고 있으면 빨려든다(cos)
+  const SUB = 8;                          // 프레임당 물리 서브스텝(최고 속도에서도 공을 통과하지 않게)
+  const DECEL = 0.067;                    // 구름 마찰(프레임당 등감속) — 세게 칠수록 멀리(거리 ∝ 속도²)
+  const STOP = 0.05;                      // 정지 임계 속도
+  const CUSH_E = 0.72, BALL_E = 0.95;     // 쿠션/공 반발계수
+  const PMIN = 3.2, PMAX = 21;            // 발사 속도(px/프레임) — 최대 파워면 브레이크로 랙이 확 흩어진다
+  const PSPD = 0.022;                     // 파워 게이지 왕복 속도(프레임당)
+  const SOLIDS  = [{n:1,c:'#facc15'},{n:2,c:'#2563eb'},{n:3,c:'#dc2626'},{n:4,c:'#9333ea'}];
+  const STRIPES = [{n:9,c:'#facc15'},{n:10,c:'#2563eb'},{n:11,c:'#dc2626'},{n:12,c:'#9333ea'}];
+  // r=그리기 반지름 · grab=가만히 있어도 빨려드는 거리 · reach=쿠션에서 포켓으로 인정하는 자키 범위
+  const POCKETS = [
+    { x:L,     y:T,   r:15, grab:12, reach:42 },  { x:RT,     y:T,   r:15, grab:12, reach:42 },
+    { x:L-4,   y:H/2, r:13, grab:11, reach:20 },  { x:RT+4,   y:H/2, r:13, grab:11, reach:20 },
+    { x:L,     y:BT,  r:15, grab:12, reach:42 },  { x:RT,     y:BT,  r:15, grab:12, reach:42 },
+  ];
+  const CUE_SPOT = { x: W/2, y: T + (BT-T)*0.80 };
+
+  const G = { balls:[], phase:'aim', angle:-Math.PI/2, power:0, pdir:1, shots:0,
+              evt:null, over:false, raf:null };
+  let cv, ctx, $shots, $left, $msg, $fill, $act, $cancel, $tip;
+
+  // ── 초기 배치: 9구 다이아몬드 랙(1·2·3·2·1), 정중앙에 검은 8번 ──
+  function rack(){
+    const d = 2*R + 0.7, rowY = d * 0.866;
+    const top = T + (BT-T)*0.24, cx = W/2;
+    const counts = [1,2,3,2,1], slots = [];
+    counts.forEach((c,i)=>{ for(let k=0;k<c;k++) slots.push({ x: cx + (k-(c-1)/2)*d, y: top + i*rowY }); });
+    const rest = shuffle(SOLIDS.map(s=>({...s,type:'solid'})).concat(STRIPES.map(s=>({...s,type:'stripe'}))));
+    const balls = [{ x:CUE_SPOT.x, y:CUE_SPOT.y, vx:0, vy:0, n:0, c:'#f8fafc', type:'cue', in:false }];
+    let ri = 0;
+    slots.forEach((p,i)=>{
+      const spec = (i===4) ? { n:8, c:'#18181b', type:'eight' } : rest[ri++];
+      balls.push({ x: p.x + (Math.random()-0.5)*0.6, y: p.y + (Math.random()-0.5)*0.6,
+                   vx:0, vy:0, n:spec.n, c:spec.c, type:spec.type, in:false });
+    });
+    G.balls = balls;
+  }
+  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+  const cue = () => G.balls[0];
+  const objLeft = () => G.balls.filter(b => !b.in && (b.type==='solid'||b.type==='stripe')).length;   // 8번 제외(규칙용)
+  const ballsLeft = () => G.balls.filter(b => !b.in && b.type!=='cue').length;                        // 8번 포함(표시용)
+  const alive = () => !!(cv && document.body.contains(cv));
+
+  // ── 물리 ──────────────────────────────────────────
+  function pocketBall(b){
+    b.in = true; b.vx = b.vy = 0;
+    if(b.type==='cue') G.evt.cueIn = true;
+    else if(b.type==='eight') G.evt.eightIn = true;
+    else G.evt.potted.push(b);
+  }
+  function tryPocket(b){
+    const sp = Math.hypot(b.vx, b.vy); if(sp <= 0) return false;
+    for(const p of POCKETS){
+      const dx = p.x-b.x, dy = p.y-b.y, d = Math.hypot(dx,dy);
+      if(d > p.reach || d <= 0) continue;
+      if((b.vx*dx + b.vy*dy)/(sp*d) < AIM_CONE) continue;
+      pocketBall(b); return true;
+    }
+    return false;
+  }
+  function step(){
+    for(let s=0;s<SUB;s++){
+      for(const b of G.balls){
+        if(b.in || (!b.vx && !b.vy)) continue;
+        b.x += b.vx/SUB; b.y += b.vy/SUB;
+        const sp = Math.hypot(b.vx, b.vy);                    // 등감속: 방향은 유지하고 속력만 일정하게 깎는다
+        if(sp > 0){ const ns = Math.max(0, sp - DECEL/SUB); b.vx = b.vx/sp*ns; b.vy = b.vy/sp*ns; }
+        let sunk = false;
+        for(const p of POCKETS){ if(Math.hypot(b.x-p.x, b.y-p.y) < p.grab){ pocketBall(b); sunk = true; break; } }
+        if(sunk) continue;
+        // 쿠션: 닿는 순간 포켓 자키 안이고 포켓 쪽으로 굴러가는 중이면 들어가고, 아니면 튕긴다
+        if(b.x-R < L || b.x+R > RT){
+          if(tryPocket(b)) continue;
+          if(b.x-R < L){ b.x = L+R; b.vx = -b.vx*CUSH_E; b.vy *= 0.985; }
+          else { b.x = RT-R; b.vx = -b.vx*CUSH_E; b.vy *= 0.985; }
+        }
+        if(b.y-R < T || b.y+R > BT){
+          if(tryPocket(b)) continue;
+          if(b.y-R < T){ b.y = T+R; b.vy = -b.vy*CUSH_E; b.vx *= 0.985; }
+          else { b.y = BT-R; b.vy = -b.vy*CUSH_E; b.vx *= 0.985; }
+        }
+        // 틈으로 빠져나가더라도 캔버스 밖으로는 못 나가게(안전망)
+        if(b.x < R*0.6){ b.x = R*0.6; b.vx = Math.abs(b.vx)*0.4; }
+        else if(b.x > W-R*0.6){ b.x = W-R*0.6; b.vx = -Math.abs(b.vx)*0.4; }
+        if(b.y < R*0.6){ b.y = R*0.6; b.vy = Math.abs(b.vy)*0.4; }
+        else if(b.y > H-R*0.6){ b.y = H-R*0.6; b.vy = -Math.abs(b.vy)*0.4; }
+      }
+      // 공끼리 충돌(등질량 탄성) — 법선 방향 운동량 교환 + 겹침 보정
+      for(let i=0;i<G.balls.length;i++){
+        const a = G.balls[i]; if(a.in) continue;
+        for(let j=i+1;j<G.balls.length;j++){
+          const b = G.balls[j]; if(b.in) continue;
+          const dx = b.x-a.x, dy = b.y-a.y, d = Math.hypot(dx,dy);
+          if(d <= 0 || d >= 2*R) continue;
+          const nx = dx/d, ny = dy/d;
+          const ov = (2*R - d)/2;
+          a.x -= nx*ov; a.y -= ny*ov; b.x += nx*ov; b.y += ny*ov;
+          const rel = (b.vx-a.vx)*nx + (b.vy-a.vy)*ny;
+          if(rel >= 0) continue;
+          const imp = -(1+BALL_E)*rel/2;
+          a.vx -= imp*nx; a.vy -= imp*ny; b.vx += imp*nx; b.vy += imp*ny;
+          if(!G.evt.firstHit && (a.type==='cue' || b.type==='cue')) G.evt.firstHit = a.type==='cue' ? b : a;
+        }
+      }
+      for(const b of G.balls){ if(!b.in && Math.hypot(b.vx,b.vy) < STOP){ b.vx = 0; b.vy = 0; } }
+    }
+  }
+  const moving = () => G.balls.some(b => !b.in && (b.vx || b.vy));
+
+  // ── 조준 예측(점선이 닿는 지점 + 목적구 진행 방향) ──
+  function predict(){
+    const c = cue(), dx = Math.cos(G.angle), dy = Math.sin(G.angle);
+    let bestT = Infinity, target = null;
+    for(const b of G.balls){
+      if(b.in || b === c) continue;
+      const ex = b.x-c.x, ey = b.y-c.y, t = ex*dx + ey*dy;
+      if(t <= 0) continue;
+      const perp2 = ex*ex + ey*ey - t*t, rr = (2*R)*(2*R);
+      if(perp2 > rr) continue;
+      const th = t - Math.sqrt(rr - perp2);
+      if(th > 0 && th < bestT){ bestT = th; target = b; }
+    }
+    let wallT = Infinity;
+    if(dx > 0) wallT = Math.min(wallT, (RT-R-c.x)/dx); else if(dx < 0) wallT = Math.min(wallT, (L+R-c.x)/dx);
+    if(dy > 0) wallT = Math.min(wallT, (BT-R-c.y)/dy); else if(dy < 0) wallT = Math.min(wallT, (T+R-c.y)/dy);
+    if(!target || wallT < bestT) return { x: c.x+dx*Math.max(0,wallT), y: c.y+dy*Math.max(0,wallT), target:null };
+    return { x: c.x+dx*bestT, y: c.y+dy*bestT, target };
+  }
+
+  // ── 그리기 ────────────────────────────────────────
+  function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+  function drawTable(){
+    ctx.fillStyle = '#3f2513'; roundRect(0,0,W,H,16); ctx.fill();                    // 나무 프레임
+    ctx.fillStyle = '#14532d'; roundRect(4,4,W-8,H-8,12); ctx.fill();                // 레일
+    const fg = ctx.createLinearGradient(0,T,0,BT);
+    fg.addColorStop(0,'#15803d'); fg.addColorStop(0.5,'#177f45'); fg.addColorStop(1,'#136136');
+    ctx.fillStyle = fg; ctx.fillRect(L,T,RT-L,BT-T);                                  // 천(felt)
+    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 2; ctx.strokeRect(L,T,RT-L,BT-T);
+    ctx.strokeStyle = 'rgba(255,255,255,.13)'; ctx.lineWidth = 1;                     // 헤드 스트링
+    ctx.beginPath(); ctx.moveTo(L, CUE_SPOT.y); ctx.lineTo(RT, CUE_SPOT.y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.45)';                                          // 레일 다이아몬드
+    for(let i=1;i<=3;i++){ const y = T + (BT-T)*i/4;
+      if(i!==2){ ctx.beginPath(); ctx.arc(CU/2,y,1.6,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(W-CU/2,y,1.6,0,7); ctx.fill(); } }
+    for(let i=1;i<=3;i++){ const x = L + (RT-L)*i/4;
+      ctx.beginPath(); ctx.arc(x,CU/2,1.6,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(x,H-CU/2,1.6,0,7); ctx.fill(); }
+    for(const p of POCKETS){                                                          // 포켓
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fillStyle = '#0a0a0a'; ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(212,175,55,.55)'; ctx.stroke();
+    }
+  }
+  function drawBall(b){
+    ctx.beginPath(); ctx.ellipse(b.x+1.6, b.y+2.4, R*0.95, R*0.8, 0, 0, 7);           // 그림자
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.arc(b.x,b.y,R,0,7); ctx.clip();
+    ctx.fillStyle = (b.type==='solid') ? b.c : (b.type==='eight' ? '#18181b' : '#f8fafc');
+    ctx.fillRect(b.x-R, b.y-R, 2*R, 2*R);
+    if(b.type==='stripe'){ ctx.fillStyle = b.c; ctx.fillRect(b.x-R, b.y-R*0.56, 2*R, R*1.12); }
+    if(b.type!=='cue'){
+      ctx.beginPath(); ctx.arc(b.x,b.y,R*0.47,0,7); ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.fillStyle = '#111827'; ctx.font = `bold ${Math.round(R*0.76)}px -apple-system, sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(b.n), b.x, b.y+0.4);
+    }
+    const g = ctx.createRadialGradient(b.x-R*0.4, b.y-R*0.45, R*0.05, b.x-R*0.1, b.y-R*0.1, R*1.3);
+    g.addColorStop(0,'rgba(255,255,255,.55)'); g.addColorStop(0.38,'rgba(255,255,255,.05)'); g.addColorStop(1,'rgba(0,0,0,.42)');
+    ctx.fillStyle = g; ctx.fillRect(b.x-R, b.y-R, 2*R, 2*R);
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(b.x,b.y,R,0,7); ctx.lineWidth = 0.9; ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.stroke();
+  }
+  function drawAim(){
+    const c = cue(); if(c.in) return;
+    const p = predict(), dx = Math.cos(G.angle), dy = Math.sin(G.angle);
+    ctx.save();
+    ctx.setLineDash([6,6]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.beginPath(); ctx.moveTo(c.x+dx*R, c.y+dy*R); ctx.lineTo(p.x, p.y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, 7);                                      // 고스트 볼(충돌 시점 흰공 위치)
+    ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 1.4; ctx.stroke();
+    if(p.target){                                                                     // 목적구가 튀어나갈 방향
+      const ox = p.target.x-p.x, oy = p.target.y-p.y, od = Math.hypot(ox,oy) || 1;
+      ctx.beginPath(); ctx.moveTo(p.target.x, p.target.y);
+      ctx.lineTo(p.target.x + ox/od*34, p.target.y + oy/od*34);
+      ctx.strokeStyle = 'rgba(253,224,71,.9)'; ctx.lineWidth = 2; ctx.stroke();
+    }
+    const pull = 8 + (G.phase==='power' ? G.power*26 : 0);                            // 큐대(파워만큼 뒤로 당겨짐)
+    const bx = c.x - dx*(R+pull), by = c.y - dy*(R+pull);
+    const tx = c.x - dx*(R+pull+96), ty = c.y - dy*(R+pull+96);
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(tx,ty); ctx.lineWidth = 4.4; ctx.strokeStyle = '#c8873f'; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx-dx*10, by-dy*10); ctx.lineWidth = 4.4; ctx.strokeStyle = '#e0f2fe'; ctx.stroke();
+    ctx.restore();
+  }
+  function draw(){
+    drawTable();
+    for(const b of G.balls) if(!b.in) drawBall(b);
+    if((G.phase==='aim' || G.phase==='power') && !G.over) drawAim();
+  }
+
+  // ── 루프 ──────────────────────────────────────────
+  function loop(){
+    if(!alive()){ if(G.raf) cancelAnimationFrame(G.raf); G.raf = null; return; }
+    if(G.phase==='power'){
+      G.power += G.pdir*PSPD;
+      if(G.power >= 1){ G.power = 1; G.pdir = -1; }
+      else if(G.power <= 0){ G.power = 0; G.pdir = 1; }
+      $fill.style.width = Math.round(G.power*100) + '%';
+    } else if(G.phase==='roll'){
+      step();
+      if(!moving()) endShot();
+    }
+    draw();
+    G.raf = requestAnimationFrame(loop);
+  }
+
+  // ── 샷 처리 ───────────────────────────────────────
+  function shoot(){
+    const c = cue(), sp = PMIN + (PMAX-PMIN)*G.power;
+    c.vx = Math.cos(G.angle)*sp; c.vy = Math.sin(G.angle)*sp;
+    G.shots++; $shots.textContent = G.shots;
+    G.evt = { cueIn:false, eightIn:false, potted:[], firstHit:null };
+    setPhase('roll');
+  }
+  function respotCue(){
+    const c = cue();
+    c.in = false; c.vx = c.vy = 0; c.x = CUE_SPOT.x; c.y = CUE_SPOT.y;
+    for(let k=0;k<60;k++){                                        // 겹치면 아래로 조금씩 밀어 빈자리 찾기
+      const hit = G.balls.some(b => b!==c && !b.in && Math.hypot(b.x-c.x, b.y-c.y) < 2*R+1);
+      if(!hit) break;
+      c.y = Math.min(BT-R-1, c.y + 3);
+      if(c.y >= BT-R-1){ c.x = Math.max(L+R+1, c.x - 7); c.y = CUE_SPOT.y; }
+    }
+  }
+  function endShot(){
+    const e = G.evt, left = objLeft();
+    if(e.eightIn){
+      if(left === 0 && !e.cueIn) finish(true);
+      else finish(false, e.cueIn ? '8번과 흰공을 함께 넣었어요 — 실패!' : '색공·줄공이 남았는데 8번을 넣었어요 — 실패!');
+      return;
+    }
+    let msg;
+    if(e.cueIn){ respotCue(); G.shots++; $shots.textContent = G.shots; msg = '스크래치! 흰공 복귀 · 벌타 +1'; }
+    else if(!e.firstHit) msg = '헛샷! 아무 공도 못 맞혔어요';
+    else if(e.potted.length) msg = `${e.potted.length}개 포켓 성공! 👍`;
+    else msg = '아쉽다 — 다음 샷!';
+    if(left === 0) msg = (e.cueIn ? '스크래치(벌타 +1) — ' : '') + '이제 검은 8번을 넣으면 클리어! 🎱';
+    $left.textContent = ballsLeft();
+    setPhase('aim', msg);
+  }
+  function finish(win, why){
+    G.over = true;
+    if(win){
+      recordStat('pocket', { result:'win', best:G.shots });
+      $msg.innerHTML = `🎉 클리어!<br><b>${G.shots}타</b><br><button class="btn primary" id="pkAgain">다시하기</button>`;
+    } else {
+      recordStat('pocket', { result:'loss' });
+      $msg.innerHTML = `게임 오버<br><span class="pk-why">${escapeHtml(why)}</span><br><button class="btn primary" id="pkAgain">다시하기</button>`;
+    }
+    $msg.classList.remove('hidden');
+    setPhase('over');
+    const a = el.querySelector('#pkAgain'); if(a) a.onclick = newGame;
+  }
+
+  // ── 화면/조작 상태 ────────────────────────────────
+  function setPhase(p, msg){
+    G.phase = p;
+    if(p !== 'power'){ G.power = 0; G.pdir = 1; if($fill) $fill.style.width = '0%'; }
+    $act.disabled = (p === 'roll' || p === 'over');
+    $act.textContent = p==='power' ? '발사! 🎯' : (p==='roll' ? '구르는 중…' : '파워 ▶');
+    $act.classList.toggle('shoot', p==='power');
+    $cancel.classList.toggle('hidden', p!=='power');
+    el.querySelectorAll('.pk-rot').forEach(b => b.disabled = (p !== 'aim'));
+    if(msg !== undefined) $tip.textContent = msg;
+    else if(p==='aim') $tip.textContent = '화면을 터치·드래그해 방향을 맞춘 뒤 파워를 누르세요';
+    else if(p==='power') $tip.textContent = '게이지가 왔다 갔다 하는 동안 원하는 세기에서 발사!';
+  }
+  function newGame(){
+    rack(); G.shots = 0; G.over = false; G.angle = -Math.PI/2;
+    G.evt = { cueIn:false, eightIn:false, potted:[], firstHit:null };
+    $shots.textContent = '0'; $left.textContent = ballsLeft();
+    $msg.classList.add('hidden'); $msg.innerHTML = '';
+    setPhase('aim', '브레이크 샷! 세게 쳐서 랙을 흩뜨려 보세요');
+  }
+
+  const pbest = getStat('pocket')?.best;
+  el.innerHTML = `<div class="mg pocket">
+    <div class="pk-hud">
+      <span>샷 <b id="pkShots">0</b></span>
+      <span>남은 공 <b id="pkLeft">9</b></span>
+      <span>최소 <b id="pkBest">${pbest != null ? pbest + '타' : '-'}</b></span>
+    </div>
+    <div class="pk-stage">
+      <canvas id="pkCv" width="${W}" height="${H}"></canvas>
+      <div class="pk-msg hidden" id="pkMsg"></div>
+    </div>
+    <div class="pk-gaugewrap">
+      <div class="pk-gauge"><i id="pkFill"></i></div>
+      <button class="pk-cancel hidden" id="pkCancel">취소</button>
+    </div>
+    <div class="pk-ctrl">
+      <button class="btn pk-rot" id="pkL">◀</button>
+      <button class="btn primary pk-act" id="pkAct">파워 ▶</button>
+      <button class="btn pk-rot" id="pkR">▶</button>
+    </div>
+    <p class="pk-tip" id="pkTip"></p>
+  </div>`;
+
+  cv = el.querySelector('#pkCv'); ctx = cv.getContext('2d');
+  $shots = el.querySelector('#pkShots'); $left = el.querySelector('#pkLeft');
+  $msg = el.querySelector('#pkMsg'); $fill = el.querySelector('#pkFill');
+  $act = el.querySelector('#pkAct'); $cancel = el.querySelector('#pkCancel'); $tip = el.querySelector('#pkTip');
+
+  // 캔버스 터치/드래그 → 큐볼 기준 방향
+  function aimAt(e){
+    if(G.phase !== 'aim' || G.over) return;
+    const r = cv.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (W / r.width), y = (e.clientY - r.top) * (H / r.height);
+    const c = cue(), dx = x - c.x, dy = y - c.y;
+    if(Math.hypot(dx,dy) < 4) return;
+    G.angle = Math.atan2(dy, dx);
+  }
+  let dragging = false;
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); dragging = true; try{ cv.setPointerCapture(e.pointerId); }catch(_){} aimAt(e); });
+  cv.addEventListener('pointermove', e => { if(dragging) aimAt(e); });
+  cv.addEventListener('pointerup', () => { dragging = false; });
+  cv.addEventListener('pointercancel', () => { dragging = false; });
+  cv.oncontextmenu = e => { e.preventDefault(); return false; };
+
+  // 미세 조준(꾹 누르면 연속 회전)
+  function holdRot(btn, dir){
+    let t = null;
+    const stepA = () => { if(G.phase === 'aim' && !G.over) G.angle += dir*0.009; };
+    const stop = () => { if(t){ clearInterval(t); t = null; } };
+    btn.onpointerdown = e => { e.preventDefault(); stepA(); stop(); t = setInterval(stepA, 40); };
+    btn.onpointerup = stop; btn.onpointercancel = stop; btn.onpointerleave = stop;
+    btn.oncontextmenu = e => { e.preventDefault(); return false; };
+  }
+  holdRot(el.querySelector('#pkL'), -1);
+  holdRot(el.querySelector('#pkR'), +1);
+  $act.onclick = () => {
+    if(G.over) return;
+    if(G.phase === 'aim'){ G.power = 0; G.pdir = 1; setPhase('power'); }
+    else if(G.phase === 'power') shoot();
+  };
+  $cancel.onclick = () => { if(G.phase === 'power') setPhase('aim'); };
+
+  newGame();
+  G.raf = requestAnimationFrame(loop);
 }
 
 document.addEventListener('DOMContentLoaded', bootstrap);

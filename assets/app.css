@@ -72,21 +72,35 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .mg-score { color: var(--muted); }
 .mg-score b, .game-best b { color: var(--primary2); }
 
-/* 핀볼 */
-.mg.pinball { gap: 10px; width: 100%; }
-.pin-hud { display: flex; justify-content: space-between; width: min(94vw, 340px); font-size: .9rem; color: var(--muted); }
-.pin-hud b { color: var(--primary2); font-variant-numeric: tabular-nums; }
-.pin-stage { position: relative; width: min(94vw, 340px); }
-.pin-stage #pinCv { width: 100%; height: auto; display: block; border-radius: 14px; touch-action: none; background: #0f172a; }
-.pin-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-  background: rgba(2, 6, 23, .72); color: #fff; border-radius: 14px; font-size: 1.3rem; font-weight: 800; text-align: center; }
-.pin-msg b { font-size: 1.6rem; color: #facc15; }
-.pin-msg.hidden { display: none; }
-.pin-ctrl { display: flex; gap: 8px; width: min(94vw, 340px); }
-.pin-ctrl .btn { padding: 16px 0; font-size: 1.05rem; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
-.pin-ctrl .btn.flip { flex: 1; font-size: 1.3rem; }
-.pin-ctrl .btn.launch { flex: 1.4; }
-.pin-tip { font-size: .78rem; color: var(--muted); text-align: center; max-width: min(94vw, 340px); }
+/* 포켓볼 — 테이블(캔버스)이 남는 높이를 흡수하고, HUD·게이지·조작부는 항상 화면 안에 */
+.mg.pocket { gap: 8px; width: 100%; padding: 10px 8px;
+  height: calc(100vh - var(--header-h) - var(--tab-h) - 62px); }
+@supports (height: 1dvh) { .mg.pocket { height: calc(100dvh - var(--header-h) - var(--tab-h) - 62px); } }
+.pk-hud { display: flex; justify-content: space-between; width: min(96vw, 360px); font-size: .88rem; color: var(--muted); }
+.pk-hud b { color: var(--primary2); font-variant-numeric: tabular-nums; }
+.pk-stage { position: relative; flex: 1 1 auto; min-height: 0; width: 100%;
+  display: flex; align-items: center; justify-content: center; }
+.pk-stage #pkCv { height: 100%; width: auto; max-width: 100%; display: block;
+  border-radius: 14px; touch-action: none; background: #3f2513; }
+.pk-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: rgba(2, 6, 23, .74); color: #fff; border-radius: 14px; font-size: 1.25rem; font-weight: 800; text-align: center; }
+.pk-msg b { font-size: 1.6rem; color: #facc15; }
+.pk-msg .pk-why { font-size: .92rem; font-weight: 600; color: #e2e8f0; }
+.pk-gaugewrap { display: flex; align-items: center; gap: 8px; width: min(96vw, 360px); }
+.pk-gauge { flex: 1 1 auto; height: 14px; border-radius: 8px; overflow: hidden;
+  background: var(--bg2); border: 1px solid var(--border); }
+.pk-gauge i { display: block; height: 100%; width: 0%;
+  background: linear-gradient(90deg, #22c55e 0%, #facc15 55%, #ef4444 100%); }
+.pk-cancel { flex: 0 0 auto; background: transparent; border: 1px solid var(--border); color: var(--muted);
+  border-radius: 8px; padding: 3px 10px; font-size: .78rem; font-weight: 700; cursor: pointer; }
+.pk-ctrl { display: flex; gap: 8px; width: min(96vw, 360px); }
+.pk-ctrl .btn { padding: 14px 0; -webkit-user-select: none; user-select: none; touch-action: none; }
+.pk-ctrl .pk-rot { flex: 1; font-size: 1.2rem; }
+.pk-ctrl .pk-act { flex: 2.2; font-size: 1.02rem; }
+.pk-ctrl .pk-act.shoot { background: #ef4444; border-color: #ef4444; }
+.pk-ctrl .btn:disabled { opacity: .45; }
+.pk-tip { margin: 0; font-size: .76rem; color: var(--muted); text-align: center;
+  max-width: min(96vw, 360px); min-height: 1.1em; }
 
 /* 테트리스 */
 /* 패널 높이를 화면에 맞춰 고정하고(헤더·탭바·게임바 제외) 게임판이 남는 높이를 흡수하게 한다.
