@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b96';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b97';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -3632,7 +3632,23 @@ function runFour(el, cfg){
 
   const G = { balls: [], turn: 0, score: [0, 0], phase: 'aim', angle: -Math.PI/2, power: 0, pdir: 1,
               shotsLeft: FOUR_SHOTS, run: 0, bestRun: 0, hits: [], over: false, recorded: false, raf: null,
-              spin: { f: 0, s: 0 } };
+              spin: { f: 0, s: 0 }, hist: [] };
+  // ── 되돌리기(무제한): 매 샷 직전 상태를 스택에 저장 ──
+  function snapshot(){ return { balls: G.balls.map(b => ({ x:b.x, y:b.y, k:b.k })), turn:G.turn,
+    score:[...G.score], shotsLeft:G.shotsLeft, run:G.run, bestRun:G.bestRun, angle:G.angle }; }
+  function pushHistory(){ G.hist.push(snapshot()); }
+  function restoreState(s){
+    G.balls = s.balls.map(b => ({ x:b.x, y:b.y, k:b.k, vx:0, vy:0 }));
+    G.turn = s.turn; G.score = [...s.score]; G.shotsLeft = s.shotsLeft; G.run = s.run; G.bestRun = s.bestRun; G.angle = s.angle; G.over = false;
+  }
+  function undo(){
+    if(!G.hist.length) return;
+    let s = G.hist.pop();
+    if(cfg.mode === 'cpu'){ while(s.turn === 1 && G.hist.length) s = G.hist.pop(); }   // vs컴퓨터: 내 차례로 돌아올 때까지
+    restoreState(s);
+    $msg.classList.add('hidden'); $msg.innerHTML = '';
+    resetSpin(); updateHud(); setPhase('aim', '이전 상태로 되돌렸어요 ↩︎');
+  }
   // 당점(스핀) — 접촉 시 수구에 팔로/드로 + 사이드 스로 적용(대부분 소모). 수구만 spF/spS 를 가진다.
   function applySpin(b){
     if(!b.spF && !b.spS) return;
@@ -3847,6 +3863,7 @@ function runFour(el, cfg){
 
   // ── 샷 처리 ───────────────────────────────────────
   function shoot(){
+    pushHistory();                                                      // 샷 직전 상태 저장(되돌리기용)
     const c = cue(), sp = PMIN + (PMAX-PMIN)*G.power;
     c.vx = Math.cos(G.angle)*sp; c.vy = Math.sin(G.angle)*sp;
     c.dir = { x: Math.cos(G.angle), y: Math.sin(G.angle) }; c.v0 = sp;   // 당점 계산용
@@ -3948,13 +3965,14 @@ function runFour(el, cfg){
     $act.classList.toggle('shoot', p==='power');
     $cancel.classList.toggle('hidden', p!=='power');
     el.querySelectorAll('.pk-rot').forEach(b => b.disabled = (p !== 'aim'));
+    const ub = el.querySelector('#fbUndo'); if(ub) ub.disabled = !(G.hist.length && (p === 'aim' || p === 'over'));
     if(msg !== undefined) $tip.textContent = msg;
     else if(p==='aim') $tip.textContent = '화면을 터치·드래그해 방향을 맞춘 뒤 파워를 누르세요';
     else if(p==='power') $tip.textContent = '게이지가 왔다 갔다 하는 동안 원하는 세기에서 발사!';
   }
   function newGame(){
     rack(); G.turn = 0; G.score = [0,0]; G.shotsLeft = FOUR_SHOTS; G.run = 0; G.bestRun = 0;
-    G.hits = []; G.over = false; G.recorded = false;
+    G.hits = []; G.over = false; G.recorded = false; G.hist = [];
     $msg.classList.add('hidden'); $msg.innerHTML = '';
     updateHud(); aimDefault(); resetSpin();
     setPhase('aim', solo ? `빨간공 2개를 모두 맞히면 1점! ${FOUR_SHOTS}샷 도전`
@@ -3969,6 +3987,7 @@ function runFour(el, cfg){
       <div class="pk-msg hidden" id="fbMsg"></div>
     </div>
     <div class="pk-gaugewrap">
+      <button class="btn ghost small fb-undo" id="fbUndo" title="이전 상태로 되돌리기" disabled>↩︎</button>
       <div class="pk-gauge"><i id="fbFill"></i></div>
       <button class="pk-cancel hidden" id="fbCancel">취소</button>
     </div>
@@ -4020,6 +4039,7 @@ function runFour(el, cfg){
     else if(G.phase === 'power') shoot();
   };
   $cancel.onclick = () => { if(G.phase === 'power') setPhase('aim'); };
+  el.querySelector('#fbUndo').onclick = () => { if(G.phase === 'aim' || G.phase === 'over') undo(); };
 
   // ── 당점(정면 큐볼) 선택기 ──
   if(useSpin){

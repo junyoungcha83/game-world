@@ -92,6 +92,8 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .pk-msg b { font-size: 1.6rem; color: #facc15; }
 .pk-msg .pk-why { font-size: .92rem; font-weight: 600; color: #e2e8f0; }
 .pk-gaugewrap { display: flex; align-items: center; gap: 8px; width: min(96vw, 360px); }
+.fb-undo { flex: 0 0 auto; padding: 6px 12px; font-size: 1.05rem; line-height: 1; }
+.fb-undo:disabled { opacity: .35; }
 .pk-gauge { flex: 1 1 auto; height: 14px; border-radius: 8px; overflow: hidden;
   background: var(--bg2); border: 1px solid var(--border); }
 .pk-gauge i { display: block; height: 100%; width: 0%;
