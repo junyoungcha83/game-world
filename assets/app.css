@@ -110,8 +110,12 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .pk-tip { margin: 0; font-size: .76rem; color: var(--muted); text-align: center;
   max-width: min(96vw, 360px); min-height: 1.1em; }
 /* 당점(정면 큐볼) 선택기 */
+.fb-spinbox { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .fb-spin { width: 56px; height: 56px; flex: 0 0 auto; border-radius: 50%; background: #0f172a;
-  touch-action: none; cursor: pointer; align-self: center; }
+  touch-action: none; cursor: pointer; }
+.fb-course { display: inline-flex; align-items: center; gap: 3px; font-size: .62rem; font-weight: 700;
+  color: var(--muted); cursor: pointer; white-space: nowrap; }
+.fb-course input { width: 13px; height: 13px; accent-color: #38bdf8; margin: 0; }
 /* 당점 사용 옵션(모드 선택) */
 .fb-opt { display: flex; flex-direction: column; align-items: center; gap: 2px; width: min(80vw, 260px);
   margin: -4px auto 4px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 12px;

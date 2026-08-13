@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b99';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b100';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -3632,6 +3632,7 @@ function runFour(el, cfg){
   const solo = cfg.mode === 'solo';
   const useSpin = !!cfg.spin;             // 당점(회전) 사용
   const detailCourse = !!cfg.course;      // 코스 자세히(예상 괘적 최대 3개)
+  let courseReflect = false;              // '코스반영' — 당점(스핀)까지 반영한 예측선(게임 중 체크박스)
   const FOLLOW_K = 0.55, THROW_K = 0.28, CUSH_ENG = 0.34;   // 팔로·드로 / 사이드 스로 / 쿠션 잉글리시 세기
   const who = i => cfg.mode === 'cpu' ? (i === 0 ? '나' : '컴퓨터') : `${i + 1}P`;
 
@@ -3777,6 +3778,26 @@ function runFour(el, cfg){
     return { points: pts, target };
   }
 
+  // ── 당점(스핀) 반영 예측: 실제 물리로 수구 궤적을 굴려 본다 ──
+  function simCuePath(angle, pw){
+    const ci = G.turn;
+    const bs = G.balls.map(b => ({ x:b.x, y:b.y, vx:0, vy:0, k:b.k }));
+    const sp = PMIN + (PMAX-PMIN)*pw, c = bs[ci];
+    c.vx = Math.cos(angle)*sp; c.vy = Math.sin(angle)*sp;
+    c.dir = { x: Math.cos(angle), y: Math.sin(angle) }; c.v0 = sp;
+    c.spF = G.spin.f; c.spS = G.spin.s;
+    const pts = [{ x:c.x, y:c.y }], hits = [];
+    let firstContactIdx = -1;
+    for(let f=0; f<300; f++){
+      const before = hits.length;
+      physFrame(bs, 4, hits, ci);
+      if(firstContactIdx < 0 && hits.length > before) firstContactIdx = pts.length;
+      pts.push({ x:bs[ci].x, y:bs[ci].y });
+      if(Math.hypot(bs[ci].vx, bs[ci].vy) < 1.2) break;
+    }
+    return { pts, firstContactIdx };
+  }
+
   // ── 컴퓨터: 후보 샷을 물리로 미리 굴려보고 가장 좋은 것 고르기 ──
   function simulate(ang, pw, ci){
     const bs = G.balls.map(b => ({ ...b })), hits = [];
@@ -3855,22 +3876,33 @@ function runFour(el, cfg){
   }
   function drawAim(){
     const c = cue(), dx = Math.cos(G.angle), dy = Math.sin(G.angle);
-    const path = predictPath(c.x, c.y, dx, dy, detailCourse ? 3 : 1);
-    const pts = path.points, last = pts[pts.length-1];
-    ctx.save();
-    ctx.setLineDash([6,6]); ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,255,255,.85)';
-    ctx.beginPath(); ctx.moveTo(c.x+dx*R, c.y+dy*R);                                 // 큐볼 가장자리에서 시작
-    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    for(let i=1;i<pts.length-1;i++){ if(pts[i].bounce){                              // 쿠션 반사점
-      ctx.beginPath(); ctx.arc(pts[i].x, pts[i].y, 2.6, 0, 7); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fill(); } }
-    if(path.target){                                                                 // 공에 닿는 지점: 고스트 + 목적구 진행방향
-      ctx.beginPath(); ctx.arc(last.x, last.y, R, 0, 7); ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 1.4; ctx.stroke();
-      const ox = path.target.x-last.x, oy = path.target.y-last.y, od = Math.hypot(ox,oy) || 1;
-      ctx.beginPath(); ctx.moveTo(path.target.x, path.target.y);
-      ctx.lineTo(path.target.x + ox/od*34, path.target.y + oy/od*34);
-      ctx.strokeStyle = 'rgba(253,224,71,.9)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.save(); ctx.lineCap = 'round';
+    if(useSpin && courseReflect){                                                    // '코스반영' — 당점(스핀)까지 물리로 반영한 예측선(하늘색)
+      const pw = (G.phase === 'power') ? G.power : 0.7;
+      const sim = simCuePath(G.angle, pw);
+      ctx.setLineDash([6,6]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(56,189,248,.95)';
+      ctx.beginPath(); ctx.moveTo(c.x+dx*R, c.y+dy*R);
+      for(let i=1;i<sim.pts.length;i++) ctx.lineTo(sim.pts[i].x, sim.pts[i].y);
+      ctx.stroke(); ctx.setLineDash([]);
+      if(sim.firstContactIdx > 0){ const p = sim.pts[sim.firstContactIdx];
+        ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, 7); ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 1.4; ctx.stroke(); }
+    } else {
+      const path = predictPath(c.x, c.y, dx, dy, detailCourse ? 3 : 1);
+      const pts = path.points, last = pts[pts.length-1];
+      ctx.setLineDash([6,6]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.85)';
+      ctx.beginPath(); ctx.moveTo(c.x+dx*R, c.y+dy*R);                               // 큐볼 가장자리에서 시작
+      for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      for(let i=1;i<pts.length-1;i++){ if(pts[i].bounce){                            // 쿠션 반사점
+        ctx.beginPath(); ctx.arc(pts[i].x, pts[i].y, 2.6, 0, 7); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fill(); } }
+      if(path.target){                                                               // 공에 닿는 지점: 고스트 + 목적구 진행방향
+        ctx.beginPath(); ctx.arc(last.x, last.y, R, 0, 7); ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 1.4; ctx.stroke();
+        const ox = path.target.x-last.x, oy = path.target.y-last.y, od = Math.hypot(ox,oy) || 1;
+        ctx.beginPath(); ctx.moveTo(path.target.x, path.target.y);
+        ctx.lineTo(path.target.x + ox/od*34, path.target.y + oy/od*34);
+        ctx.strokeStyle = 'rgba(253,224,71,.9)'; ctx.lineWidth = 2; ctx.stroke();
+      }
     }
     const pull = 8 + (G.phase==='power' ? G.power*26 : 0);                           // 큐대(파워만큼 뒤로 당겨짐)
     const bx = c.x - dx*(R+pull), by = c.y - dy*(R+pull);
@@ -4033,7 +4065,10 @@ function runFour(el, cfg){
       <button class="pk-cancel hidden" id="fbCancel">취소</button>
     </div>
     <div class="pk-ctrl">
-      ${useSpin ? `<canvas class="fb-spin" id="fbSpin" width="120" height="120" title="당점 — 드래그로 회전 지정 (↑팔로 ↓드로 ←→사이드)"></canvas>` : ''}
+      ${useSpin ? `<div class="fb-spinbox">
+        <canvas class="fb-spin" id="fbSpin" width="120" height="120" title="당점 — 드래그로 회전 지정 (↑팔로 ↓드로 ←→사이드)"></canvas>
+        <label class="fb-course"><input type="checkbox" id="fbCourseChk"> 코스반영</label>
+      </div>` : ''}
       <button class="btn pk-rot" id="fbL">◀</button>
       <button class="btn primary pk-act" id="fbAct">파워 ▶</button>
       <button class="btn pk-rot" id="fbR">▶</button>
@@ -4114,6 +4149,8 @@ function runFour(el, cfg){
     sc.oncontextmenu = e => { e.preventDefault(); return false; };
     G._drawSpin = drawSpin;
     drawSpin();
+    const chk = el.querySelector('#fbCourseChk');
+    if(chk) chk.onchange = () => { courseReflect = chk.checked; };
   }
 
   newGame();
