@@ -1,7 +1,8 @@
 // 앱 셸 오프라인 캐시. 캐시 이름 바꾸면 옛 캐시 자동 폐기.
-const CACHE = 'game-world-v104';
+const CACHE = 'game-world-v105';
 self.addEventListener('message', (e) => { if (e.data === 'skip-waiting') self.skipWaiting(); });
-const ASSETS = ['./', './index.html', './assets/app.css', './assets/app.js', './manifest.webmanifest', './assets/icon.svg', './assets/kbo-bg.jpg'];
+// app.css/app.js 는 버전 쿼리(?v=)로 참조 — 배포마다 URL 이 바뀌어 옛 캐시가 절대 재사용되지 않는다.
+const ASSETS = ['./', './index.html', './assets/app.css?v=105', './assets/app.js?v=105', './manifest.webmanifest', './assets/icon.svg', './assets/kbo-bg.jpg'];
 // 지도 맞히기용 국가 실루엣 — 완전 오프라인 위해 프리캐시
 const MAP_CODES = ['kr','jp','cn','us','gb','fr','de','it','es','pt','ca','br','ar','mx','au','in','ru','th','vn','id','ph','tr','eg','za','nl','se','no','ch','gr',
   'cl','nz','ie','is','sa','ir','pk','my','mn','ua','pl','pe','co','ng','ma','fi','kz','ve','cu','ke','dk','at','ae','sg','lk','kh','np','il','be','cz','ro','hu'];
@@ -9,7 +10,8 @@ const MAP_ASSETS = MAP_CODES.map(c => `./assets/maps/${c}.svg`);
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then(async (c) => {
-    await c.addAll(ASSETS).catch(() => {});
+    // cache:'reload' — 프리캐시할 때 HTTP 캐시를 우회해 항상 최신 파일을 담는다(옛 버전 굳는 것 방지)
+    await Promise.all(ASSETS.map(u => c.add(new Request(u, { cache: 'reload' })).catch(() => {})));
     // 지도는 개별 캐시(일부 실패해도 설치는 진행)
     await Promise.all(MAP_ASSETS.map(u => c.add(u).catch(() => {})));
   }));
@@ -25,8 +27,11 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   if (new URL(req.url).origin !== self.location.origin) return;
+  // HTML(내비게이션)은 HTTP 캐시를 우회해 항상 최신 index.html 을 받는다 → 새 버전이 새로고침 때 바로 반영
+  const isHTML = req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
+  const net = isHTML ? fetch(req, { cache: 'reload' }) : fetch(req);
   e.respondWith(
-    fetch(req).then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {}); return res; })
+    net.then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {}); return res; })
       .catch(() => caches.match(req).then(r => r || caches.match('./index.html')))
   );
 });
