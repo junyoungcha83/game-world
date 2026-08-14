@@ -106,22 +106,27 @@
     addEventListener('load', async () => {
       try {
         const reg = await navigator.serviceWorker.register('sw.js');
-        reg.update();                                  // 열 때마다 새 SW 확인
-        // 앱이 다시 보일 때마다 + 주기적으로 업데이트 확인 (PWA 재개 시에도 갱신되도록)
-        const check = () => { try { reg.update(); } catch {} };
-        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
-        setInterval(check, 60000);
-        // 새 버전이 활성화되면 자동으로 한 번 새로고침
+        // 새 버전은 '대기'만 시키고, 사용 중(게임 플레이 중)에는 자동으로 버전업/새로고침하지 않는다.
+        // 오직 페이지를 새로고침해 다시 로드될 때(= 메인화면 진입) 대기 중인 새 버전을 적용한다.
         let reloaded = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
           if (reloaded) return; reloaded = true; location.reload();
         });
-        reg.addEventListener('updatefound', () => {
-          const sw = reg.installing;
-          sw && sw.addEventListener('statechange', () => {
-            if (sw.state === 'installed' && navigator.serviceWorker.controller) sw.postMessage('skip-waiting');
-          });
-        });
+        const applyWaiting = () => {
+          if (reg.waiting && navigator.serviceWorker.controller) { reg.waiting.postMessage('skip-waiting'); return true; }
+          return false;
+        };
+        // 1) 이미 대기 중인 새 버전이 있으면 이번 새로고침에서 적용
+        if (!applyWaiting()) {
+          // 2) 이번 로드에서 '한 번만' 새 sw.js 확인 → 설치되면 적용. 주기적/복귀 시 확인은 하지 않음.
+          await reg.update().catch(() => {});
+          if (!applyWaiting()) {
+            const sw = reg.installing;
+            sw && sw.addEventListener('statechange', () => {
+              if (sw.state === 'installed' && navigator.serviceWorker.controller) sw.postMessage('skip-waiting');
+            });
+          }
+        }
       } catch {}
     });
   }

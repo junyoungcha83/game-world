@@ -1,5 +1,5 @@
 // 앱 셸 오프라인 캐시. 캐시 이름 바꾸면 옛 캐시 자동 폐기.
-const CACHE = 'game-world-v103';
+const CACHE = 'game-world-v104';
 self.addEventListener('message', (e) => { if (e.data === 'skip-waiting') self.skipWaiting(); });
 const ASSETS = ['./', './index.html', './assets/app.css', './assets/app.js', './manifest.webmanifest', './assets/icon.svg', './assets/kbo-bg.jpg'];
 // 지도 맞히기용 국가 실루엣 — 완전 오프라인 위해 프리캐시
@@ -13,7 +13,8 @@ self.addEventListener('install', (e) => {
     // 지도는 개별 캐시(일부 실패해도 설치는 진행)
     await Promise.all(MAP_ASSETS.map(u => c.add(u).catch(() => {})));
   }));
-  self.skipWaiting();
+  // skipWaiting() 안 함 — 새 버전은 '대기'만 하고, 페이지 새로고침(메인화면 진입) 때만 적용.
+  // 사용 중(게임 플레이 중)에 자동으로 버전이 바뀌지 않게 한다.
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))));
