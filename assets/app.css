@@ -147,17 +147,18 @@ body.playing .app-main { overscroll-behavior-y: contain; }
   background: rgba(2,6,23,.78); color: #fff; border-radius: 10px; font-size: 1.3rem; font-weight: 800; text-align: center; }
 .tet-msg b { font-size: 1.7rem; color: #38bdf8; }
 .tet-msg.hidden { display: none; }
-/* 십자(D-패드) 배치 — 4열 3행. 상=모양바꾸기, 좌우=이동, 하=천천히 내리기.
-   빨리 내리기(⤓)는 오른쪽 버튼의 오른편(2행 4열)에 따로 둔다.
+/* 십자(D-패드) 배치 — 방향키(⟳·◀▶·▼)는 왼쪽 3열, 액션(⏸·⤓)은 오른쪽 4열.
+   방향키 열(1~3)은 넓게(1fr) 두어 크게, 액션 열(4)은 좁게(0.82fr).
+   빨리 내리기(⤓)는 오른쪽 화살표에서 떨어지도록 오른쪽 '아래' 구석(3행 4열)에 둔다(오조작 방지).
    폭에 dvh 를 섞어 화면이 짧을 때 버튼도 같이 줄어들게 → 게임판과 함께 항상 화면 안에. */
-.tet-ctrl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; flex: 0 0 auto; width: min(94vw, 340px); }
-@supports (width: 1dvh) { .tet-ctrl { width: min(94vw, 340px, 30dvh); } }
-.tet-ctrl .btn { aspect-ratio: 1; padding: 0; font-size: 1.7rem; border-radius: 14px; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+.tet-ctrl { display: grid; grid-template-columns: 1fr 1fr 1fr 0.82fr; gap: 9px; flex: 0 0 auto; width: min(96vw, 360px); }
+@supports (width: 1dvh) { .tet-ctrl { width: min(96vw, 360px, 32.5dvh); } }
+.tet-ctrl .btn { aspect-ratio: 1; padding: 0; font-size: 1.85rem; border-radius: 14px; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
 .tet-up { grid-area: 1 / 2; }
 .tet-pause { grid-area: 1 / 4; font-size: 1.3rem !important; }
 .tet-left { grid-area: 2 / 1; }
 .tet-right { grid-area: 2 / 3; }
-.tet-drop { grid-area: 2 / 4; }
+.tet-drop { grid-area: 3 / 4; }
 .tet-down { grid-area: 3 / 2; }
 .tet-tip { font-size: .76rem; color: var(--muted); text-align: center; max-width: min(96vw, 440px); flex: 0 0 auto; }
 /* 화면이 짧으면 안내문을 숨겨 그만큼 게임판에 준다(버튼 아이콘만으로도 조작을 알 수 있음). */
