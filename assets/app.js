@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b100';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b101';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -3166,10 +3166,10 @@ function startArchery(el){
 }
 
 // ══════════════════════════ 🎱 포켓볼 ══════════════════════════
-// 6포켓 테이블 · 공 10개(색공4·줄공4·검은8번 + 흰 큐볼).
+// 6포켓 테이블 · 공 16개(색공7·줄공7·검은8번 + 흰 큐볼) = 실제 규격.
 // 진행: 조준(점선으로 방향 조절) → 파워(게이지가 최저↔최고 왕복) → 발사 → 공이 다 멈추면 다음 샷.
 // 물리: 등질량 탄성충돌 + 구름마찰 + 쿠션 반발. 프레임당 서브스텝으로 통과(터널링) 방지.
-// 규칙: 색공·줄공 8개를 먼저 모두 넣고 마지막에 8번(검은공) → 클리어. 8번을 먼저 넣으면 패배.
+// 규칙: 색공·줄공 14개를 먼저 모두 넣고 마지막에 8번(검은공) → 클리어. 8번을 먼저 넣으면 패배.
 //       흰공이 빠지면(스크래치) 헤드스팟 복귀 + 벌타 1.
 // TODO(다음 단계): 양궁처럼 컴퓨터와 번갈아 치는 대전 모드(색공/줄공 그룹 배정, CPU 조준 정확도 = 난이도).
 function startPocket(el){
@@ -3181,10 +3181,27 @@ function startPocket(el){
       <button data-m="two">대결 · 2인<small>한 기기에서 번갈아 치기 · 많이 넣는 사람 승</small></button>
     </div>
   </div>`;
-  el.querySelectorAll('.omok-levels button').forEach(b => b.onclick = () => runPocket(el, { mode: b.dataset.m }));
+  el.querySelectorAll('.omok-levels button').forEach(b => b.onclick = () => pickFormation(el, b.dataset.m));
+}
+// 모드 선택 뒤: 시작 전에 공 배치(랙 형태)를 고른다
+function pickFormation(el, mode){
+  el.innerHTML = `<div class="mg jg-pick">
+    <div class="mg-msg">공 배치를 골라요 🎱</div>
+    <div class="omok-levels pk-forms">
+      <button data-f="triangle">▲ 삼각형<small>기본 15구 랙</small></button>
+      <button data-f="diamond">◆ 다이아몬드<small>마름모꼴</small></button>
+      <button data-f="ring">◎ 원형<small>가운데 8번 · 링 배치</small></button>
+      <button data-f="grid">▦ 격자<small>5×3 바둑판</small></button>
+      <button data-f="random">✦ 무작위<small>매판 다르게 흩뿌림</small></button>
+    </div>
+    <button class="btn ghost pk-backmode" id="pkBackMode">◀ 모드 다시 고르기</button>
+  </div>`;
+  el.querySelectorAll('.pk-forms button').forEach(b => b.onclick = () => runPocket(el, { mode, formation: b.dataset.f }));
+  const bk = el.querySelector('#pkBackMode'); if(bk) bk.onclick = () => startPocket(el);
 }
 function runPocket(el, cfg){
   const two = cfg.mode === 'two';         // 2인 핫시트 대결
+  const FORMATION = cfg.formation || 'triangle';   // 공 배치 형태
   const who = i => `${i + 1}P`;
   const W = 320, H = 568;                 // 캔버스 크기(세로형 테이블)
   const CU = 15;                          // 쿠션(레일) 두께
@@ -3197,8 +3214,10 @@ function runPocket(el, cfg){
   const CUSH_E = 0.72, BALL_E = 0.95;     // 쿠션/공 반발계수
   const PMIN = 3.2, PMAX = 21;            // 발사 속도(px/프레임) — 최대 파워면 브레이크로 랙이 확 흩어진다
   const PSPD = 0.022;                     // 파워 게이지 왕복 속도(프레임당)
-  const SOLIDS  = [{n:1,c:'#facc15'},{n:2,c:'#2563eb'},{n:3,c:'#dc2626'},{n:4,c:'#9333ea'}];
-  const STRIPES = [{n:9,c:'#facc15'},{n:10,c:'#2563eb'},{n:11,c:'#dc2626'},{n:12,c:'#9333ea'}];
+  // 실제 당구공 색: 1·9=노랑, 2·10=파랑, 3·11=빨강, 4·12=보라, 5·13=주황, 6·14=초록, 7·15=밤색
+  const HUES = ['#f5c518','#2563eb','#dc2626','#7c3aed','#ea580c','#15803d','#7f1d1d'];
+  const SOLIDS  = HUES.map((c,i)=>({ n:i+1, c }));   // 색공 1~7
+  const STRIPES = HUES.map((c,i)=>({ n:i+9, c }));   // 줄공 9~15
   // r=그리기 반지름 · grab=가만히 있어도 빨려드는 거리 · reach=쿠션에서 포켓으로 인정하는 자키 범위
   const POCKETS = [
     { x:L,     y:T,   r:15, grab:12, reach:42 },  { x:RT,     y:T,   r:15, grab:12, reach:42 },
@@ -3219,18 +3238,45 @@ function runPocket(el, cfg){
     if($left) $left.textContent = ballsLeft();
   }
 
-  // ── 초기 배치: 9구 다이아몬드 랙(1·2·3·2·1), 정중앙에 검은 8번 ──
+  // ── 선택한 형태(FORMATION)대로 15개 슬롯을 만든다 ──
+  function makeSlots(formation){
+    const d = 2*R + 1;                                  // 공 간격(살짝 띄움)
+    const cx = W/2, topY = T + (BT-T)*0.13;
+    const put = counts => { const s=[]; counts.forEach((c,i)=>{ for(let k=0;k<c;k++) s.push({ x: cx+(k-(c-1)/2)*d, y: topY + i*d*0.9 }); }); return s; };
+    if(formation==='diamond') return put([1,2,3,4,3,2]);          // ◆ 15
+    if(formation==='grid'){                                       // ▦ 5×3
+      const cols=5, rows=3, gx=d, gy=d*0.95, ox=cx-(cols-1)/2*gx, s=[];
+      for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) s.push({ x: ox+c*gx, y: topY + r*gy });
+      return s;
+    }
+    if(formation==='ring'){                                       // ◎ 가운데1 + 안6 + 밖8
+      const cy = topY + d*2.4, s=[{ x:cx, y:cy }];
+      const ring=(n,rr,ph)=>{ for(let i=0;i<n;i++){ const a=ph+i/n*Math.PI*2; s.push({ x:cx+Math.cos(a)*rr, y:cy+Math.sin(a)*rr }); } };
+      ring(6, d*1.28, -Math.PI/2); ring(8, d*2.5, -Math.PI/2);
+      return s;
+    }
+    if(formation==='random'){                                     // ✦ 겹치지 않게 흩뿌리기
+      const s=[], y0=topY, y1=topY+(BT-T)*0.30; let guard=0;
+      while(s.length<15 && guard++<5000){
+        const x = L+R+2 + Math.random()*(RT-L-2*R-4), y = y0 + Math.random()*(y1-y0);
+        if(s.every(p => Math.hypot(p.x-x, p.y-y) >= 2*R+1.5)) s.push({ x, y });
+      }
+      return s;
+    }
+    return put([1,2,3,4,5]);                                      // ▲ 삼각형(기본) 15
+  }
+  // ── 초기 배치: 8번은 무게중심(가운데), 나머지는 색공7·줄공7을 무작위로 ──
   function rack(){
-    const d = 2*R + 0.7, rowY = d * 0.866;
-    const top = T + (BT-T)*0.24, cx = W/2;
-    const counts = [1,2,3,2,1], slots = [];
-    counts.forEach((c,i)=>{ for(let k=0;k<c;k++) slots.push({ x: cx + (k-(c-1)/2)*d, y: top + i*rowY }); });
+    const slots = makeSlots(FORMATION);
+    const mx = slots.reduce((a,p)=>a+p.x,0)/slots.length, my = slots.reduce((a,p)=>a+p.y,0)/slots.length;
+    let ei=0, ed=Infinity;
+    slots.forEach((p,i)=>{ const dd=Math.hypot(p.x-mx, p.y-my); if(dd<ed){ ed=dd; ei=i; } });   // 중심에 가장 가까운 슬롯 = 8번
     const rest = shuffle(SOLIDS.map(s=>({...s,type:'solid'})).concat(STRIPES.map(s=>({...s,type:'stripe'}))));
     const balls = [{ x:CUE_SPOT.x, y:CUE_SPOT.y, vx:0, vy:0, n:0, c:'#f8fafc', type:'cue', in:false }];
     let ri = 0;
     slots.forEach((p,i)=>{
-      const spec = (i===4) ? { n:8, c:'#18181b', type:'eight' } : rest[ri++];
-      balls.push({ x: p.x + (Math.random()-0.5)*0.6, y: p.y + (Math.random()-0.5)*0.6,
+      const spec = (i===ei) ? { n:8, c:'#18181b', type:'eight' } : rest[ri++];
+      balls.push({ x: p.x + (Math.random()-0.5)*0.5, y: p.y + (Math.random()-0.5)*0.5,
                    vx:0, vy:0, n:spec.n, c:spec.c, type:spec.type, in:false });
     });
     G.balls = balls;
@@ -3447,7 +3493,7 @@ function runPocket(el, cfg){
     $left.textContent = ballsLeft();
     setPhase('aim', msg);
   }
-  // ── 2인 대결: 넣으면 계속·못 넣으면 차례 넘김. 스크래치는 흰공 복귀 + 차례 넘김. 넣은 공만큼 득점(공 9개 = 무승부 없음) ──
+  // ── 2인 대결: 넣으면 계속·못 넣으면 차례 넘김. 스크래치는 흰공 복귀 + 차례 넘김. 넣은 공만큼 득점(공 15개=홀수 → 무승부 없음) ──
   function resolveTwo(e){
     const potted = e.potted.length + (e.eightIn ? 1 : 0);
     if(potted > 0) G.score[G.turn] += potted;
@@ -3508,12 +3554,12 @@ function runPocket(el, cfg){
   const hudHtml = two
     ? `<div class="pk-hud pk-hud-two t0" id="pkHud">
         <span class="pk-p pk-p0"><b>1P</b> <b id="pkS0">0</b></span>
-        <span>남은 <b id="pkLeft">9</b></span>
+        <span>남은 <b id="pkLeft">15</b></span>
         <span class="pk-p pk-p1"><b>2P</b> <b id="pkS1">0</b></span>
       </div>`
     : `<div class="pk-hud">
         <span>샷 <b id="pkShots">0</b></span>
-        <span>남은 공 <b id="pkLeft">9</b></span>
+        <span>남은 공 <b id="pkLeft">15</b></span>
         <span>최소 <b id="pkBest">${pbest != null ? pbest + '타' : '-'}</b></span>
       </div>`;
   el.innerHTML = `<div class="mg pocket">
