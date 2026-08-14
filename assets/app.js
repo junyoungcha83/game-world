@@ -1718,7 +1718,7 @@ function runTetris(el, cfg) {
       <span>점수 <b id="tScore">0</b></span>
       <span>라인 <b id="tLines">0</b></span>
       ${midHud}
-      <span class="tet-next">다음 <canvas id="tNext" width="40" height="40"></canvas></span>
+      <span class="tet-next">다음 <canvas id="tNext" width="40" height="22"></canvas></span>
     </div>
     <div class="tet-stagewrap">
       <div class="tet-stage">
@@ -1818,7 +1818,10 @@ function runTetris(el, cfg) {
   }
   function drawNext() {
     nctx.clearRect(0, 0, ncv.width, ncv.height);
-    const s = SHAPES[nextKey], u = 9, ox = (ncv.width - s[0].length * u) / 2, oy = (ncv.height - s.length * u) / 2;
+    // 캔버스가 HUD 한 줄 높이(납작)라 칸 크기를 폭·높이 양쪽에 맞춰 잡는다
+    const s = SHAPES[nextKey];
+    const u = Math.min(9, Math.floor(ncv.width / s[0].length), Math.floor(ncv.height / s.length));
+    const ox = (ncv.width - s[0].length * u) / 2, oy = (ncv.height - s.length * u) / 2;
     nctx.fillStyle = COLORS[nextKey];
     for (let r = 0; r < s.length; r++) for (let c = 0; c < s[r].length; c++) if (s[r][c]) nctx.fillRect(ox + c * u + 1, oy + r * u + 1, u - 2, u - 2);
   }

@@ -131,35 +131,38 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 
 /* 테트리스 */
 /* 패널 높이를 화면에 맞춰 고정하고(헤더·탭바·게임바 제외) 게임판이 남는 높이를 흡수하게 한다.
-   → 조작부가 1행에서 3행(십자)으로 커져도 버튼이 탭바 아래로 잘리지 않는다. */
+   → 조작부가 커져도 버튼이 탭바 아래로 잘리지 않는다. */
 .mg.tetris { gap: 8px; width: 100%; padding: 10px 8px;
   height: calc(100vh - var(--header-h) - var(--tab-h) - 62px); }
 @supports (height: 1dvh) { .mg.tetris { height: calc(100dvh - var(--header-h) - var(--tab-h) - 62px); } }
-.tet-hud { display: flex; align-items: center; gap: 12px; width: min(96vw, 400px); font-size: .95rem; color: var(--muted); flex-wrap: wrap; }
+/* HUD 는 항상 한 줄(nowrap). 줄바꿈되면 그만큼 게임판 높이를 뺏기므로 접지 않는다.
+   '다음' 미리보기 칸도 글자 줄높이에 맞춘 납작한 캔버스(40×22)라 이 줄을 넘기지 않는다. */
+.tet-hud { display: flex; align-items: center; gap: 10px; width: min(96vw, 400px); font-size: .92rem; color: var(--muted);
+  flex-wrap: nowrap; white-space: nowrap; }
 .tet-hud b { color: var(--primary2); font-variant-numeric: tabular-nums; }
 .tet-next { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-.tet-next canvas { background: #0b1220; border-radius: 6px; }
+.tet-next canvas { background: #0b1220; border-radius: 5px; display: block; }
 /* 게임판은 HUD·조작부·안내문을 뺀 나머지 높이를 전부 차지한다(flex: 1).
    캔버스가 height 기준으로 그려지고 폭이 비율(1:2)로 따라오므로 화면이 짧아도 넘치지 않는다. */
-.tet-stage { position: relative; flex: 1 1 auto; min-height: 0; width: auto; max-width: min(86vw, 320px); }
+.tet-stage { position: relative; flex: 1 1 auto; min-height: 0; width: auto; max-width: min(92vw, 380px); }
 .tet-stage #tCv { height: 100%; width: auto; max-width: 100%; display: block; border-radius: 10px; background: #0b1220; touch-action: none; image-rendering: pixelated; }
 .tet-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   background: rgba(2,6,23,.78); color: #fff; border-radius: 10px; font-size: 1.3rem; font-weight: 800; text-align: center; }
 .tet-msg b { font-size: 1.7rem; color: #38bdf8; }
 .tet-msg.hidden { display: none; }
-/* 십자(D-패드) 배치 — 방향키(⟳·◀▶·▼)는 왼쪽 3열, 액션(⏸·⤓)은 오른쪽 4열.
-   방향키 열(1~3)은 넓게(1fr) 두어 크게, 액션 열(4)은 좁게(0.82fr).
-   빨리 내리기(⤓)는 오른쪽 화살표에서 떨어지도록 오른쪽 '아래' 구석(3행 4열)에 둔다(오조작 방지).
+/* 'ㅜ' 배치 — 윗줄에 ◀ ⟳ ▶(모양바꾸기가 좌·우 사이), 그 아래 가운데에 ▼.
+   3행(십자)에서 2행으로 줄어든 만큼이 그대로 게임판 높이로 간다(= 게임 화면이 커진다).
+   4열은 빈 여백(0.3fr)이라 방향키와 액션(⏸·⤓)이 붙지 않는다 → 오조작 방지.
    폭에 dvh 를 섞어 화면이 짧을 때 버튼도 같이 줄어들게 → 게임판과 함께 항상 화면 안에. */
-.tet-ctrl { display: grid; grid-template-columns: 1fr 1fr 1fr 0.82fr; gap: 9px; flex: 0 0 auto; width: min(96vw, 360px); }
-@supports (width: 1dvh) { .tet-ctrl { width: min(96vw, 360px, 32.5dvh); } }
+.tet-ctrl { display: grid; grid-template-columns: 1fr 1fr 1fr 0.3fr 0.85fr; gap: 9px; flex: 0 0 auto; width: min(96vw, 372px); }
+@supports (width: 1dvh) { .tet-ctrl { width: min(96vw, 372px, 42dvh); } }
 .tet-ctrl .btn { aspect-ratio: 1; padding: 0; font-size: 1.85rem; border-radius: 14px; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+.tet-left { grid-area: 1 / 1; }
 .tet-up { grid-area: 1 / 2; }
-.tet-pause { grid-area: 1 / 4; font-size: 1.3rem !important; }
-.tet-left { grid-area: 2 / 1; }
-.tet-right { grid-area: 2 / 3; }
-.tet-drop { grid-area: 3 / 4; }
-.tet-down { grid-area: 3 / 2; }
+.tet-right { grid-area: 1 / 3; }
+.tet-pause { grid-area: 1 / 5; font-size: 1.3rem !important; }
+.tet-down { grid-area: 2 / 2; }
+.tet-drop { grid-area: 2 / 5; }
 .tet-tip { font-size: .76rem; color: var(--muted); text-align: center; max-width: min(96vw, 440px); flex: 0 0 auto; }
 /* 화면이 짧으면 안내문을 숨겨 그만큼 게임판에 준다(버튼 아이콘만으로도 조작을 알 수 있음). */
 @media (max-height: 700px) { .tet-tip { display: none; } }
