@@ -5,7 +5,7 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b101';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+const BUILD = 'b102';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -1601,23 +1601,132 @@ function startRoulette(el) {
 
 // ── 미니게임: 테트리스 (보드) ─────────────────────────
 // 10x20 보드, 7종 블록(7-bag), 이동/회전(월킥)/소프트·하드드롭, 라인클리어·점수·레벨. 최고 점수 기록.
+// 온라인 배틀: 방 통신(Worker+KV 폴링). 공정성 위해 시드 PRNG로 양쪽 블록 순서를 동일하게.
+const tetSleep = ms => new Promise(r => setTimeout(r, ms));
+function tetGenCode() { const s = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 4; i++) c += s[Math.floor(Math.random() * s.length)]; return c; }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function roomPutMeta(code, meta) { return fetch(`${API_BASE}/api/room/${code}/meta`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(meta) }); }
+async function roomGetMeta(code) { const r = await fetch(`${API_BASE}/api/room/${code}/meta`, { cache: 'no-store' }); if (r.status === 404) return null; if (!r.ok) throw new Error('net'); return r.json(); }
+function roomPut(code, slot, data) { return fetch(`${API_BASE}/api/room/${code}/${slot}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).catch(() => {}); }
+async function roomGet(code) { try { const r = await fetch(`${API_BASE}/api/room/${code}`, { cache: 'no-store' }); if (r.ok) return r.json(); } catch (_) {} return null; }
+const myTetName = () => { const u = getCurrentUser(); return (u && u.name) || '나'; };
+
 function startTetris(el) {
+  const back = document.getElementById('gameBack'); if (back) back.onclick = () => showView('hub');
+  el.innerHTML = `<div class="mg jg-pick">
+    <div class="mg-msg">테트리스 🟦</div>
+    <div class="omok-levels">
+      <button data-m="solo">혼자 하기<small>최고 점수 도전 · 기록 저장</small></button>
+      <button data-m="create">배틀 · 방 만들기<small>다른 폰과 대결 · 코드 공유</small></button>
+      <button data-m="join">배틀 · 참가하기<small>받은 방 코드로 입장</small></button>
+    </div>
+  </div>`;
+  el.querySelector('[data-m="solo"]').onclick = () => runTetris(el, { online: false });
+  el.querySelector('[data-m="create"]').onclick = () => tetPickMode(el);
+  el.querySelector('[data-m="join"]').onclick = () => tetJoin(el);
+}
+function tetPickMode(el) {
+  el.innerHTML = `<div class="mg jg-pick">
+    <div class="mg-msg">배틀 방식을 골라요</div>
+    <div class="omok-levels">
+      <button data-b="attack">⚔️ 라인 공격전<small>2줄 이상 지우면 상대에게 방해줄 · 먼저 무너지면 패</small></button>
+      <button data-b="race">🏁 점수 레이스<small>같은 블록으로 2분간 · 점수 높은 사람 승</small></button>
+    </div>
+    <button class="btn ghost" id="tBack">◀ 뒤로</button>
+  </div>`;
+  el.querySelectorAll('[data-b]').forEach(b => b.onclick = () => tetHost(el, b.dataset.b));
+  el.querySelector('#tBack').onclick = () => startTetris(el);
+}
+async function tetHost(el, mode) {
+  const code = tetGenCode(), seed = (Math.random() * 4294967296) >>> 0, name = myTetName();
+  el.innerHTML = `<div class="mg jg-pick tet-lobby"><div class="mg-msg">방 만드는 중…</div></div>`;
+  try {
+    const r = await roomPutMeta(code, { mode, seed, host: name, at: Date.now() });
+    if (!r.ok) throw new Error('net');
+    await roomPut(code, 'a', { name, alive: true, lines: 0, score: 0, garbage: 0, ended: false, at: Date.now() });
+  } catch (_) {
+    el.innerHTML = `<div class="mg jg-pick tet-lobby"><div class="mg-msg">연결 실패 😥<br><small>인터넷을 확인하고 다시 시도해 주세요</small></div><button class="btn ghost" id="tBack">◀ 뒤로</button></div>`;
+    el.querySelector('#tBack').onclick = () => startTetris(el); return;
+  }
+  el.innerHTML = `<div class="mg jg-pick tet-lobby">
+    <div class="mg-msg">방이 열렸어요</div>
+    <div class="tet-code">${code}</div>
+    <p class="tet-lobtip">상대에게 이 <b>코드</b>를 알려주세요<br><span class="tet-modechip">${mode === 'attack' ? '⚔️ 라인 공격전' : '🏁 점수 레이스'}</span></p>
+    <div class="tet-wait">상대를 기다리는 중…</div>
+    <button class="btn ghost" id="tCancel">취소</button>
+  </div>`;
+  let stop = false;
+  el.querySelector('#tCancel').onclick = () => { stop = true; startTetris(el); };
+  (async function wait() {
+    while (!stop && el.querySelector('.tet-lobby')) {
+      const room = await roomGet(code);
+      if (room && room.b && room.b.name) { runTetris(el, { online: true, code, slot: 'a', mode, seed, myName: name, oppName: room.b.name }); return; }
+      await tetSleep(700);
+    }
+  })();
+}
+function tetJoin(el) {
+  el.innerHTML = `<div class="mg jg-pick">
+    <div class="mg-msg">방 코드를 입력하세요</div>
+    <input id="tCodeIn" class="tet-codein" maxlength="4" autocapitalize="characters" placeholder="ABCD" />
+    <div id="tJoinMsg" class="tet-lobtip"></div>
+    <div class="tet-joinbtns">
+      <button class="btn primary" id="tJoinGo">참가</button>
+      <button class="btn ghost" id="tBack">◀ 뒤로</button>
+    </div>
+  </div>`;
+  const inp = el.querySelector('#tCodeIn');
+  inp.oninput = () => { inp.value = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4); };
+  el.querySelector('#tBack').onclick = () => startTetris(el);
+  el.querySelector('#tJoinGo').onclick = async () => {
+    const code = inp.value.trim(), msg = el.querySelector('#tJoinMsg');
+    if (code.length < 3) { msg.textContent = '코드를 정확히 입력해 주세요'; return; }
+    msg.textContent = '방을 찾는 중…';
+    let meta; try { meta = await roomGetMeta(code); } catch (_) { msg.textContent = '연결 실패 — 다시 시도해 주세요'; return; }
+    if (!meta) { msg.textContent = '그런 방이 없어요. 코드를 확인해 주세요'; return; }
+    const name = myTetName();
+    await roomPut(code, 'b', { name, alive: true, lines: 0, score: 0, garbage: 0, ended: false, at: Date.now() });
+    runTetris(el, { online: true, code, slot: 'b', mode: meta.mode, seed: meta.seed, myName: name, oppName: meta.host || '상대' });
+  };
+}
+
+// 솔로/배틀 공용 엔진 — cfg.online 이면 상대 패널·방해줄·타이머가 붙는다
+function runTetris(el, cfg) {
+  const online = !!cfg.online, race = online && cfg.mode === 'race', attack = online && cfg.mode === 'attack';
+  const RACE_SECONDS = 120;
   const COLS = 10, ROWS = 20, CELL = 30;
   const COLORS = { I: '#22d3ee', O: '#facc15', T: '#a78bfa', S: '#34d399', Z: '#f87171', J: '#60a5fa', L: '#fb923c' };
   const SHAPES = { I: [[1, 1, 1, 1]], O: [[1, 1], [1, 1]], T: [[0, 1, 0], [1, 1, 1]], S: [[0, 1, 1], [1, 1, 0]], Z: [[1, 1, 0], [0, 1, 1]], J: [[1, 0, 0], [1, 1, 1]], L: [[0, 0, 1], [1, 1, 1]] };
   const KEYS = Object.keys(SHAPES);
   const LINE_SCORE = [0, 100, 300, 500, 800];
+  const ATTACK = [0, 0, 1, 2, 4];        // 지운 줄 수 → 상대에게 보내는 방해줄 수
+  const GARB = '#64748b';                // 방해줄 색
+  const rnd = online ? mulberry32(cfg.seed >>> 0) : Math.random;   // 배틀은 시드 공유(같은 순서)
 
-  el.innerHTML = `<div class="mg tetris">
+  const oppPanel = online ? `<div class="tet-opp">
+        <div class="tet-opp-h"><b id="tOppName">${escapeHtml(cfg.oppName || '상대')}</b><span id="tOppInfo"></span></div>
+        <canvas id="tOppCv" width="${COLS * 6}" height="${ROWS * 6}"></canvas>
+        <div class="tet-incoming hidden" id="tIncoming"></div>
+      </div>` : '';
+  const midHud = race ? '<span>남은 <b id="tTimer">2:00</b></span>' : '<span>레벨 <b id="tLevel">1</b></span>';
+  const tip = online
+    ? (attack ? '2줄 이상 지우면 상대에게 방해줄! 먼저 무너지면 패' : '2분 동안 더 높은 점수를 내면 승!')
+    : '⟳ 모양바꾸기 · ◀▶ 이동 · ▼ 천천히 내리기 · ⤓ 빨리 내리기 · ⏸ 일시멈춤 (키보드 ↑←→↓·Space·P)';
+
+  el.innerHTML = `<div class="mg tetris ${online ? 'tet-online' : ''}">
     <div class="tet-hud">
       <span>점수 <b id="tScore">0</b></span>
       <span>라인 <b id="tLines">0</b></span>
-      <span>레벨 <b id="tLevel">1</b></span>
+      ${midHud}
       <span class="tet-next">다음 <canvas id="tNext" width="40" height="40"></canvas></span>
     </div>
-    <div class="tet-stage">
-      <canvas id="tCv" width="${COLS * CELL}" height="${ROWS * CELL}"></canvas>
-      <div class="tet-msg hidden" id="tMsg"></div>
+    <div class="tet-stagewrap">
+      <div class="tet-stage">
+        <canvas id="tCv" width="${COLS * CELL}" height="${ROWS * CELL}"></canvas>
+        <div class="tet-msg hidden" id="tMsg"></div>
+        <div class="tet-count hidden" id="tCount"></div>
+      </div>
+      ${oppPanel}
     </div>
     <div class="tet-ctrl">
       <button class="btn tet-up" id="tRot">⟳</button>
@@ -1627,18 +1736,22 @@ function startTetris(el) {
       <button class="btn tet-drop" id="tDrop">⤓</button>
       <button class="btn tet-down" id="tDown">▼</button>
     </div>
-    <div class="tet-tip">⟳ 모양바꾸기 · ◀▶ 이동 · ▼ 천천히 내리기 · ⤓ 빨리 내리기 · ⏸ 일시멈춤 (키보드 ↑←→↓·Space·P)</div>
+    <div class="tet-tip">${tip}</div>
   </div>`;
 
   const cv = el.querySelector('#tCv'), ctx = cv.getContext('2d');
   const ncv = el.querySelector('#tNext'), nctx = ncv.getContext('2d');
   const $score = el.querySelector('#tScore'), $lines = el.querySelector('#tLines'), $level = el.querySelector('#tLevel'), $msg = el.querySelector('#tMsg');
-  const $pause = el.querySelector('#tPause');
+  const $pause = el.querySelector('#tPause'), $timer = el.querySelector('#tTimer'), $count = el.querySelector('#tCount');
+  const oppCv = el.querySelector('#tOppCv'), octx = oppCv ? oppCv.getContext('2d') : null;
+  const $oppInfo = el.querySelector('#tOppInfo'), $incoming = el.querySelector('#tIncoming');
   const alive = () => !!el.querySelector('.tetris');
 
   let grid, cur, bag, nextKey, score, lines, level, over, paused, dropAcc, lastT;
+  let started = !online, ended = false, toppedOut = false, battleDone = false;
+  let garbageSent = 0, appliedGarbage = 0, pendingGarbage = 0, raceEnd = 0, netIv = null, pushBusy = false;
 
-  function refillBag() { const b = KEYS.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } bag.push(...b); }
+  function refillBag() { const b = KEYS.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } bag.push(...b); }
   function fromBag() { if (bag.length < 1) refillBag(); return bag.shift(); }
   function collide(shape, x, y) {
     for (let r = 0; r < shape.length; r++) for (let c = 0; c < shape[r].length; c++) {
@@ -1662,13 +1775,31 @@ function startTetris(el) {
     let n = 0;
     for (let r = ROWS - 1; r >= 0; r--) { if (grid[r].every(c => c)) { grid.splice(r, 1); grid.unshift(Array(COLS).fill(0)); n++; r++; } }
     if (n) { lines += n; score += LINE_SCORE[n] * level; level = Math.min(10, Math.floor(lines / 10) + 1); updateHud(); }
+    return n;
   }
-  function lock() { merge(); clearLines(); if (!over) spawn(); }
-  function move(dx) { if (over || paused) return; if (!collide(cur.shape, cur.x + dx, cur.y)) { cur.x += dx; draw(); } }
+  function addGarbage(nRows) {   // 바닥에서 방해줄을 밀어올린다. 천장을 넘기면 true(=게임오버)
+    for (let k = 0; k < nRows; k++) {
+      if (grid[0].some(c => c)) return true;
+      grid.shift();
+      const hole = Math.floor(Math.random() * COLS), row = Array(COLS).fill(GARB); row[hole] = 0;
+      grid.push(row);
+    }
+    return false;
+  }
+  function lock() {
+    merge(); const cleared = clearLines();
+    if (attack) {
+      if (cleared >= 1) garbageSent += ATTACK[cleared];
+      if (pendingGarbage > 0) { const n = pendingGarbage; pendingGarbage = 0; updateIncoming(); if (addGarbage(n)) { gameOver(); return; } }
+      if (cleared >= 2) pushNow();   // 공격은 곧바로 상대에게 반영
+    }
+    if (!over) spawn();
+  }
+  function move(dx) { if (over || paused || !started) return; if (!collide(cur.shape, cur.x + dx, cur.y)) { cur.x += dx; draw(); } }
   function gravity() { if (!collide(cur.shape, cur.x, cur.y + 1)) cur.y++; else lock(); }
-  function softDrop() { if (over || paused) return; if (!collide(cur.shape, cur.x, cur.y + 1)) { cur.y++; score += 1; updateHud(); } else lock(); draw(); }
-  function hardDrop() { if (over || paused) return; let d = 0; while (!collide(cur.shape, cur.x, cur.y + 1)) { cur.y++; d++; } score += d * 2; updateHud(); lock(); draw(); }
-  function rotate() { if (over || paused) return; const nr = rotateCW(cur.shape); for (const off of [0, -1, 1, -2, 2]) { if (!collide(nr, cur.x + off, cur.y)) { cur.shape = nr; cur.x += off; draw(); return; } } }
+  function softDrop() { if (over || paused || !started) return; if (!collide(cur.shape, cur.x, cur.y + 1)) { cur.y++; score += 1; updateHud(); } else lock(); draw(); }
+  function hardDrop() { if (over || paused || !started) return; let d = 0; while (!collide(cur.shape, cur.x, cur.y + 1)) { cur.y++; d++; } score += d * 2; updateHud(); lock(); draw(); }
+  function rotate() { if (over || paused || !started) return; const nr = rotateCW(cur.shape); for (const off of [0, -1, 1, -2, 2]) { if (!collide(nr, cur.x + off, cur.y)) { cur.shape = nr; cur.x += off; draw(); return; } } }
   function ghostY() { let y = cur.y; while (!collide(cur.shape, cur.x, y + 1)) y++; return y; }
 
   function cell(g, x, y, color) { g.fillStyle = color; g.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2); g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, 4); }
@@ -1691,18 +1822,75 @@ function startTetris(el) {
     nctx.fillStyle = COLORS[nextKey];
     for (let r = 0; r < s.length; r++) for (let c = 0; c < s[r].length; c++) if (s[r][c]) nctx.fillRect(ox + c * u + 1, oy + r * u + 1, u - 2, u - 2);
   }
-  function updateHud() { $score.textContent = score.toLocaleString('ko-KR'); $lines.textContent = lines; $level.textContent = level; }
+  function updateHud() { $score.textContent = score.toLocaleString('ko-KR'); $lines.textContent = lines; if ($level) $level.textContent = level; }
   function dropInterval() { return Math.max(120, 800 - (level - 1) * 70); }
+  // ── 온라인: 내 보드 인코딩 / 상대 그리기 / 상태 교환 ──
+  function boardStr() {
+    const g = grid.map(r => r.slice());
+    if (cur && !over) for (let r = 0; r < cur.shape.length; r++) for (let c = 0; c < cur.shape[r].length; c++) {
+      if (cur.shape[r][c]) { const y = cur.y + r, x = cur.x + c; if (y >= 0 && y < ROWS && x >= 0 && x < COLS) g[y][x] = cur.color; }
+    }
+    let s = ''; for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) s += g[r][c] ? '1' : '0';
+    return s;
+  }
+  function updateIncoming() { if (!$incoming) return; if (pendingGarbage > 0) { $incoming.textContent = `⚠ 방해줄 +${pendingGarbage}`; $incoming.classList.remove('hidden'); } else $incoming.classList.add('hidden'); }
+  function renderOpp(o) {
+    if (!octx) return;
+    octx.fillStyle = '#0b1220'; octx.fillRect(0, 0, oppCv.width, oppCv.height);
+    const b = o.board || '', u = 6, ko = o.alive === false;
+    for (let i = 0; i < b.length && i < ROWS * COLS; i++) { if (b[i] === '1') { octx.fillStyle = ko ? '#475569' : '#38bdf8'; octx.fillRect((i % COLS) * u, ((i / COLS) | 0) * u, u - 1, u - 1); } }
+    if ($oppInfo) $oppInfo.textContent = ko ? ' KO' : (race ? ` ${(o.score || 0).toLocaleString('ko-KR')}점` : ` ${o.lines || 0}줄`);
+  }
+  function myPayload() { return { name: cfg.myName, alive: !toppedOut, lines, score, level, board: boardStr(), garbage: garbageSent, ended, at: Date.now() }; }
+  function pushNow() { if (online) roomPut(cfg.code, cfg.slot, myPayload()); }
+  async function netTick() {
+    if (!online || battleDone || !alive()) return;
+    if (!pushBusy) { pushBusy = true; try { await roomPut(cfg.code, cfg.slot, myPayload()); } finally { pushBusy = false; } }
+    const room = await roomGet(cfg.code); if (!room) return;
+    const o = cfg.slot === 'a' ? room.b : room.a; if (!o) return;
+    renderOpp(o);
+    const stale = Date.now() - (o.at || 0) > 12000;
+    if (attack) {
+      if (typeof o.garbage === 'number' && o.garbage > appliedGarbage) { pendingGarbage += (o.garbage - appliedGarbage); appliedGarbage = o.garbage; updateIncoming(); }
+      if (!over) { if (o.ended && o.alive === false) return finishAttack('win', '상대가 먼저 무너졌어요! 🎉'); if (stale) return finishAttack('win', '상대 연결이 끊겼어요'); }
+    } else if (race) {
+      if (over && (o.ended || stale)) return settleRace(o);
+    }
+  }
+  function stopNet() { if (netIv) { clearInterval(netIv); netIv = null; } }
+  function showResult(title, sub) {
+    $msg.innerHTML = `${title}<br><span class="tet-sub">${sub}</span><br><button class="btn" id="tAgain">처음으로</button>`;
+    $msg.classList.remove('hidden');
+    const a = el.querySelector('#tAgain'); if (a) a.onclick = () => startTetris(el);
+  }
+  function finishAttack(result, why) {
+    if (battleDone) return; battleDone = true; over = true; ended = true; stopNet(); pushNow();
+    recordStat('tetris', { best: score, result: result === 'win' ? 'win' : undefined });
+    showResult(result === 'win' ? '🎉 승리!' : '패배', `${why}<br><small>내 ${lines}줄 · ${score.toLocaleString('ko-KR')}점</small>`);
+  }
+  function finishRace() {
+    if (ended) return; ended = true; over = true; pushNow();
+    $msg.innerHTML = `시간 종료 ⏱<br><b>${score.toLocaleString('ko-KR')}점 · ${lines}줄</b><br><span class="tet-waitres">상대 결과 기다리는 중…</span>`;
+    $msg.classList.remove('hidden');
+  }
+  function settleRace(o) {
+    if (battleDone) return; battleDone = true; stopNet();
+    const mine = score, theirs = o.score || 0, draw = mine === theirs, win = mine > theirs;
+    recordStat('tetris', { best: score, result: win ? 'win' : undefined });
+    showResult(draw ? '무승부' : (win ? '🎉 승리!' : '패배'), `나 ${mine.toLocaleString('ko-KR')}점 · 상대 ${theirs.toLocaleString('ko-KR')}점`);
+  }
   function gameOver() {
-    over = true; paused = false; syncPauseBtn();
-    recordStat('tetris', { best: score, result: score > 0 ? 'win' : undefined });
+    over = true; toppedOut = true; paused = false; syncPauseBtn();
+    if (race) return finishRace();
+    if (attack) { pushNow(); return finishAttack('lose', '꼭대기까지 쌓였어요 😥'); }
+    ended = true; recordStat('tetris', { best: score, result: score > 0 ? 'win' : undefined });
     $msg.innerHTML = `게임 오버<br><b>${score.toLocaleString('ko-KR')}점</b><br><button class="btn" id="tAgain">다시하기</button>`;
     $msg.classList.remove('hidden');
     const a = el.querySelector('#tAgain'); if (a) a.onclick = reset;
   }
   function syncPauseBtn() { $pause.textContent = paused ? '▶' : '⏸'; $pause.setAttribute('aria-label', paused ? '계속하기' : '일시멈춤'); }
   function setPaused(p) {
-    if (over || paused === p) return;
+    if (over || paused === p || online) return;   // 배틀은 일시정지 없음(상대는 계속 진행)
     paused = p; syncPauseBtn();
     if (paused) {
       $msg.innerHTML = `일시정지<br><button class="btn" id="tResume">계속하기</button>`;
@@ -1715,12 +1903,16 @@ function startTetris(el) {
   function reset() {
     grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
     bag = []; nextKey = fromBag(); score = 0; lines = 0; level = 1; over = false; paused = false; dropAcc = 0; lastT = 0;
+    ended = false; toppedOut = false;
     $msg.classList.add('hidden'); syncPauseBtn(); updateHud(); spawn(); draw();
   }
 
+  function fmtClock(ms) { const s = Math.ceil(ms / 1000); return `${(s / 60) | 0}:${String(s % 60).padStart(2, '0')}`; }
+  function cleanup() { window.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onHide); stopNet(); }
   function loop(t) {
-    if (!alive()) { window.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onHide); return; }
-    if (!over && !paused) {
+    if (!alive()) { cleanup(); return; }
+    if (race && started && !ended) { const rem = Math.max(0, raceEnd - performance.now()); if ($timer) $timer.textContent = fmtClock(rem); if (rem <= 0) finishRace(); }
+    if (!over && !paused && started) {
       if (!lastT) lastT = t;
       dropAcc += Math.min(t - lastT, 100); lastT = t;
       const iv = dropInterval();
@@ -1744,11 +1936,25 @@ function startTetris(el) {
     else if (e.code === 'KeyP' || e.key === 'Escape') { e.preventDefault(); if (!e.repeat) setPaused(!paused); }
   }
   // 다른 탭·앱으로 전환하면 자동으로 일시정지
-  function onHide() { if (document.hidden) setPaused(true); }
+  function onHide() { if (document.hidden && !online) setPaused(true); }
   window.addEventListener('keydown', onKey);
   document.addEventListener('visibilitychange', onHide);
 
+  // 배틀은 3·2·1 카운트다운 뒤 동시에 시작(초기 지연을 가림), 그때부터 상태 교환
+  function startBattle() {
+    if ($pause) $pause.classList.add('hidden');
+    let n = 3; $count.classList.remove('hidden'); $count.textContent = n;
+    const iv = setInterval(() => {
+      if (!alive()) { clearInterval(iv); return; }
+      n--;
+      if (n > 0) $count.textContent = n;
+      else if (n === 0) $count.textContent = '시작!';
+      else { clearInterval(iv); $count.classList.add('hidden'); started = true; lastT = 0; raceEnd = performance.now() + RACE_SECONDS * 1000; netIv = setInterval(netTick, 500); netTick(); }
+    }, 800);
+  }
+
   reset();
+  if (online) startBattle();
   requestAnimationFrame(loop);
 }
 

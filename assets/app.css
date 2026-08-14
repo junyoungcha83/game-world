@@ -163,6 +163,33 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 /* 화면이 짧으면 안내문을 숨겨 그만큼 게임판에 준다(버튼 아이콘만으로도 조작을 알 수 있음). */
 @media (max-height: 700px) { .tet-tip { display: none; } }
 
+/* ── 테트리스 온라인 배틀 ── */
+.tet-stagewrap { flex: 1 1 auto; min-height: 0; width: 100%; display: flex; gap: 10px; align-items: stretch; justify-content: center; }
+.tet-online .tet-stage { max-width: min(58vw, 210px); }
+.tet-online .tet-hud { width: min(96vw, 400px); }
+.tet-count { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 3rem; font-weight: 900; color: #fff; background: rgba(2,6,23,.45); border-radius: 10px; text-shadow: 0 2px 14px rgba(0,0,0,.6); }
+.tet-count.hidden { display: none; }
+.tet-opp { flex: 0 0 auto; align-self: center; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.tet-opp-h { font-size: .72rem; color: var(--muted); display: flex; gap: 4px; align-items: baseline; max-width: 76px; }
+.tet-opp-h b { color: #38bdf8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 48px; }
+.tet-opp canvas { background: #0b1220; border-radius: 6px; border: 1px solid #1e293b; image-rendering: pixelated; }
+.tet-incoming { font-size: .68rem; font-weight: 800; color: #fca5a5; text-align: center; min-height: 1.1em; }
+.tet-incoming.hidden { visibility: hidden; }
+.tet-sub { font-size: 1rem; font-weight: 600; color: #cbd5e1; }
+.tet-waitres { font-size: .9rem; font-weight: 600; color: var(--muted); }
+
+/* ── 테트리스 배틀 로비 ── */
+.tet-lobby { gap: 14px; }
+.tet-code { font-size: 2.6rem; font-weight: 900; letter-spacing: .34em; color: #38bdf8;
+  background: #0b1220; padding: 10px 16px 10px 28px; border-radius: 14px; border: 1px solid #1e293b; }
+.tet-lobtip { text-align: center; color: var(--muted); font-size: .9rem; line-height: 1.7; }
+.tet-modechip { display: inline-block; margin-top: 4px; font-weight: 700; color: #e2e8f0; }
+.tet-wait { color: var(--muted); font-size: .95rem; }
+.tet-codein { width: min(70vw, 220px); text-align: center; font-size: 1.8rem; font-weight: 800;
+  letter-spacing: .3em; text-transform: uppercase; padding: 10px; border-radius: 12px; border: 1px solid #334155; background: #0b1220; color: #e2e8f0; }
+.tet-joinbtns { display: flex; gap: 10px; }
+
 .rps-choices { display: flex; gap: 14px; }
 .rps-choices button { width: 76px; height: 76px; font-size: 2.2rem; border-radius: 18px;
   border: 1px solid var(--border); background: var(--bg2); cursor: pointer; }
