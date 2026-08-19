@@ -462,6 +462,21 @@ const HUB_CATEGORIES = [
   { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess'] },
   { label: '🧠 퀴즈',  bgm: 'bright', ids: ['flags', 'capital', 'mapq'] },
 ];
+// ── 메인화면 새로고침 ─────────────────────────────────
+// 이 앱은 '새로고침할 때만' 새 버전을 적용한다(게임 중에 판이 리셋되지 않도록).
+// 설치형 PWA 에는 주소창도 당겨서-새로고침도 마땅치 않아서 버튼을 따로 둔다.
+// 새 sw.js 를 먼저 내려받아 두면 이어지는 reload 에서 곧바로 새 버전이 적용된다.
+async function hubRefresh() {
+  const b = document.getElementById('hubRefresh');
+  if (b) { if (b.disabled) return; b.disabled = true; b.classList.add('spinning'); }
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    // update() 가 응답 없이 늘어질 수 있다 — 버튼이 계속 도는 채로 멈추지 않게 시간을 끊는다
+    if (reg) await Promise.race([reg.update(), new Promise(r => setTimeout(r, 2500))]);
+  } catch {}
+  location.reload();
+}
+
 function renderHub() {
   const hub = document.getElementById('hub');
   const u = getCurrentUser();
@@ -470,6 +485,7 @@ function renderHub() {
     <div class="hub-header">
       <button class="hub-avatar" id="hubAvatar">${avatarInner(u)}</button>
       <div class="hub-greet">${u ? escapeHtml(u.name) + ' 님, 즐겜!' : '게임을 골라요'}<small>사진을 누르면 프로필</small></div>
+      <button class="hub-refresh" id="hubRefresh" title="새로고침 — 새 버전·기록 다시 받기" aria-label="새로고침">⟳</button>
     </div>
     <div class="hub-cats">
       ${HUB_CATEGORIES.map(cat => `
@@ -485,6 +501,7 @@ function renderHub() {
         </section>`).join('')}
     </div>`;
   hub.querySelector('#hubAvatar').onclick = () => showView('profile');
+  hub.querySelector('#hubRefresh').onclick = hubRefresh;
   hub.querySelectorAll('.game-card').forEach(b => b.onclick = () => openGame(b.dataset.id));
   document.getElementById('hubHint').textContent = '';
 }
