@@ -5,7 +5,12 @@ const STORAGE_KEY = 'game-world-state-v1';
 const TOKEN_KEY   = 'game-world-edit-token';
 const CURUSER_KEY = 'game-world-current-user';
 const REPAIR_KEY  = 'game-world-repaired-v1';  // 부풀려진 기록 1회 정정 여부(기기별)
-const BUILD = 'b105';  // 화면 우상단에 표시 — sw.js CACHE 버전과 같은 번호로 함께 올릴 것
+// 화면 우상단에 표시되는 버전. index.html 이 이 파일을 부를 때 붙인 ?v= 을 그대로 읽는다 —
+// 손으로 적어 두면 배포 때 올리는 걸 잊어 '표시된 버전 ≠ 실제 돌아가는 파일' 이 되기 때문이다.
+const BUILD = (() => {
+  try { const v = new URL(document.currentScript.src).searchParams.get('v'); if (v) return 'b' + v; } catch {}
+  return 'b?';
+})();
 const DELETE_PW = '0000';   // 사용자 삭제 확인 비밀번호(기본값)
 
 function DEFAULT_STATE() { return { version: 1, users: [], scores: {} }; }
@@ -219,6 +224,125 @@ function recordStat(gid, opt) {
 }
 function refreshStat(gid) { const el = document.getElementById('gameBest'); if (el) { const g = GAMES.find(x => x.id === gid); if (g) el.textContent = g.fmtStat(getStat(gid)); } }
 
+// ── 레트로 배경음악 (WebAudio 합성) ────────────────────
+// 음원 파일 없이 사각파(리드)·삼각파(베이스)·노이즈(하이햇)로 8비트풍 곡을 실시간 연주한다.
+// 스케줄러는 lookahead 방식 — 25ms 마다 0.2초 앞의 음을 미리 예약하므로
+// 각 게임의 requestAnimationFrame 루프에 박자가 밀리지 않는다.
+const BGM_KEY = 'game-world-bgm';
+const BGM_LOOKAHEAD = 0.2, BGM_TICK = 25;
+
+// 음이름 → 주파수. '-' 는 빈 박(쉼표). c4 = 가온다 = MIDI 60
+const NOTE_SEMI = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
+function noteHz(n) {
+  const m = /^([a-g])(#?)(\d)$/.exec(n || ''); if (!m) return 0;
+  const semi = NOTE_SEMI[m[1]] + (m[2] ? 1 : 0) + (+m[3] + 1) * 12;
+  return 440 * Math.pow(2, (semi - 69) / 12);
+}
+
+// 곡 — lead/bass 는 8분음표 한 칸씩. hat 은 '몇 칸마다 하이햇'(0이면 없음)
+const BGM_SONGS = {
+  calm: { tempo: 92, hat: 0,      // 보드게임 — 생각할 때 방해되지 않게 잔잔히
+    lead: 'a4 - c5 - e5 - d5 - c5 - b4 - a4 - - - g4 - b4 - d5 - c5 - b4 - a4 - g4 - - -',
+    bass: 'a2 - - - a2 - - - e2 - - - e2 - - - g2 - - - g2 - - - e2 - - - e2 - - -' },
+  march: { tempo: 138, hat: 2,    // 스포츠 — 경쾌한 행진곡
+    lead: 'c5 - e5 - g5 - e5 - f5 - a5 - g5 - - - e5 - c5 - d5 - e5 - c5 - g4 - c5 - - -',
+    bass: 'c3 - g2 - c3 - g2 - f2 - c3 - g2 - g2 - c3 - g2 - c3 - g2 - g2 - g2 - c3 - - -' },
+  chip: { tempo: 150, hat: 4,     // 레트로 — 정통 8비트 아르페지오
+    lead: 'e5 b4 e5 g5 a5 g5 e5 b4 d5 a4 d5 f5 a5 f5 d5 a4 c5 g4 c5 e5 g5 e5 c5 g4 b4 f#4 b4 d5 f#5 d5 b4 f#4',
+    bass: 'e2 - - - e2 - - - d2 - - - d2 - - - c2 - - - c2 - - - b1 - - - b1 - - -' },
+  bright: { tempo: 118, hat: 4,   // 퀴즈·자유 — 밝고 가벼운 곡
+    lead: 'g4 - b4 - d5 - b4 - c5 - e5 - d5 - - - a4 - c5 - e5 - c5 - d5 - b4 - g4 - - -',
+    bass: 'g2 - - - d3 - - - c3 - - - g2 - - - a2 - - - e3 - - - d3 - - - g2 - - -' },
+};
+for (const s of Object.values(BGM_SONGS)) { s.lead = s.lead.split(' '); s.bass = s.bass.split(' '); }
+
+// 박자를 세면 반칙이 되는 게임 — 10초 맞추기는 비트에 맞춰 세면 게임이 성립하지 않는다
+const BGM_SKIP = { timer10: 1 };
+
+const bgm = { ctx: null, master: null, noise: null, song: null, key: null, step: 0, next: 0, timer: null };
+const bgmEnabled = () => localStorage.getItem(BGM_KEY) === 'on';
+
+function bgmInit() {
+  if (bgm.ctx) return true;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
+  try { bgm.ctx = new AC(); } catch { return false; }
+  bgm.master = bgm.ctx.createGain();
+  bgm.master.gain.value = 0.12;            // 배경음이지 주인공이 아니다
+  bgm.master.connect(bgm.ctx.destination);
+  const len = Math.floor(bgm.ctx.sampleRate * 0.1);
+  bgm.noise = bgm.ctx.createBuffer(1, len, bgm.ctx.sampleRate);
+  const d = bgm.noise.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  return true;
+}
+function bgmTone(t, hz, dur, type, vol) {
+  if (!hz) return;
+  const o = bgm.ctx.createOscillator(), g = bgm.ctx.createGain();
+  o.type = type; o.frequency.setValueAtTime(hz, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.008);            // 짧은 어택
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);      // 자연스러운 디케이
+  o.connect(g).connect(bgm.master);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+function bgmHat(t) {
+  const src = bgm.ctx.createBufferSource(); src.buffer = bgm.noise;
+  const f = bgm.ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 6000;
+  const g = bgm.ctx.createGain();
+  g.gain.setValueAtTime(0.12, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+  src.connect(f).connect(g).connect(bgm.master);
+  src.start(t); src.stop(t + 0.06);
+}
+function bgmSchedule() {
+  const s = bgm.song; if (!s) return;
+  const spb = 30 / s.tempo;                                  // 8분음표 한 칸 길이(초)
+  while (bgm.next < bgm.ctx.currentTime + BGM_LOOKAHEAD) {
+    const t = bgm.next, i = bgm.step % s.lead.length;
+    bgmTone(t, noteHz(s.lead[i]), spb * 1.6, 'square', 0.16);
+    bgmTone(t, noteHz(s.bass[i % s.bass.length]), spb * 1.8, 'triangle', 0.22);
+    if (s.hat && i % s.hat === 0) bgmHat(t);
+    bgm.step++; bgm.next += spb;
+  }
+}
+// 게임 → 곡. HUB_CATEGORIES 의 분류를 그대로 쓴다(게임별 데이터 추가 불필요)
+function bgmForGame(id) {
+  if (!id || BGM_SKIP[id]) return null;
+  const cat = HUB_CATEGORIES.find(c => c.ids.includes(id));
+  return (cat && cat.bgm) || 'chip';
+}
+function bgmPlay(key) {
+  if (!key || !bgmEnabled() || !bgmInit()) return;
+  if (bgm.key === key) { bgm.ctx.resume().catch(() => {}); return; }   // 같은 곡이면 이어서
+  bgmStop();
+  bgm.key = key; bgm.song = BGM_SONGS[key] || BGM_SONGS.chip; bgm.step = 0;
+  // resume() 은 비동기 — 재개된 뒤의 시각을 기준으로 첫 음을 잡아야 박자가 안 밀린다
+  bgm.ctx.resume().then(() => {
+    if (bgm.key !== key) return;                             // 그새 다른 곡으로 바뀜
+    bgm.next = bgm.ctx.currentTime + 0.1;
+    clearInterval(bgm.timer);
+    bgm.timer = setInterval(bgmSchedule, BGM_TICK);
+  }).catch(() => {});
+}
+// suspend 까지 해야 미리 예약된 0.2초치 음이 남아 울리지 않는다
+function bgmStop() {
+  clearInterval(bgm.timer); bgm.timer = null; bgm.song = null; bgm.key = null;
+  if (bgm.ctx) bgm.ctx.suspend().catch(() => {});
+}
+function bgmSyncBtn() {
+  const b = document.getElementById('bgmBtn'); if (!b) return;
+  const on = bgmEnabled();
+  b.textContent = on ? '🔊' : '🔇';
+  b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  b.title = on ? '배경음악 끄기' : '배경음악 켜기';
+}
+// 토글 탭이 곧 '사용자 제스처' — iOS 는 이 안에서만 AudioContext 를 열 수 있다
+function bgmToggle() {
+  const on = !bgmEnabled();
+  localStorage.setItem(BGM_KEY, on ? 'on' : 'off');
+  bgmSyncBtn();
+  if (on) bgmPlay(bgmForGame(currentGameId)); else bgmStop();
+}
+
 // ── 게임 레지스트리 (여기에 추가만 하면 방사형 메뉴 자동 반영) ──
 const GAMES = [
   { id: 'rps',   name: '가위바위보', emoji: '✊', color: '#f472b6', best: 'high',
@@ -330,12 +454,13 @@ function boardGames() {
 
 // ── 허브(방사형) ──────────────────────────────────────
 // 홈 화면 카테고리 분류
+// bgm: 이 분류의 게임에 깔릴 배경음악(BGM_SONGS 의 키)
 const HUB_CATEGORIES = [
-  { label: '🎨 자유',  ids: ['color', 'brush', 'roulette'] },
-  { label: '♟️ 보드',  ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot'] },
-  { label: '⚾ 스포츠', ids: ['kbo', 'archery', 'pocket', 'fourball'] },
-  { label: '🕹️ 레트로', ids: ['timer10', 'rps', 'guess'] },
-  { label: '🧠 퀴즈',  ids: ['flags', 'capital', 'mapq'] },
+  { label: '🎨 자유',  bgm: 'bright', ids: ['color', 'brush', 'roulette'] },
+  { label: '♟️ 보드',  bgm: 'calm',   ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot'] },
+  { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball'] },
+  { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess'] },
+  { label: '🧠 퀴즈',  bgm: 'bright', ids: ['flags', 'capital', 'mapq'] },
 ];
 function renderHub() {
   const hub = document.getElementById('hub');
@@ -366,8 +491,14 @@ function renderHub() {
 
 // ── 뷰 전환 ───────────────────────────────────────────
 let currentView = 'hub';
+let currentGameId = null;   // 지금 열려 있는 게임 id — 배경화면·배경음악 선택에 쓴다
 function showView(name) {
   currentView = name;
+  // 게임을 나가면 배경화면·배경음악을 원래대로 (뒤로가기·하단 탭 어느 쪽으로 나가도 여기를 지난다)
+  if (name !== 'game') {
+    delete document.body.dataset.game; document.body.style.removeProperty('--gc');
+    currentGameId = null; bgmStop();
+  }
   // 게임 플레이 중에는 당겨서 새로고침(pull-to-refresh) 비활성화 — 실수로 리로드되어 게임 리셋 방지
   document.body.classList.toggle('playing', name === 'game');
   ['hub', 'game', 'records', 'profile'].forEach(v => document.getElementById(v + 'View').classList.toggle('hidden', v !== name));
@@ -375,6 +506,61 @@ function showView(name) {
   if (name === 'profile') renderProfile();
   if (name === 'records') { renderBoard(); resyncFromServer(); }   // 기록 열 때마다 서버 최신 반영
   if (name === 'hub') renderHub();
+  navSync();
+}
+
+// ── 기기 뒤로가기 ─────────────────────────────────────
+// 그냥 두면 안드로이드/브라우저 뒤로가기가 앱을 통째로 종료해 버린다(히스토리 항목이 하나뿐이라서).
+// 그래서 첫 화면(허브)보다 안쪽에 있을 때는 '되돌아갈 자리'를 히스토리에 하나 얹어 둔다.
+// 뒤로가기를 누르면 그 자리가 소비되면서 popstate 가 오고, 화면을 딱 한 단계만 되돌린다.
+// 이걸 반복하면 마지막에는 항상 허브에 도착하고, 허브에서 한 번 더 눌러야 앱이 종료된다.
+let navBusy = false;   // 히스토리를 우리가 직접 건드리는 중 — popstate 재진입 방지
+
+// 등록 오버레이는 쓸 사용자가 이미 있을 때만 닫을 수 있다(첫 실행 때 닫으면 쓸 사용자가 없어진다)
+function regOpenCancelable() {
+  const ov = document.getElementById('regOverlay');
+  return !!ov && !ov.classList.contains('hidden') && state.users.length > 0 && !!getCurrentUser();
+}
+// 지금 첫 화면보다 안쪽인가?
+function navDeep() { return currentView !== 'hub' || regOpenCancelable(); }
+function navHasMark() { return !!(history.state && history.state.gw === 'in'); }
+
+// 화면이 바뀔 때마다 '되돌아갈 자리'가 딱 하나 있도록 맞춘다
+function navSync() {
+  if (navBusy) return;
+  const deep = navDeep();
+  if (deep && !navHasMark()) history.pushState({ gw: 'in' }, '');
+  else if (!deep && navHasMark()) { navBusy = true; history.back(); }   // 허브로 나왔으니 자리도 반납
+}
+
+// 뒤로가기 한 번 = 화면 한 단계
+function navBack() {
+  // ① 게임이 띄운 확인창이 열려 있으면 그것부터 닫는다
+  const quitNo = document.querySelector('.kbo-quit #qNo');
+  if (quitNo) { quitNo.click(); return; }
+  // ② 사용자 전환 화면
+  if (regOpenCancelable()) { document.getElementById('regOverlay').classList.add('hidden'); return; }
+  // ③ 게임 안 — 게임이 정의해 둔 '‹ 뒤로'를 그대로 쓴다.
+  //    레벨 선택·모드 선택 같은 중간 화면도 그 덕에 한 단계씩 자연스럽게 되돌아간다.
+  if (currentView === 'game') {
+    const b = document.getElementById('gameBack');
+    if (b && b.onclick) b.onclick(); else showView('hub');
+    return;
+  }
+  // ④ 기록·프로필 → 첫 화면
+  if (currentView !== 'hub') showView('hub');
+}
+
+function navInit() {
+  // 새로고침으로 남았을 수 있는 옛 표시를 지우고 이 항목을 '첫 화면'으로 삼는다
+  try { history.replaceState({ gw: 'base' }, ''); } catch {}
+  addEventListener('popstate', () => {
+    if (navBusy) { navBusy = false; return; }   // 우리가 반납한 자리 — 화면은 이미 맞다
+    navBusy = true;
+    try { navBack(); } finally { navBusy = false; }
+    navSync();   // 아직 안쪽이면(중간 화면으로 되돌아간 것) 되돌아갈 자리를 다시 만들어 둔다
+  });
+  navSync();
 }
 
 // ── 기록(게임별 순위) ─────────────────────────────────
@@ -412,8 +598,17 @@ function openGame(id) {
   document.getElementById('gameTitle').textContent = g.emoji + ' ' + g.name;
   document.getElementById('gameBest').textContent = g.fmtStat(getStat(id));
   document.getElementById('gameBack').onclick = () => showView('hub');   // 기본 뒤로가기(게임이 필요시 자체 오버라이드)
+  // 배경화면: body[data-game] 으로 게임별 배경, --gc 로 그 게임 테마색을 CSS 에 넘긴다
+  currentGameId = id;
+  document.body.dataset.game = id;
+  document.body.style.setProperty('--gc', g.color);
+  // 음악이 없는 게임(10초 맞추기)에서는 토글 버튼도 숨긴다 — 켜도 소리가 안 나면 헷갈린다
+  const song = bgmForGame(id);
+  const bgmBtn = document.getElementById('bgmBtn');
+  if (bgmBtn) bgmBtn.classList.toggle('hidden', !song);
   showView('game');
   g.start(document.getElementById('gameScreen'));
+  if (song) bgmPlay(song); else bgmStop();   // 음악 없는 게임으로 바로 넘어가도 앞 곡이 남지 않게
 }
 
 // ── 미니게임: 가위바위보 ──────────────────────────────
@@ -2484,6 +2679,7 @@ function showReg() {
     divider.classList.add('hidden');
   }
   ov.classList.remove('hidden');
+  navSync();   // 사용자 전환으로 열린 거면 뒤로가기로 닫을 수 있게
 }
 
 // ── 부트 ──────────────────────────────────────────────
@@ -2494,6 +2690,12 @@ async function bootstrap() {
 
   document.querySelectorAll('.tab-btn').forEach(b => b.onclick = () => showView(b.dataset.view));
   document.getElementById('gameBack').onclick = () => showView('hub');
+  navInit();   // 기기 뒤로가기 — 화면을 만지기 전에 걸어 둔다
+
+  // 배경음악 토글
+  const bgmBtn = document.getElementById('bgmBtn');
+  if (bgmBtn) bgmBtn.onclick = bgmToggle;
+  bgmSyncBtn();
 
   // 프로필
   document.getElementById('profSave').onclick = () => {
@@ -2549,8 +2751,12 @@ async function bootstrap() {
     showView('hub');
   };
 
-  // 포그라운드 복귀 시 자동 재동기화 (다른 기기 기록 반영)
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) resyncFromServer(); });
+  // 포그라운드 복귀 시 자동 재동기화 (다른 기기 기록 반영) + 배경음악 일시정지/재개
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { if (bgm.ctx) bgm.ctx.suspend().catch(() => {}); return; }
+    resyncFromServer();
+    if (currentView === 'game' && bgm.key) bgm.ctx.resume().catch(() => {});
+  });
   window.addEventListener('focus', resyncFromServer);
 
   setSync('불러오는 중…');

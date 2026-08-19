@@ -14,6 +14,35 @@ body {
 .muted { color: var(--muted); }
 .small { font-size: .8rem; }
 
+/* ── 게임 배경화면 ──
+   게임에 들어가면 body 에 [data-game="게임id"] 가 붙고 --gc 에 그 게임 테마색이 들어온다.
+   별도 레이어 요소 없이 body 의 background 를 여러 겹으로 쌓아 스태킹 문제를 피한다.
+   기본은 코드로 그린 패턴(용량 0), 몇몇 게임만 아래에서 실제 이미지로 덮어쓴다. */
+body[data-game] {
+  /* color-mix 를 모르는 구형 브라우저용 — 아래 선언을 못 읽으면 이 격자만 남는다 */
+  background:
+    repeating-linear-gradient(0deg,  rgba(255,255,255,.028) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.028) 0 1px, transparent 1px 34px),
+    radial-gradient(120% 80% at 50% 0%, #16203c 0%, var(--bg) 60%);
+  background:
+    radial-gradient(100% 55% at 50% 0%, color-mix(in srgb, var(--gc, #7c5cff) 20%, transparent), transparent 72%),
+    repeating-linear-gradient(0deg,  rgba(255,255,255,.028) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.028) 0 1px, transparent 1px 34px),
+    radial-gradient(120% 80% at 50% 0%, #16203c 0%, var(--bg) 60%);
+  background-attachment: fixed;
+}
+/* 사진 배경 — 위에 덮는 어두운 스크림이 필수다. 없으면 그 위 글자가 안 읽힌다 */
+body[data-game="janggi"] {
+  background:
+    linear-gradient(rgba(11,16,32,.74), rgba(11,16,32,.90)),
+    url('bg/janggi.svg') center/cover fixed no-repeat, var(--bg);
+}
+body[data-game="kbo"] {
+  background:
+    linear-gradient(rgba(11,16,32,.84), rgba(11,16,32,.94)),
+    url('kbo-bg.jpg') center 20%/cover fixed no-repeat, var(--bg);
+}
+
 .app-header {
   height: var(--header-h); flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
   padding: 0 16px; padding-top: env(safe-area-inset-top);
@@ -65,9 +94,19 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .back-btn { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 7px 12px; cursor: pointer; }
 .game-bar strong { font-size: 1.05rem; }
 .game-best { margin-left: auto; font-size: .82rem; color: var(--primary2); font-weight: 700; }
+.bgm-btn { flex: 0 0 auto; background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 5px 9px; font-size: 1rem; line-height: 1; cursor: pointer; }
+.bgm-btn[aria-pressed="true"] { border-color: var(--primary2); }
 .game-screen { min-height: 50vh; }
-.mg { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 22px 16px;
+/* 카드를 살짝 투명하게 — 판 양옆의 빈 여백으로 배경화면이 비쳐 보인다 */
+.mg { background: rgba(26,34,56,.78);                                   /* color-mix 미지원 대비 */
+  background: color-mix(in srgb, var(--card) 78%, transparent);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  border: 1px solid var(--border); border-radius: 18px; padding: 22px 16px;
   display: flex; flex-direction: column; align-items: center; gap: 16px; }
+/* 캔버스를 계속 다시 그리는 게임은 가독성·성능이 우선이고 배경이 보일 여백도 없다 — 원래대로 불투명 */
+.mg.tetris, .mg.pocket, .mg.fourball, .mg.kbo, .mg.arch, .mg.roulette {
+  background: var(--card); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .mg-msg { font-size: 1.15rem; font-weight: 700; text-align: center; min-height: 1.4em; }
 .mg-vs { color: var(--muted); min-height: 1.2em; }
 .mg-score { color: var(--muted); }

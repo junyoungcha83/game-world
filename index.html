@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
 <title>게임 월드</title>
-<link rel="stylesheet" href="assets/app.css?v=106" />
+<link rel="stylesheet" href="assets/app.css?v=107" />
 
 <!-- PWA -->
 <link rel="manifest" href="manifest.webmanifest" />
@@ -35,6 +35,7 @@
       <button class="back-btn" id="gameBack">‹ 뒤로</button>
       <strong id="gameTitle">게임</strong>
       <span class="game-best" id="gameBest"></span>
+      <button class="bgm-btn" id="bgmBtn" aria-pressed="false" title="배경음악 켜기">🔇</button>
     </div>
     <div class="game-screen" id="gameScreen"></div>
   </section>
@@ -100,7 +101,7 @@
   </div>
 </div>
 
-<script src="assets/app.js?v=106"></script>
+<script src="assets/app.js?v=107"></script>
 <script>
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     addEventListener('load', async () => {
