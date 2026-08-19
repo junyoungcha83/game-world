@@ -269,6 +269,9 @@ function bgmInit() {
   bgm.master = bgm.ctx.createGain();
   bgm.master.gain.value = 0.12;            // 배경음이지 주인공이 아니다
   bgm.master.connect(bgm.ctx.destination);
+  sfx.master = bgm.ctx.createGain();       // 효과음은 배경음악과 따로 — 배경음악이 꺼져 있어도 들려야 한다
+  sfx.master.gain.value = 0.9;
+  sfx.master.connect(bgm.ctx.destination);
   const len = Math.floor(bgm.ctx.sampleRate * 0.1);
   bgm.noise = bgm.ctx.createBuffer(1, len, bgm.ctx.sampleRate);
   const d = bgm.noise.getChannelData(0);
@@ -312,6 +315,7 @@ function bgmForGame(id) {
 }
 function bgmPlay(key) {
   if (!key || !bgmEnabled() || !bgmInit()) return;
+  bgm.master.gain.value = 0.12;                              // bgmStop 이 내려둔 음량 되돌리기
   if (bgm.key === key) { bgm.ctx.resume().catch(() => {}); return; }   // 같은 곡이면 이어서
   bgmStop();
   bgm.key = key; bgm.song = BGM_SONGS[key] || BGM_SONGS.chip; bgm.step = 0;
@@ -326,6 +330,7 @@ function bgmPlay(key) {
 // suspend 까지 해야 미리 예약된 0.2초치 음이 남아 울리지 않는다
 function bgmStop() {
   clearInterval(bgm.timer); bgm.timer = null; bgm.song = null; bgm.key = null;
+  if (bgm.master) bgm.master.gain.value = 0;   // 효과음이 ctx 를 다시 깨울 수 있으니 예약된 음이 나중에 울리지 않게 음량부터 0
   if (bgm.ctx) bgm.ctx.suspend().catch(() => {});
 }
 function bgmSyncBtn() {
@@ -341,6 +346,130 @@ function bgmToggle() {
   localStorage.setItem(BGM_KEY, on ? 'on' : 'off');
   bgmSyncBtn();
   if (on) bgmPlay(bgmForGame(currentGameId)); else bgmStop();
+}
+
+// ── 효과음 (WebAudio 합성) ─────────────────────────────
+// 음원 파일 없이 만든다: 아주 짧은 노이즈 버스트(어택) + 빠르게 사그라드는 고음 배음(몸통) = 당구공 '딱!'.
+// AudioContext 는 배경음악과 공유한다(모바일 브라우저는 컨텍스트 개수 제한이 있다). 음량 버스만 따로 둔다.
+const SFX_KEY = 'game-world-sfx';
+const sfx = { master: null, last: 0, lastC: 0 };   // last=공 충돌 · lastC=쿠션 (서로 막지 않게 따로)
+// 충돌 한 번마다 불리는 자리라 localStorage 는 처음 한 번만 읽고 캐시한다
+let sfxOn = null;
+const sfxEnabled = () => (sfxOn === null ? (sfxOn = localStorage.getItem(SFX_KEY) !== 'off') : sfxOn);   // 기본 켜짐
+function sfxSet(on) { sfxOn = !!on; localStorage.setItem(SFX_KEY, on ? 'on' : 'off'); }
+// 소리 낼 준비가 된 ctx. 배경음악이 꺼져 있으면 ctx 가 suspend 상태라 깨워야 한다
+function sfxCtx() {
+  if (!sfxEnabled() || !bgmInit()) return null;
+  if (bgm.ctx.state === 'suspended') bgm.ctx.resume().catch(() => {});
+  return bgm.ctx;
+}
+// 공끼리 부딪히는 '딱!' — s(0~1) 는 부딪힌 세기. 세게 맞을수록 크고 높고 단단하다
+function sfxBallHit(s) {
+  const c = sfxCtx(); if (!c) return;
+  const t = c.currentTime;
+  if (t - sfx.last < 0.02) return;        // 한 프레임에 여러 번 부딪혀도(브레이크샷) 소리는 하나만 — 겹치면 지저분하다
+  sfx.last = t;
+  s = Math.max(0.05, Math.min(1, s));
+  const vol = 0.12 + 0.5 * s;
+  const src = c.createBufferSource(); src.buffer = bgm.noise;          // 어택: 밴드패스로 깎은 짧은 노이즈
+  const bp = c.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.value = 2400 + 2800 * s; bp.Q.value = 1.1;
+  const ng = c.createGain();
+  ng.gain.setValueAtTime(vol, t); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
+  src.connect(bp).connect(ng).connect(sfx.master);
+  src.start(t); src.stop(t + 0.05);
+  const base = 1500 + 1000 * s;                                        // 몸통: 기음+배음이 살짝 내려가며 0.05초 안에 사라진다
+  for (const [mul, v, dur] of [[1, 0.45, 0.055], [2.6, 0.22, 0.03]]) {
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = 'triangle'; o.frequency.setValueAtTime(base * mul, t);
+    o.frequency.exponentialRampToValueAtTime(base * mul * 0.7, t + dur);
+    g.gain.setValueAtTime(vol * v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(sfx.master); o.start(t); o.stop(t + dur + 0.02);
+  }
+}
+// 쿠션 '툭' — 천에 눌린 둔한 소리라 고음을 걷어낸다
+function sfxCushion(s) {
+  const c = sfxCtx(); if (!c) return;
+  const t = c.currentTime;
+  if (t - sfx.lastC < 0.02) return;
+  sfx.lastC = t;
+  s = Math.max(0.05, Math.min(1, s));
+  const vol = 0.06 + 0.22 * s;
+  const src = c.createBufferSource(); src.buffer = bgm.noise;
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700 + 500 * s;
+  const g = c.createGain();
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+  src.connect(lp).connect(g).connect(sfx.master);
+  src.start(t); src.stop(t + 0.08);
+  const o = c.createOscillator(), og = c.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(180, t); o.frequency.exponentialRampToValueAtTime(110, t + 0.07);
+  og.gain.setValueAtTime(vol * 0.8, t); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+  o.connect(og).connect(sfx.master); o.start(t); o.stop(t + 0.09);
+}
+// 큐가 수구를 때리는 '탁' — 나무+가죽이라 공끼리보다 낮고 무디다
+function sfxCueShot(s) {
+  const c = sfxCtx(); if (!c) return;
+  const t = c.currentTime;
+  s = Math.max(0.05, Math.min(1, s));
+  const vol = 0.14 + 0.3 * s;
+  const src = c.createBufferSource(); src.buffer = bgm.noise;
+  const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900 + 700 * s; bp.Q.value = 0.9;
+  const g = c.createGain();
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
+  src.connect(bp).connect(g).connect(sfx.master);
+  src.start(t); src.stop(t + 0.06);
+}
+// 포켓에 빠지는 '툭 또르륵'
+function sfxPocket() {
+  const c = sfxCtx(); if (!c) return;
+  const t = c.currentTime;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(300, t); o.frequency.exponentialRampToValueAtTime(70, t + 0.22);
+  g.gain.setValueAtTime(0.28, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+  o.connect(g).connect(sfx.master); o.start(t); o.stop(t + 0.28);
+  const src = c.createBufferSource(); src.buffer = bgm.noise;
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200;
+  const ng = c.createGain();
+  ng.gain.setValueAtTime(0.14, t + 0.02); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+  src.connect(lp).connect(ng).connect(sfx.master);
+  src.start(t + 0.02); src.stop(t + 0.16);
+}
+// 판 위에 말·돌을 놓는 '딱!' — kind: 'stone'=오목(유리알이 나무판에) · 'piece'=장기·체스(나무말)
+// cap=true 면 잡는 수 — 말끼리 부딪히니 조금 더 크고 낮게
+function sfxPlace(kind, cap) {
+  const c = sfxCtx(); if (!c) return;
+  const t = c.currentTime;
+  if (t - sfx.last < 0.02) return;
+  sfx.last = t;
+  const stone = kind !== 'piece';
+  const vol = (stone ? 0.34 : 0.3) * (cap ? 1.25 : 1);
+  // 어택 — 돌은 높고 맑게(하이패스), 나무말은 낮고 둔하게(밴드패스)
+  const src = c.createBufferSource(); src.buffer = bgm.noise;
+  const f = c.createBiquadFilter();
+  if (stone) { f.type = 'highpass'; f.frequency.value = 2800; }
+  else { f.type = 'bandpass'; f.frequency.value = cap ? 900 : 1100; f.Q.value = 0.8; }
+  const ng = c.createGain();
+  const nd = stone ? 0.018 : 0.026;
+  ng.gain.setValueAtTime(vol, t); ng.gain.exponentialRampToValueAtTime(0.0001, t + nd);
+  src.connect(f).connect(ng).connect(sfx.master);
+  src.start(t); src.stop(t + nd + 0.02);
+  // 몸통 — 판이 울리는 짧은 여운. 돌은 2.6kHz대, 나무말은 500Hz대
+  const base = stone ? 2600 : (cap ? 430 : 520);
+  const dur = stone ? 0.045 : 0.08;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(base, t);
+  o.frequency.exponentialRampToValueAtTime(base * 0.7, t + dur);
+  g.gain.setValueAtTime(vol * 0.55, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(sfx.master); o.start(t); o.stop(t + dur + 0.02);
+}
+// 게임 설정화면의 '효과음' 체크박스 — 켜고 끄면 바로 저장된다
+function sfxOptHtml(id) {
+  return `<label class="fb-opt"><input type="checkbox" id="${id}"${sfxEnabled() ? ' checked' : ''}> <b>효과음</b>
+      <small>공이 부딪히는 딱! 소리, 쿠션·포켓 소리</small></label>`;
+}
+function sfxOptBind(el, id) {
+  const cb = el.querySelector('#' + id); if (!cb) return;
+  cb.onchange = () => { sfxSet(cb.checked); if (cb.checked) sfxBallHit(0.5); };   // 켜는 순간 한 번 들려준다
 }
 
 // ── 게임 레지스트리 (여기에 추가만 하면 방사형 메뉴 자동 반영) ──
@@ -1080,13 +1209,13 @@ function runOmok(el, level) {
 
   const play = (i) => {
     if (over || busy || board[i]) return;
-    board[i] = ME; history.push({ i, who: ME });
+    board[i] = ME; history.push({ i, who: ME }); sfxPlace('stone');
     if (fiveAt(board, i, ME)) { finish('win'); return; }
     if (!board.includes(EMPTY)) { finish('draw'); return; }
     busy = true; msg.textContent = '컴퓨터 생각 중…'; draw();
     setTimeout(() => {
       if (!el.querySelector('.omok')) return;   // 화면 이탈 시 중단
-      const mv = chooseMove(); board[mv] = CPU; history.push({ i: mv, who: CPU }); busy = false;
+      const mv = chooseMove(); board[mv] = CPU; history.push({ i: mv, who: CPU }); sfxPlace('stone'); busy = false;
       if (fiveAt(board, mv, CPU)) { finish('loss'); return; }
       if (!board.includes(EMPTY)) { finish('draw'); return; }
       msg.textContent = `[${level.label}] 당신(⚫) 차례`; draw();
@@ -2416,7 +2545,7 @@ function runJanggi(el, mode, level) {
     if (mode === 'cpu' && turn === 'T') { busy = true; setTimeout(() => {
       if (!el.querySelector('.janggi')) return;     // 화면 이탈
       const m = jgBestMove(board, level.ai);
-      if (m) { const cap = jgApply(board, m.fr, m.fc, m.tr, m.tc); history.push({ fr:m.fr, fc:m.fc, tr:m.tr, tc:m.tc, cap, side:'T' }); }
+      if (m) { const cap = jgApply(board, m.fr, m.fc, m.tr, m.tc); history.push({ fr:m.fr, fc:m.fc, tr:m.tr, tc:m.tc, cap, side:'T' }); sfxPlace('piece', !!cap); }
       busy = false; afterMove();
     }, 350); }
   };
@@ -2438,7 +2567,7 @@ function runJanggi(el, mode, level) {
     const p = board[r][c];
     if (selR !== null && targets.some(t => t[0]===r && t[1]===c)) {
       const cap = jgApply(board, selR, selC, r, c);
-      history.push({ fr:selR, fc:selC, tr:r, tc:c, cap, side: turn });
+      history.push({ fr:selR, fc:selC, tr:r, tc:c, cap, side: turn }); sfxPlace('piece', !!cap);
       selR = selC = null; targets = []; afterMove(); return;
     }
     if (p && p.side === turn) { selR = r; selC = c; targets = jgLegalFrom(board, r, c); render(); }
@@ -2628,7 +2757,7 @@ function runChess(el, mode, level){
     render();
     if(mode==='cpu' && s.turn!==human){ busy=true; setTimeout(()=>{
       if(!el.querySelector('.chess')) return;
-      const m=chBestMove(s, s.turn, level.ai); if(m){ history.push(chApply(s,m)); }
+      const m=chBestMove(s, s.turn, level.ai); if(m){ const u=chApply(s,m); history.push(u); sfxPlace('piece', !!(u.cap || u.epPawn)); }
       busy=false; finishIfOver(); render();
     }, 300); }
   };
@@ -2637,7 +2766,7 @@ function runChess(el, mode, level){
     else chUndoMove(s, history.pop());
     over=false; sel=null; targets=[]; render();
   };
-  const doMove=(mv)=>{ history.push(chApply(s,mv)); sel=null; targets=[]; afterMove(); };
+  const doMove=(mv)=>{ const u=chApply(s,mv); history.push(u); sfxPlace('piece', !!(u.cap || u.epPawn)); sel=null; targets=[]; afterMove(); };
   const onTap=(r,c)=>{ if(over||busy)return; if(mode==='cpu'&&s.turn!==human)return;
     if(sel && targets.some(t=>t[0]===r&&t[1]===c)){
       const cands=chLegalFrom(s, sel[0], sel[1]).filter(m=>m.tr===r&&m.tc===c);
@@ -2658,6 +2787,8 @@ function renderProfile() {
   document.getElementById('profName').value = u.name;
   setAvatar('profAvatarImg', 'profAvatarFallback', u);
   document.getElementById('syncHint').textContent = getToken() ? '동기화 켜짐' : '동기화하려면 비밀번호 설정';
+  const sb = document.getElementById('profSfx');
+  if (sb) sb.textContent = sfxEnabled() ? '🔊 효과음 켜짐' : '🔇 효과음 꺼짐';
   renderRecords(u);
 }
 
@@ -2736,6 +2867,9 @@ async function bootstrap() {
     deleteUser(u.id);
     showReg();   // 삭제 후 남은 사용자 선택/새 등록 화면으로
   };
+  // 효과음 전역 토글 — 탭이 곧 사용자 제스처라 이 안에서 미리듣기까지 된다
+  const sfxBtn = document.getElementById('profSfx');
+  if (sfxBtn) sfxBtn.onclick = () => { sfxSet(!sfxEnabled()); renderProfile(); if (sfxEnabled()) sfxPlace('stone'); };
   document.getElementById('profToken').onclick = () => {
     const cur = getToken();
     const v = prompt('동기화 비밀번호 (여러 기기에서 같은 값 사용, 비우면 끄기):', cur);
@@ -3608,11 +3742,13 @@ function startPocket(el){
   const back = document.getElementById('gameBack'); if (back) back.onclick = () => showView('hub');
   el.innerHTML = `<div class="mg jg-pick">
     <div class="mg-msg">모드를 골라요 🎱</div>
+    ${sfxOptHtml('pkSfxOpt')}
     <div class="omok-levels">
       <button data-m="solo">연습<small>혼자 최소타 도전 · 기록 저장</small></button>
       <button data-m="two">대결 · 2인<small>한 기기에서 번갈아 치기 · 많이 넣는 사람 승</small></button>
     </div>
   </div>`;
+  sfxOptBind(el, 'pkSfxOpt');
   el.querySelectorAll('.omok-levels button').forEach(b => b.onclick = () => pickFormation(el, b.dataset.m));
 }
 // 모드 선택 뒤: 시작 전에 공 배치(랙 형태)를 고른다
@@ -3721,6 +3857,7 @@ function runPocket(el, cfg){
 
   // ── 물리 ──────────────────────────────────────────
   function pocketBall(b){
+    sfxPocket();
     b.in = true; b.vx = b.vy = 0;
     if(b.type==='cue') G.evt.cueIn = true;
     else if(b.type==='eight') G.evt.eightIn = true;
@@ -3749,11 +3886,13 @@ function runPocket(el, cfg){
         // 쿠션: 닿는 순간 포켓 자키 안이고 포켓 쪽으로 굴러가는 중이면 들어가고, 아니면 튕긴다
         if(b.x-R < L || b.x+R > RT){
           if(tryPocket(b)) continue;
+          sfxCushion(Math.abs(b.vx)/13);
           if(b.x-R < L){ b.x = L+R; b.vx = -b.vx*CUSH_E; b.vy *= 0.985; }
           else { b.x = RT-R; b.vx = -b.vx*CUSH_E; b.vy *= 0.985; }
         }
         if(b.y-R < T || b.y+R > BT){
           if(tryPocket(b)) continue;
+          sfxCushion(Math.abs(b.vy)/13);
           if(b.y-R < T){ b.y = T+R; b.vy = -b.vy*CUSH_E; b.vx *= 0.985; }
           else { b.y = BT-R; b.vy = -b.vy*CUSH_E; b.vx *= 0.985; }
         }
@@ -3777,6 +3916,7 @@ function runPocket(el, cfg){
           if(rel >= 0) continue;
           const imp = -(1+BALL_E)*rel/2;
           a.vx -= imp*nx; a.vy -= imp*ny; b.vx += imp*nx; b.vy += imp*ny;
+          sfxBallHit(Math.abs(rel)/16);                          // 부딪힌 세기 = 법선 방향 상대속도
           if(!G.evt.firstHit && (a.type==='cue' || b.type==='cue')) G.evt.firstHit = a.type==='cue' ? b : a;
         }
       }
@@ -3894,6 +4034,7 @@ function runPocket(el, cfg){
   function shoot(){
     const c = cue(), sp = PMIN + (PMAX-PMIN)*G.power;
     c.vx = Math.cos(G.angle)*sp; c.vy = Math.sin(G.angle)*sp;
+    sfxCueShot(G.power);
     G.shots++; if($shots) $shots.textContent = G.shots;
     G.evt = { cueIn:false, eightIn:false, potted:[], firstHit:null };
     setPhase('roll');
@@ -4081,12 +4222,14 @@ function startFourball(el){
       <small>정면 큐볼에서 칠 위치를 골라 팔로·드로·사이드 스핀 — 충돌·쿠션 반사가 달라져요</small></label>
     <label class="fb-opt"><input type="checkbox" id="fbCourseOpt"> <b>코스 자세히</b>
       <small>예상 괘적을 쿠션 반사까지 최대 3개 표시</small></label>
+    ${sfxOptHtml('fbSfxOpt')}
     <div class="omok-levels">
       <button data-m="solo">연습<small>혼자 ${FOUR_SHOTS}샷 도전 · 기록 저장</small></button>
       ${FOUR_AIS.map(a => `<button data-m="cpu" data-k="${a.key}">대결 · vs 컴퓨터 ${a.label}<small>${a.desc} · 먼저 ${FOUR_TARGET}점</small></button>`).join('')}
       <button data-m="two">대결 · 2인<small>한 기기에서 번갈아 치기</small></button>
     </div>
   </div>`;
+  sfxOptBind(el, 'fbSfxOpt');
   el.querySelectorAll('.omok-levels button').forEach(b => b.onclick = () => {
     const m = b.dataset.m;
     const spin = !!el.querySelector('#fbSpinOpt')?.checked;
@@ -4160,7 +4303,8 @@ function runFour(el, cfg){
 
   // ── 물리 한 프레임 ─────────────────────────────────
   // bs=공 배열 · ci=수구 인덱스 · hits=수구가 접촉한 공 인덱스(중복 없이 누적) — 실제 진행과 CPU 시뮬레이션이 같은 코드를 쓴다
-  function physFrame(bs, sub, hits, ci){
+  // quiet=true 면 효과음을 내지 않는다(미리 굴려보는 계산에서 소리가 나면 안 된다)
+  function physFrame(bs, sub, hits, ci, quiet){
     for(let s=0;s<sub;s++){
       for(const b of bs){
         if(!b.vx && !b.vy) continue;
@@ -4172,6 +4316,7 @@ function runFour(el, cfg){
         else if(b.x+R > RT){ b.x = RT-R; b.vx = -b.vx*CUSH_E; b.vy *= 0.99; vwall = true; }
         if(b.y-R < T){ b.y = T+R; b.vy = -b.vy*CUSH_E; b.vx *= 0.99; hwall = true; }
         else if(b.y+R > BT){ b.y = BT-R; b.vy = -b.vy*CUSH_E; b.vx *= 0.99; hwall = true; }
+        if(!quiet && (vwall || hwall)) sfxCushion(Math.hypot(b.vx, b.vy)/13);
         if(b.spS){                                                            // 사이드 스핀 → 쿠션 반사각이 달라진다(잉글리시)
           if(vwall){ b.vy += b.spS * Math.abs(b.vx) * CUSH_ENG; b.spS *= 0.7; }
           if(hwall){ b.vx += b.spS * Math.abs(b.vy) * CUSH_ENG; b.spS *= 0.7; }
@@ -4189,6 +4334,7 @@ function runFour(el, cfg){
           if(rel >= 0) continue;
           const imp = -(1+BALL_E)*rel/2;
           a.vx -= imp*nx; a.vy -= imp*ny; b.vx += imp*nx; b.vy += imp*ny;
+          if(!quiet) sfxBallHit(Math.abs(rel)/15);               // 부딪힌 세기 = 법선 방향 상대속도
           applySpin(a); applySpin(b);                            // 당점(팔로/드로/사이드) — 충돌 후 수구 진행이 달라진다
           if(hits && (i === ci || j === ci)){ const o = (i === ci) ? j : i; if(!hits.includes(o)) hits.push(o); }
         }
@@ -4268,7 +4414,7 @@ function runFour(el, cfg){
     let firstContactIdx = -1;
     for(let f=0; f<300; f++){
       const before = hits.length;
-      physFrame(bs, 4, hits, ci);
+      physFrame(bs, 4, hits, ci, true);
       if(firstContactIdx < 0 && hits.length > before) firstContactIdx = pts.length;
       pts.push({ x:bs[ci].x, y:bs[ci].y });
       if(Math.hypot(bs[ci].vx, bs[ci].vy) < 1.2) break;
@@ -4282,7 +4428,7 @@ function runFour(el, cfg){
     bs.forEach(b => { b.spF = 0; b.spS = 0; });   // 컴퓨터는 당점 없이(중앙) 계산
     const sp = PMIN + (PMAX-PMIN)*pw;
     bs[ci].vx = Math.cos(ang)*sp; bs[ci].vy = Math.sin(ang)*sp;
-    for(let f=0; f<700 && moving(bs); f++) physFrame(bs, 4, hits, ci);   // 미리보기는 서브스텝을 줄여 가볍게
+    for(let f=0; f<700 && moving(bs); f++) physFrame(bs, 4, hits, ci, true);   // 미리보기는 서브스텝을 줄여 가볍게
     return { hits, bs };
   }
   function shotValue(hits, bs, ci){
@@ -4418,6 +4564,7 @@ function runFour(el, cfg){
     const c = cue(), sp = PMIN + (PMAX-PMIN)*G.power;
     c.vx = Math.cos(G.angle)*sp; c.vy = Math.sin(G.angle)*sp;
     c.dir = { x: Math.cos(G.angle), y: Math.sin(G.angle) }; c.v0 = sp;   // 당점 계산용
+    sfxCueShot(G.power);
     c.spF = useSpin ? G.spin.f : 0; c.spS = useSpin ? G.spin.s : 0;
     G.hits = [];
     setPhase('roll');

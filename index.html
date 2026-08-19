@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
 <title>게임 월드</title>
-<link rel="stylesheet" href="assets/app.css?v=108" />
+<link rel="stylesheet" href="assets/app.css?v=109" />
 
 <!-- PWA -->
 <link rel="manifest" href="manifest.webmanifest" />
@@ -67,6 +67,7 @@
         <div class="records" id="profRecords"></div>
       </div>
       <div class="prof-sync">
+        <button class="btn small ghost" id="profSfx">🔊 효과음 켜짐</button>
         <button class="btn small ghost" id="profToken">🔒 동기화 비밀번호</button>
         <span class="muted small" id="syncHint"></span>
       </div>
@@ -101,7 +102,7 @@
   </div>
 </div>
 
-<script src="assets/app.js?v=108"></script>
+<script src="assets/app.js?v=109"></script>
 <script>
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     addEventListener('load', async () => {
