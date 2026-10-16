@@ -1,6 +1,7 @@
 {
   "name": "게임 월드",
   "short_name": "게임월드",
+  "id": "./?app=gameworld-v2",
   "description": "사용자별 게임 허브 — 가운데 프로필 둘레로 게임이 모이는 곳",
   "start_url": "./",
   "scope": "./",
