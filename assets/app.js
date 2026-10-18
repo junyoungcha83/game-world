@@ -589,7 +589,12 @@ const HUB_CATEGORIES = [
   { label: '♟️ 보드',  bgm: 'calm',   ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot'] },
   { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball'] },
   { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess'] },
-  { label: '🧠 퀴즈',  bgm: 'bright', ids: ['flags', 'capital', 'mapq'] },
+  { label: '🧠 퀴즈',  bgm: 'bright', ids: ['quizworld', 'flags', 'capital', 'mapq'] },
+];
+// 게임이 아니라 다른 앱으로 가는 카드 — GAMES 에 넣지 않아 기록·순위판에는 안 나온다.
+// 같은 주소(github.io)라 지금 고른 사용자·동기화 비밀번호를 퀴즈세상이 그대로 읽는다.
+const HUB_LINKS = [
+  { id: 'quizworld', name: '퀴즈세상', emoji: '🧩', color: '#7c5cff', href: '../quiz-world/' },
 ];
 // ── 메인화면 새로고침 ─────────────────────────────────
 // 이 앱은 '새로고침할 때만' 새 버전을 적용한다(게임 중에 판이 리셋되지 않도록).
@@ -609,7 +614,7 @@ async function hubRefresh() {
 function renderHub() {
   const hub = document.getElementById('hub');
   const u = getCurrentUser();
-  const byId = id => GAMES.find(g => g.id === id);
+  const byId = id => GAMES.find(g => g.id === id) || HUB_LINKS.find(g => g.id === id);
   hub.innerHTML = `
     <div class="hub-header">
       <button class="hub-avatar" id="hubAvatar">${avatarInner(u)}</button>
@@ -631,7 +636,11 @@ function renderHub() {
     </div>`;
   hub.querySelector('#hubAvatar').onclick = () => showView('profile');
   hub.querySelector('#hubRefresh').onclick = hubRefresh;
-  hub.querySelectorAll('.game-card').forEach(b => b.onclick = () => openGame(b.dataset.id));
+  hub.querySelectorAll('.game-card').forEach(b => b.onclick = () => {
+    const link = HUB_LINKS.find(l => l.id === b.dataset.id);
+    if (link) { location.href = link.href; return; }   // 같은 창으로 이동 — 뒤로가기로 게임월드에 돌아온다
+    openGame(b.dataset.id);
+  });
   document.getElementById('hubHint').textContent = '';
 }
 
