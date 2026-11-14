@@ -845,10 +845,10 @@ function startGuess(el) {
 }
 
 // ── 미니게임: 스도쿠 (1~5단계) ─────────────────────────
-// 1단계 4×4, 2단계 6×6, 3~5단계 9×9(주어진 숫자 수로 난이도). 문제는 매번 새로 만들고 답이 하나뿐인지 확인한다.
+// 1·2단계 4×4, 3~5단계 9×9(주어진 숫자 수로 난이도). 문제는 매번 새로 만들고 답이 하나뿐인지 확인한다.
 const SUDOKU_LEVELS = [
   { key: 'sudoku_1', label: '1단계', desc: '4×4 · 아주 쉬움',  n: 4, br: 2, bc: 2, clues: 8 },
-  { key: 'sudoku_2', label: '2단계', desc: '6×6 · 쉬움',      n: 6, br: 2, bc: 3, clues: 18 },
+  { key: 'sudoku_2x', label: '2단계', desc: '4×4 · 쉬움',     n: 4, br: 2, bc: 2, clues: 5 },   // 예전 2단계(6×6, sudoku_2)와 기록을 섞지 않게 키를 바꿈
   { key: 'sudoku_3', label: '3단계', desc: '9×9 · 보통',      n: 9, br: 3, bc: 3, clues: 40 },
   { key: 'sudoku_4', label: '4단계', desc: '9×9 · 어려움',    n: 9, br: 3, bc: 3, clues: 32 },
   { key: 'sudoku_5', label: '5단계', desc: '9×9 · 아주 어려움', n: 9, br: 3, bc: 3, clues: 26 },
