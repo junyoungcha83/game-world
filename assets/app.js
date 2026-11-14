@@ -257,7 +257,7 @@ const BGM_SONGS = {
 for (const s of Object.values(BGM_SONGS)) { s.lead = s.lead.split(' '); s.bass = s.bass.split(' '); }
 
 // 박자를 세면 반칙이 되는 게임 — 10초 맞추기는 비트에 맞춰 세면 게임이 성립하지 않는다
-const BGM_SKIP = { timer10: 1 };
+const BGM_SKIP = { timer10: 1, sudoku: 1 };   // 집중하는 게임은 음악 없이
 
 const bgm = { ctx: null, master: null, noise: null, song: null, key: null, step: 0, next: 0, timer: null };
 const bgmEnabled = () => localStorage.getItem(BGM_KEY) === 'on';
@@ -513,6 +513,9 @@ const GAMES = [
   { id: 'fourball', name: '4구', emoji: '🔴', color: '#b91c1c', best: 'high',
     svg: '<svg viewBox="0 0 100 100" width="100%" height="100%"><g stroke-linecap="round"><line x1="18" y1="18" x2="82" y2="82" stroke="#6b3f18" stroke-width="11"/><line x1="82" y1="18" x2="18" y2="82" stroke="#6b3f18" stroke-width="11"/><line x1="18" y1="18" x2="82" y2="82" stroke="#d8a05a" stroke-width="6.5"/><line x1="82" y1="18" x2="18" y2="82" stroke="#d8a05a" stroke-width="6.5"/></g><g stroke="rgba(0,0,0,.4)" stroke-width="1"><circle cx="50" cy="20" r="11" fill="#facc15"/><circle cx="80" cy="50" r="11" fill="#f8fafc"/><circle cx="50" cy="80" r="11" fill="#22c55e"/><circle cx="20" cy="50" r="11" fill="#38bdf8"/></g><g fill="rgba(255,255,255,.6)"><circle cx="46" cy="16" r="2.6"/><circle cx="76" cy="46" r="2.6"/><circle cx="46" cy="76" r="2.6"/><circle cx="16" cy="46" r="2.6"/></g></svg>',
     fmtStat: () => fourAggFmt(), start: startFourball },
+  { id: 'sudoku', name: '스도쿠', emoji: '🔲', color: '#14b8a6', best: 'low',
+    svg: '<svg viewBox="0 0 100 100" width="100%" height="100%"><rect x="14" y="14" width="72" height="72" rx="6" fill="#f8fafc"/><g stroke="#94a3b8" stroke-width="1.5"><line x1="38" y1="14" x2="38" y2="86"/><line x1="62" y1="14" x2="62" y2="86"/><line x1="14" y1="38" x2="86" y2="38"/><line x1="14" y1="62" x2="86" y2="62"/></g><rect x="14" y="14" width="72" height="72" rx="6" fill="none" stroke="#0f766e" stroke-width="4"/><g font-family="system-ui,sans-serif" font-weight="800" font-size="17" text-anchor="middle" fill="#0f766e"><text x="26" y="32">5</text><text x="74" y="32">3</text><text x="50" y="56">7</text><text x="26" y="80">1</text><text x="74" y="80">9</text></g><text x="50" y="80" font-family="system-ui,sans-serif" font-weight="800" font-size="17" text-anchor="middle" fill="#f97316">4</text></svg>',
+    fmtStat: () => sudokuAggFmt(), start: startSudoku },
   { id: 'tetris', name: '테트리스', emoji: '🟦', color: '#0ea5e9', best: 'high',
     fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startTetris },
 ];
@@ -575,6 +578,7 @@ function boardGames() {
     if (g.id === 'omok') for (const l of OMOK_LEVELS) out.push({ id: l.key, emoji: '⚫', name: `오목 ${l.label}`, best: 'high', fmtStat: omokFmt });
     else if (g.id === 'janggi') for (const l of JANGGI_LEVELS) out.push({ id: l.key, emoji: '漢', name: `장기 ${l.label}`, best: 'high', fmtStat: janggiFmt });
     else if (g.id === 'chess') for (const l of CHESS_LEVELS) out.push({ id: l.key, emoji: '♞', name: `체스 ${l.label}`, best: 'high', fmtStat: chessFmt });
+    else if (g.id === 'sudoku') for (const l of SUDOKU_LEVELS) out.push({ id: l.key, emoji: '🔲', name: `스도쿠 ${l.label}`, best: 'low', fmtStat: sudokuFmt });
     else if (g.id === 'fourball') for (const m of FOUR_MODES) out.push({ id: m.key, emoji: '🔴', name: m.name, best: 'high', fmtStat: m.fmt });
     else out.push(g);
   }
@@ -588,7 +592,7 @@ const HUB_CATEGORIES = [
   { label: '🎨 자유',  bgm: 'bright', ids: ['color', 'brush', 'roulette'] },
   { label: '♟️ 보드',  bgm: 'calm',   ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot'] },
   { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball'] },
-  { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess'] },
+  { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess', 'sudoku'] },
   { label: '🧠 퀴즈',  bgm: 'bright', ids: ['quizworld', 'flags', 'capital', 'mapq'] },
 ];
 // 게임이 아니라 다른 앱으로 가는 카드 — GAMES 에 넣지 않아 기록·순위판에는 안 나온다.
@@ -838,6 +842,194 @@ function startGuess(el) {
   document.getElementById('gBtn').onclick = go;
   document.getElementById('gIn').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
   document.getElementById('gReset').onclick = () => startGuess(el);
+}
+
+// ── 미니게임: 스도쿠 (1~5단계) ─────────────────────────
+// 1단계 4×4, 2단계 6×6, 3~5단계 9×9(주어진 숫자 수로 난이도). 문제는 매번 새로 만들고 답이 하나뿐인지 확인한다.
+const SUDOKU_LEVELS = [
+  { key: 'sudoku_1', label: '1단계', desc: '4×4 · 아주 쉬움',  n: 4, br: 2, bc: 2, clues: 8 },
+  { key: 'sudoku_2', label: '2단계', desc: '6×6 · 쉬움',      n: 6, br: 2, bc: 3, clues: 18 },
+  { key: 'sudoku_3', label: '3단계', desc: '9×9 · 보통',      n: 9, br: 3, bc: 3, clues: 40 },
+  { key: 'sudoku_4', label: '4단계', desc: '9×9 · 어려움',    n: 9, br: 3, bc: 3, clues: 32 },
+  { key: 'sudoku_5', label: '5단계', desc: '9×9 · 아주 어려움', n: 9, br: 3, bc: 3, clues: 26 },
+];
+const sudokuTime = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+const sudokuFmt = s => s ? `${s.plays}판 · 최고 ${s.best != null ? sudokuTime(s.best) : '-'}` : '아직 기록 없음';
+function sudokuAggFmt() {
+  const u = getCurrentUser(); if (!u) return '아직 기록 없음';
+  const parts = SUDOKU_LEVELS.map(l => { const s = getStat(l.key, u); return s && s.plays ? `${l.label} ${sudokuTime(s.best)}` : null; }).filter(Boolean);
+  return parts.length ? parts.join(' · ') : '아직 기록 없음';
+}
+// 풀이기 — 빈칸(0)을 후보가 가장 적은 칸부터 채운다. limit 개 해를 찾으면 멈춤(유일해 검사용 limit=2)
+function sudokuSolve(grid, L, limit, shuffle) {
+  const { n, br, bc } = L, g = grid.slice(), FULL = (1 << (n + 1)) - 2;
+  const row = Array(n).fill(0), col = Array(n).fill(0), box = Array(n).fill(0);
+  const bi = (r, c) => Math.floor(r / br) * (n / bc) + Math.floor(c / bc);
+  for (let i = 0; i < n * n; i++) if (g[i]) { const r = Math.floor(i / n), c = i % n, b = 1 << g[i]; row[r] |= b; col[c] |= b; box[bi(r, c)] |= b; }
+  let count = 0, first = null;
+  const rec = () => {
+    let best = -1, bestM = 0, bestCnt = 99;
+    for (let i = 0; i < n * n; i++) if (!g[i]) {
+      const r = Math.floor(i / n), c = i % n, m = FULL & ~(row[r] | col[c] | box[bi(r, c)]);
+      let k = 0; for (let x = m; x; x &= x - 1) k++;
+      if (k === 0) return false;
+      if (k < bestCnt) { best = i; bestM = m; bestCnt = k; if (k === 1) break; }
+    }
+    if (best < 0) { count++; if (!first) first = g.slice(); return count >= limit; }
+    const r = Math.floor(best / n), c = best % n, b2 = bi(r, c);
+    const vals = []; for (let v = 1; v <= n; v++) if (bestM & (1 << v)) vals.push(v);
+    if (shuffle) for (let i = vals.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [vals[i], vals[j]] = [vals[j], vals[i]]; }
+    for (const v of vals) {
+      const b = 1 << v; g[best] = v; row[r] |= b; col[c] |= b; box[b2] |= b;
+      if (rec()) return true;
+      g[best] = 0; row[r] &= ~b; col[c] &= ~b; box[b2] &= ~b;
+    }
+    return false;
+  };
+  rec();
+  return { count, solution: first };
+}
+// 문제 만들기 — 꽉 찬 답판을 만든 뒤, 답이 하나로 남는 동안 숫자를 지운다. 목표 개수까지 못 지우면 몇 번 다시 시도
+function sudokuMake(L) {
+  const N2 = L.n * L.n;
+  let bestP = null, bestSol = null, bestClues = N2;
+  const t0 = Date.now();
+  for (let attempt = 0; attempt < 12 && Date.now() - t0 < 2500; attempt++) {
+    const sol = sudokuSolve(Array(N2).fill(0), L, 1, true).solution;
+    const p = sol.slice();
+    const order = [...Array(N2).keys()];
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    let clues = N2;
+    for (const i of order) {
+      if (clues <= L.clues) break;
+      const keep = p[i]; p[i] = 0;
+      if (sudokuSolve(p, L, 2, false).count !== 1) p[i] = keep; else clues--;
+    }
+    if (clues < bestClues) { bestP = p; bestSol = sol; bestClues = clues; }
+    if (clues <= L.clues) break;
+  }
+  return { puzzle: bestP, solution: bestSol };
+}
+const SUDOKU_SAVE = 'gw-sudoku-cur';
+function sudokuSaved() {
+  try { const s = JSON.parse(localStorage.getItem(SUDOKU_SAVE) || 'null'); const u = getCurrentUser();
+    return s && u && s.uid === u.id && SUDOKU_LEVELS.find(l => l.key === s.key) ? s : null; } catch { return null; }
+}
+function startSudoku(el) {
+  const saved = sudokuSaved();
+  el.innerHTML = `<div class="mg omok-pick">
+    <div class="mg-msg">단계를 골라요 🔢</div>
+    <div class="omok-levels">
+      ${saved ? `<button data-resume="1" class="sd-resume">이어 하기<small>${SUDOKU_LEVELS.find(l => l.key === saved.key).label} · ${sudokuTime(saved.time || 0)}</small></button>` : ''}
+      ${SUDOKU_LEVELS.map(l => `<button data-k="${l.key}">${l.label}<small>${l.desc} · ${escapeHtml(sudokuFmt(getStat(l.key)))}</small></button>`).join('')}
+    </div>
+    <div class="sd-help">가로줄·세로줄·굵은 선 칸 안에 같은 숫자가 두 번 들어가지 않게 채워요.</div>
+  </div>`;
+  el.querySelectorAll('.omok-levels button').forEach(b => b.onclick = () => {
+    if (b.dataset.resume) { runSudoku(el, SUDOKU_LEVELS.find(l => l.key === saved.key), saved); return; }
+    const L = SUDOKU_LEVELS.find(l => l.key === b.dataset.k);
+    b.innerHTML = `${L.label}<small>문제를 만드는 중…</small>`;
+    setTimeout(() => runSudoku(el, L, null), 30);   // 글자가 먼저 바뀌어 보이게
+  });
+}
+function runSudoku(el, L, saved) {
+  const { n, br, bc } = L;
+  let puzzle, solution, cur, notes, time = 0, hints = 0, mistakes = 0;
+  if (saved) ({ puzzle, solution, cur, notes, time, hints, mistakes } = { hints: 0, mistakes: 0, ...saved });
+  else { const m = sudokuMake(L); puzzle = m.puzzle; solution = m.solution; cur = puzzle.slice(); notes = Array(n * n).fill(0); }
+  let sel = cur.findIndex(v => !v), noteMode = false, done = false, timer = null;
+  const u = getCurrentUser();
+  const persist = () => { try { if (done) localStorage.removeItem(SUDOKU_SAVE);
+    else localStorage.setItem(SUDOKU_SAVE, JSON.stringify({ uid: u && u.id, key: L.key, puzzle, solution, cur, notes, time, hints, mistakes })); } catch {} };
+  el.innerHTML = `<div class="mg sudoku">
+    <div class="sd-top"><span>${L.label} <small>${L.desc}</small></span><span>⏱ <b id="sdTime">${sudokuTime(time)}</b></span></div>
+    <div class="mg-msg" id="sdMsg">칸을 누르고 아래 숫자를 골라요</div>
+    <div class="sd-grid n${n}" id="sdGrid" style="grid-template-columns:repeat(${n},1fr)"></div>
+    <div class="sd-pad" id="sdPad" style="grid-template-columns:repeat(${n <= 6 ? n + 1 : 5},1fr)">
+      ${Array.from({ length: n }, (_, i) => `<button data-v="${i + 1}">${i + 1}</button>`).join('')}
+      <button data-v="0" class="sd-erase">⌫</button>
+    </div>
+    <div class="omok-btns">
+      <button class="btn ghost small" id="sdNote">✏️ 메모 끔</button>
+      <button class="btn ghost small" id="sdHint">💡 힌트</button>
+      <button class="btn ghost small" id="sdNew">새 문제</button>
+      <button class="btn ghost small" id="sdLevel">단계 변경</button>
+    </div>
+    <div class="sd-stat" id="sdStat"></div>
+  </div>`;
+  const grid = el.querySelector('#sdGrid'), msg = el.querySelector('#sdMsg');
+  const alive = () => !!el.querySelector('.sudoku');
+  const rc = i => [Math.floor(i / n), i % n];
+  const sameBox = (a, b) => { const [r1, c1] = rc(a), [r2, c2] = rc(b); return Math.floor(r1 / br) === Math.floor(r2 / br) && Math.floor(c1 / bc) === Math.floor(c2 / bc); };
+  const draw = () => {
+    const sv = sel >= 0 ? cur[sel] : 0;
+    grid.innerHTML = cur.map((v, i) => {
+      const [r, c] = rc(i), given = !!puzzle[i];
+      const cls = ['sd-c'];
+      if (given) cls.push('given'); else if (v && v !== solution[i]) cls.push('wrong'); else if (v) cls.push('mine');
+      if (i === sel) cls.push('sel');
+      else if (sel >= 0 && (rc(sel)[0] === r || rc(sel)[1] === c || sameBox(sel, i))) cls.push('rel');
+      if (sv && v === sv && i !== sel) cls.push('same');
+      if ((c + 1) % bc === 0 && c < n - 1) cls.push('br');
+      if ((r + 1) % br === 0 && r < n - 1) cls.push('bb');
+      const inner = v ? v : notes[i] ? `<span class="sd-notes" style="grid-template-columns:repeat(${n <= 4 ? 2 : 3},1fr)">${Array.from({ length: n }, (_, k) => `<i>${notes[i] & (1 << (k + 1)) ? k + 1 : ''}</i>`).join('')}</span>` : '';
+      return `<button class="${cls.join(' ')}" data-i="${i}">${inner}</button>`;
+    }).join('');
+    // 숫자 버튼에 남은 개수가 0이면 흐리게
+    el.querySelectorAll('#sdPad button[data-v]').forEach(b => { const v = +b.dataset.v; if (!v) return;
+      const used = cur.filter((x, i) => x === v && x === solution[i]).length; b.classList.toggle('full', used >= n); });
+    el.querySelector('#sdStat').textContent = `힌트 ${hints}번 · 틀린 입력 ${mistakes}번`;
+  };
+  const finish = () => {
+    done = true; clearInterval(timer); persist();
+    recordStat(L.key, { result: 'win', best: time });
+    const gb = document.getElementById('gameBest'); if (gb) gb.textContent = sudokuAggFmt();   // 단계별 키라 refreshStat 이 못 찾는다
+    msg.textContent = `완성! 🎉 ${sudokuTime(time)}${hints ? ` (힌트 ${hints}번)` : ''}`;
+    grid.classList.add('solved');
+  };
+  const put = v => {
+    if (done || sel < 0 || puzzle[sel]) return;
+    if (noteMode && v) { if (!cur[sel]) notes[sel] ^= (1 << v); draw(); persist(); return; }
+    cur[sel] = v; notes[sel] = 0;
+    if (v && v !== solution[sel]) { mistakes++; msg.textContent = '앗, 그 숫자는 아니에요 (빨간색)'; }
+    else if (v) {
+      msg.textContent = '좋아요!';
+      // 같은 줄·칸의 메모에서 이 숫자를 지워 준다
+      for (let i = 0; i < n * n; i++) { const [r, c] = rc(i), [sr, scc] = rc(sel); if (r === sr || c === scc || sameBox(sel, i)) notes[i] &= ~(1 << v); }
+    }
+    draw(); persist();
+    if (cur.every((x, i) => x === solution[i])) finish();
+  };
+  grid.onclick = e => { const b = e.target.closest('.sd-c'); if (!b) return; sel = +b.dataset.i; draw(); };
+  el.querySelector('#sdPad').onclick = e => { const b = e.target.closest('button'); if (b) put(+b.dataset.v); };
+  el.querySelector('#sdNote').onclick = e => { noteMode = !noteMode; e.target.textContent = noteMode ? '✏️ 메모 켬' : '✏️ 메모 끔'; e.target.classList.toggle('on', noteMode); };
+  el.querySelector('#sdHint').onclick = () => {
+    if (done) return;
+    let i = sel >= 0 && !puzzle[sel] && cur[sel] !== solution[sel] ? sel : cur.findIndex((v, k) => v !== solution[k]);
+    if (i < 0) return;
+    hints++; sel = i; const keep = noteMode; noteMode = false; put(solution[i]); noteMode = keep;
+    if (!done) msg.textContent = '💡 한 칸을 채웠어요';
+  };
+  el.querySelector('#sdNew').onclick = () => { clearInterval(timer); try { localStorage.removeItem(SUDOKU_SAVE); } catch {} msg.textContent = '문제를 만드는 중…'; setTimeout(() => runSudoku(el, L, null), 30); };
+  el.querySelector('#sdLevel').onclick = () => { clearInterval(timer); startSudoku(el); };
+  // 키보드(맥·태블릿): 숫자·방향키·백스페이스
+  const onKey = e => {
+    if (!alive()) { document.removeEventListener('keydown', onKey); return; }
+    if (/^[1-9]$/.test(e.key) && +e.key <= n) put(+e.key);
+    else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') put(0);
+    else if (e.key.startsWith('Arrow') && sel >= 0) {
+      const [r, c] = rc(sel), d = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
+      sel = ((r + d[0] + n) % n) * n + ((c + d[1] + n) % n); draw(); e.preventDefault();
+    }
+  };
+  document.addEventListener('keydown', onKey);
+  timer = setInterval(() => {
+    if (!alive()) { clearInterval(timer); return; }
+    if (document.hidden || done) return;
+    time++; const t = el.querySelector('#sdTime'); if (t) t.textContent = sudokuTime(time);
+    if (time % 5 === 0) persist();
+  }, 1000);
+  draw(); persist();
 }
 
 // ── 미니게임: 틱택토 ──────────────────────────────────

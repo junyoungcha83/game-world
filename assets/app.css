@@ -685,3 +685,32 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .betbb .bb-verdict.win { color:#34d399; }
 .betbb .bb-verdict.loss { color:#f87171; }
 .betbb .bb-sub { color:var(--muted); font-size:.88rem; }
+
+/* ── 스도쿠 ── */
+.mg.sudoku { gap: 12px; padding: 16px 10px; }
+.sd-top { display: flex; justify-content: space-between; width: 100%; font-weight: 800; font-size: .95rem; padding: 0 4px; }
+.sd-top small { color: var(--muted); font-weight: 600; margin-left: 4px; }
+.sd-grid { display: grid; width: min(94vw, 460px); aspect-ratio: 1; background: #0f172a; border: 3px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.sd-c { border: 0; border-right: 1px solid #475569; border-bottom: 1px solid #475569; background: #f8fafc; color: #1e3a8a;
+  font-weight: 800; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; font-family: inherit; }
+.sd-grid.n4 .sd-c { font-size: 2.2rem; } .sd-grid.n6 .sd-c { font-size: 1.7rem; } .sd-grid.n9 .sd-c { font-size: clamp(1rem, 5.2vw, 1.55rem); }
+.sd-c.br { border-right: 3px solid #0f172a; } .sd-c.bb { border-bottom: 3px solid #0f172a; }
+.sd-c.given { color: #0f172a; background: #e2e8f0; }
+.sd-c.mine { color: #2563eb; }
+.sd-c.wrong { color: #dc2626; background: #fee2e2; }
+.sd-c.rel { background: #dbeafe; } .sd-c.given.rel { background: #cbd5e1; }
+.sd-c.same { background: #bfdbfe; }
+.sd-c.sel { background: #fde68a !important; }
+.sd-grid.solved .sd-c { background: #dcfce7; transition: background .4s; }
+.sd-notes { display: grid; width: 100%; height: 100%; padding: 1px; }
+.sd-notes i { font-style: normal; font-size: clamp(.45rem, 2vw, .7rem); font-weight: 700; color: #64748b; display: flex; align-items: center; justify-content: center; line-height: 1; }
+.sd-grid.n4 .sd-notes i { font-size: .9rem; } .sd-grid.n6 .sd-notes i { font-size: .75rem; }
+.sd-pad { display: grid; gap: 6px; width: min(94vw, 460px); }
+.sd-pad button { padding: 12px 0; border-radius: 12px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); font-size: 1.35rem; font-weight: 800; cursor: pointer; }
+.sd-pad button:active { background: #243152; }
+.sd-pad button.full { opacity: .35; }
+.sd-pad .sd-erase { color: #f87171; }
+#sdNote.on { border-color: var(--gc, #14b8a6); color: var(--gc, #14b8a6); }
+.sd-stat { color: var(--muted); font-size: .8rem; }
+.sd-help { color: var(--muted); font-size: .82rem; text-align: center; max-width: 280px; line-height: 1.5; }
+.omok-levels .sd-resume { border-color: var(--gc, #14b8a6); }
