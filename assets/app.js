@@ -938,6 +938,8 @@ function runSudoku(el, L, saved) {
   if (saved) ({ puzzle, solution, cur, notes, time, hints, mistakes } = { hints: 0, mistakes: 0, ...saved });
   else { const m = sudokuMake(L); puzzle = m.puzzle; solution = m.solution; cur = puzzle.slice(); notes = Array(n * n).fill(0); }
   let sel = cur.findIndex(v => !v), noteMode = false, done = false, timer = null;
+  // 알려주기: 켜면 틀린 숫자를 빨갛게 표시하고 바로 알려 준다. 끄면 맞는지 틀린지 말하지 않는다(기본). 기기에 기억
+  let check = false; try { check = localStorage.getItem('gw-sudoku-check') === '1'; } catch {}
   const u = getCurrentUser();
   const persist = () => { try { if (done) localStorage.removeItem(SUDOKU_SAVE);
     else localStorage.setItem(SUDOKU_SAVE, JSON.stringify({ uid: u && u.id, key: L.key, puzzle, solution, cur, notes, time, hints, mistakes })); } catch {} };
@@ -949,8 +951,9 @@ function runSudoku(el, L, saved) {
       ${Array.from({ length: n }, (_, i) => `<button data-v="${i + 1}">${i + 1}</button>`).join('')}
       <button data-v="0" class="sd-erase">⌫</button>
     </div>
-    <div class="omok-btns">
+    <div class="omok-btns sd-btns">
       <button class="btn ghost small" id="sdNote">✏️ 메모 끔</button>
+      <button class="btn ghost small${check ? ' on' : ''}" id="sdCheck">${check ? '✅ 알려주기 켬' : '☑️ 알려주기 끔'}</button>
       <button class="btn ghost small" id="sdHint">💡 힌트</button>
       <button class="btn ghost small" id="sdNew">새 문제</button>
       <button class="btn ghost small" id="sdLevel">단계 변경</button>
@@ -966,7 +969,7 @@ function runSudoku(el, L, saved) {
     grid.innerHTML = cur.map((v, i) => {
       const [r, c] = rc(i), given = !!puzzle[i];
       const cls = ['sd-c'];
-      if (given) cls.push('given'); else if (v && v !== solution[i]) cls.push('wrong'); else if (v) cls.push('mine');
+      if (given) cls.push('given'); else if (check && v && v !== solution[i]) cls.push('wrong'); else if (v) cls.push('mine');
       if (i === sel) cls.push('sel');
       else if (sel >= 0 && (rc(sel)[0] === r || rc(sel)[1] === c || sameBox(sel, i))) cls.push('rel');
       if (sv && v === sv && i !== sel) cls.push('same');
@@ -977,8 +980,8 @@ function runSudoku(el, L, saved) {
     }).join('');
     // 숫자 버튼에 남은 개수가 0이면 흐리게
     el.querySelectorAll('#sdPad button[data-v]').forEach(b => { const v = +b.dataset.v; if (!v) return;
-      const used = cur.filter((x, i) => x === v && x === solution[i]).length; b.classList.toggle('full', used >= n); });
-    el.querySelector('#sdStat').textContent = `힌트 ${hints}번 · 틀린 입력 ${mistakes}번`;
+      const used = cur.filter((x, i) => x === v && (!check || x === solution[i])).length; b.classList.toggle('full', used >= n); });
+    el.querySelector('#sdStat').textContent = `힌트 ${hints}번` + (check ? ` · 틀린 입력 ${mistakes}번` : '');
   };
   const finish = () => {
     done = true; clearInterval(timer); persist();
@@ -991,18 +994,26 @@ function runSudoku(el, L, saved) {
     if (done || sel < 0 || puzzle[sel]) return;
     if (noteMode && v) { if (!cur[sel]) notes[sel] ^= (1 << v); draw(); persist(); return; }
     cur[sel] = v; notes[sel] = 0;
-    if (v && v !== solution[sel]) { mistakes++; msg.textContent = '앗, 그 숫자는 아니에요 (빨간색)'; }
+    const ok = v === solution[sel];
+    if (v && check && !ok) { mistakes++; msg.textContent = '앗, 그 숫자는 아니에요 (빨간색)'; }
     else if (v) {
-      msg.textContent = '좋아요!';
-      // 같은 줄·칸의 메모에서 이 숫자를 지워 준다
-      for (let i = 0; i < n * n; i++) { const [r, c] = rc(i), [sr, scc] = rc(sel); if (r === sr || c === scc || sameBox(sel, i)) notes[i] &= ~(1 << v); }
-    }
+      msg.textContent = check ? '좋아요!' : '　';
+      // 같은 줄·칸의 메모에서 이 숫자를 지워 준다(알려주기를 끈 상태에선 맞고 틀림과 상관없이)
+      if (ok || !check) for (let i = 0; i < n * n; i++) { const [r, c] = rc(i), [sr, scc] = rc(sel); if (r === sr || c === scc || sameBox(sel, i)) notes[i] &= ~(1 << v); }
+    } else msg.textContent = '　';
     draw(); persist();
     if (cur.every((x, i) => x === solution[i])) finish();
+    else if (!check && cur.every(x => x)) msg.textContent = '다 채웠는데 틀린 칸이 있어요 — 알려주기를 켜면 보여요';
   };
   grid.onclick = e => { const b = e.target.closest('.sd-c'); if (!b) return; sel = +b.dataset.i; draw(); };
   el.querySelector('#sdPad').onclick = e => { const b = e.target.closest('button'); if (b) put(+b.dataset.v); };
   el.querySelector('#sdNote').onclick = e => { noteMode = !noteMode; e.target.textContent = noteMode ? '✏️ 메모 켬' : '✏️ 메모 끔'; e.target.classList.toggle('on', noteMode); };
+  el.querySelector('#sdCheck').onclick = e => {
+    check = !check; try { localStorage.setItem('gw-sudoku-check', check ? '1' : '0'); } catch {}
+    e.target.textContent = check ? '✅ 알려주기 켬' : '☑️ 알려주기 끔'; e.target.classList.toggle('on', check);
+    if (!done) msg.textContent = check ? (cur.some((x, i) => x && !puzzle[i] && x !== solution[i]) ? '빨간 칸이 틀린 숫자예요' : '지금까지 틀린 숫자는 없어요') : '맞는지 알려 주지 않아요';
+    draw();
+  };
   el.querySelector('#sdHint').onclick = () => {
     if (done) return;
     let i = sel >= 0 && !puzzle[sel] && cur[sel] !== solution[sel] ? sel : cur.findIndex((v, k) => v !== solution[k]);

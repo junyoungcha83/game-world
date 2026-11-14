@@ -710,7 +710,9 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .sd-pad button:active { background: #243152; }
 .sd-pad button.full { opacity: .35; }
 .sd-pad .sd-erase { color: #f87171; }
-#sdNote.on { border-color: var(--gc, #14b8a6); color: var(--gc, #14b8a6); }
+#sdNote.on, #sdCheck.on { border-color: var(--gc, #14b8a6); color: var(--gc, #14b8a6); }
 .sd-stat { color: var(--muted); font-size: .8rem; }
 .sd-help { color: var(--muted); font-size: .82rem; text-align: center; max-width: 280px; line-height: 1.5; }
 .omok-levels .sd-resume { border-color: var(--gc, #14b8a6); }
+.sd-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 460px; }
+.sd-btns .btn { white-space: nowrap; }
