@@ -476,8 +476,7 @@ function sfxOptBind(el, id) {
 const GAMES = [
   { id: 'rps',   name: '가위바위보', emoji: '✊', color: '#f472b6', best: 'high',
     fmtStat: s => s ? `${s.plays}판·${s.wins}승 · 최고 ${s.best || 0}연승` : '아직 기록 없음', start: startRPS },
-  { id: 'guess', name: '숫자 맞히기', emoji: '123?', color: '#60a5fa', best: 'low',
-    svg: '<svg viewBox="0 0 100 100" width="100%" height="100%"><text x="50" y="64" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="900" font-size="40" fill="#fff" textLength="86" lengthAdjust="spacingAndGlyphs">123<tspan fill="#fde047">?</tspan></text></svg>',
+  { id: 'guess', name: '숫자 맞히기', emoji: '🔢', color: '#60a5fa', best: 'low',
     fmtStat: s => s ? `${s.plays}판 · 최고 ${s.best != null ? s.best + '번만에' : '-'}` : '아직 기록 없음', start: startGuess },
   { id: 'ttt',   name: '틱택토',     emoji: '⭕', color: '#34d399', best: 'high',
     fmtStat: s => s ? `${s.plays}판 · ${s.wins}승 ${s.losses}패 ${s.draws}무` : '아직 기록 없음', start: startTTT },
