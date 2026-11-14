@@ -916,6 +916,7 @@ function sudokuSaved() {
     return s && u && s.uid === u.id && SUDOKU_LEVELS.find(l => l.key === s.key) ? s : null; } catch { return null; }
 }
 function startSudoku(el) {
+  document.getElementById('gameBack').onclick = () => showView('hub');
   const saved = sudokuSaved();
   el.innerHTML = `<div class="mg omok-pick">
     <div class="mg-msg">단계를 골라요 🔢</div>
@@ -947,7 +948,7 @@ function runSudoku(el, L, saved) {
     <div class="sd-top"><span>${L.label} <small>${L.desc}</small></span><span>⏱ <b id="sdTime">${sudokuTime(time)}</b></span></div>
     <div class="mg-msg" id="sdMsg">칸을 누르고 아래 숫자를 골라요</div>
     <div class="sd-grid n${n}" id="sdGrid" style="grid-template-columns:repeat(${n},1fr)"></div>
-    <div class="sd-pad" id="sdPad" style="grid-template-columns:repeat(${n <= 6 ? n + 1 : 5},1fr)">
+    <div class="sd-pad" id="sdPad" style="grid-template-columns:repeat(${n + 1},1fr)">
       ${Array.from({ length: n }, (_, i) => `<button data-v="${i + 1}">${i + 1}</button>`).join('')}
       <button data-v="0" class="sd-erase">⌫</button>
     </div>
@@ -956,7 +957,6 @@ function runSudoku(el, L, saved) {
       <button class="btn ghost small${check ? ' on' : ''}" id="sdCheck">${check ? '✅ 알려주기 켬' : '☑️ 알려주기 끔'}</button>
       <button class="btn ghost small" id="sdHint">💡 힌트</button>
       <button class="btn ghost small" id="sdNew">새 문제</button>
-      <button class="btn ghost small" id="sdLevel">단계 변경</button>
     </div>
     <div class="sd-stat" id="sdStat"></div>
   </div>`;
@@ -1022,7 +1022,8 @@ function runSudoku(el, L, saved) {
     if (!done) msg.textContent = '💡 한 칸을 채웠어요';
   };
   el.querySelector('#sdNew').onclick = () => { clearInterval(timer); try { localStorage.removeItem(SUDOKU_SAVE); } catch {} msg.textContent = '문제를 만드는 중…'; setTimeout(() => runSudoku(el, L, null), 30); };
-  el.querySelector('#sdLevel').onclick = () => { clearInterval(timer); startSudoku(el); };
+  // ‹ 뒤로(기기 뒤로가기 포함) = 단계 선택 화면. 진행 중인 판은 저장돼 '이어 하기'로 돌아올 수 있다
+  document.getElementById('gameBack').onclick = () => { clearInterval(timer); persist(); startSudoku(el); };
   // 키보드(맥·태블릿): 숫자·방향키·백스페이스
   const onKey = e => {
     if (!alive()) { document.removeEventListener('keydown', onKey); return; }
