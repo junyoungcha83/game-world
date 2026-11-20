@@ -1351,7 +1351,9 @@ const GP_TRACKS = [
   { code: 'tr', country: '튀르키예',   city: '앙카라',      harm: [[5, 30, 0], [11, 18, 1.6]],          half: 40, ground: ['#b8ad7a', '#c3b886'], scene: 'stone' },
   { code: 'fr', country: '프랑스',     city: '파리',        harm: [[4, 28, 0], [14, 16, .4], [2, 8, 1]], half: 39, ground: ['#3f8f3a', '#4aa443'], scene: 'tree' },
   { code: 'au', country: '호주',       city: '캔버라',      harm: [[6, 28, 0], [15, 16, .8], [3, 8, 2]], half: 38, ground: ['#8a9a4a', '#97a756'], scene: 'eucalyptus' },
-].map((t, i) => ({ ...t, lv: i + 1, ai: i * 0.006, flag: (GP_NATIONS.find(n => n.code === t.code) || {}).flag || '' }));
+  // 마지막(15단계)은 우리나라 — 가장 어려운 코스
+  { code: 'kr', country: '대한민국',   city: '서울',        harm: [[6, 30, 0], [16, 16, 1.2], [3, 8, .4]], half: 37, ground: ['#4f7f4a', '#5a8b54'], scene: 'seoul' },
+].map((t, i) => ({ ...t, lv: i + 1, ai: i * 0.006, flag: ([GP_ME, ...GP_NATIONS].find(n => n.code === t.code) || {}).flag || '' }));
 const gpCenter = (d, T, amp) => { const u = d / GP_LEN * Math.PI * 2; let o = 0; for (const [k, a, p] of T.harm) o += a * Math.sin(k * u + p); return 100 + amp * o; };
 // 단계 열림 — 바로 앞 단계를 3위 안에 들면 다음 단계가 열린다(사용자별, 기기 간 동기화되는 기록 키 gp_unlock.best)
 const gpUnlocked = () => { const s = getStat('gp_unlock'); return Math.max(1, (s && s.best) || 1); };
@@ -1395,7 +1397,7 @@ function startGrandprix(el, mi) {
   const M = GP_MODES[mi], open = gpUnlocked();
   el.innerHTML = `<div class="mg omok-pick">
     <div class="mg-msg">🏁 코스 선택 <small class="gp-mode-tag">${M.label}</small></div>
-    <div class="sd-help">세계 14개국 수도 코스 · 단계가 오를수록 커브가 급하고 길이 좁아져요.<br>바로 앞 단계에서 <b>3위 안</b>에 들면 다음 단계가 열려요. (${open}/${GP_TRACKS.length} 열림)</div>
+    <div class="sd-help">세계 14개국 수도를 돌고 마지막 15단계는 🇰🇷 서울 · 단계가 오를수록 커브가 급하고 길이 좁아져요.<br>바로 앞 단계에서 <b>3위 안</b>에 들면 다음 단계가 열려요. (${open}/${GP_TRACKS.length} 열림)</div>
     <div class="gp-tracks">${GP_TRACKS.map(t => `<button data-lv="${t.lv}" ${t.lv > open ? 'disabled' : ''}>
       <span class="gp-lv">${t.lv}</span><span class="gp-fl">${t.flag}</span><b>${escapeHtml(t.city)}</b><small>${escapeHtml(t.country)}${t.lv > open ? ' · 🔒' : ''}</small></button>`).join('')}</div>
   </div>`;
@@ -1416,6 +1418,11 @@ function gpScene(g, type, x, y, SC, seed) {
     case 'building': g.fillStyle = ['#94a3b8', '#64748b', '#cbd5e1'][seed % 3]; g.fillRect(x - 6 * SC, y - 12 * SC, 12 * SC, 24 * SC); g.fillStyle = '#fde68a';
       for (let r = -10; r < 10; r += 4) for (let c = -4; c < 5; c += 4) if ((r + c + seed) % 3) g.fillRect(x + c * SC - SC, y + r * SC, 2 * SC, 2 * SC); break;
     case 'wall': g.fillStyle = '#a8a29e'; g.fillRect(x - 4 * SC, y - 14 * SC, 8 * SC, 28 * SC); g.fillStyle = '#78716c'; for (let r = -14; r < 14; r += 4) g.fillRect(x + 4 * SC, y + r * SC, 2 * SC, 2 * SC); break;
+    case 'seoul':   // 빌딩숲 사이로 남산서울타워·한옥 지붕
+      if (seed % 5 === 0) { g.fillStyle = '#e5e7eb'; g.fillRect(x - 1 * SC, y - 16 * SC, 2 * SC, 26 * SC); g.fillStyle = '#94a3b8'; g.fillRect(x - 4 * SC, y - 10 * SC, 8 * SC, 4 * SC); g.fillStyle = '#ef4444'; g.fillRect(x - .6 * SC, y - 20 * SC, 1.2 * SC, 4 * SC); C('#166534', x, y + 10 * SC, 7 * SC); }
+      else if (seed % 5 === 1) { g.fillStyle = '#e7d4b5'; g.fillRect(x - 7 * SC, y - 2 * SC, 14 * SC, 8 * SC); g.fillStyle = '#475569'; g.beginPath(); g.moveTo(x - 10 * SC, y - 1 * SC); g.quadraticCurveTo(x, y - 10 * SC, x + 10 * SC, y - 1 * SC); g.closePath(); g.fill(); }
+      else gpScene(g, 'building', x, y, SC, seed);
+      break;
     case 'eucalyptus': C('#7c9a6b', x, y, 6 * SC); C('#9fb98d', x - 2 * SC, y - 2 * SC, 3 * SC); break;
     default: C('#166534', x, y, 7 * SC); C('#1f7a3f', x + 2 * SC, y - 2 * SC, 3.5 * SC);
   }
