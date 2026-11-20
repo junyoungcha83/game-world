@@ -800,5 +800,5 @@ body.yb-playing { overflow: hidden; }
 .gp-tracks b { font-size: .95rem; } .gp-tracks small { color: var(--muted); font-size: .72rem; }
 .gp-mode-tag { font-size: .75rem; padding: 2px 8px; border-radius: 999px; background: var(--gc, #dc2626); color: #fff; margin-left: 6px; }
 .gp-ceremony { inset: 4% 4% auto; max-height: 92%; overflow: auto; }
-.gp-pod-cv { width: 100%; height: min(46vh, 300px); border-radius: 12px; display: block; }
+.gp-pod-cv { width: 100%; height: min(50vh, 330px); border-radius: 12px; display: block; }
 .gp-unlock { color: #fde047; font-weight: 800; }

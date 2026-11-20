@@ -1463,8 +1463,10 @@ function gpPodiumAnim(cv, top3) {
   const dpr = Math.min(2, devicePixelRatio || 1), W = cv.clientWidth || 300, H = cv.clientHeight || 200;
   cv.width = W * dpr; cv.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0);
   const conf = Array.from({ length: 70 }, () => ({ x: Math.random() * W, y: -Math.random() * H, v: 40 + Math.random() * 60, c: ['#facc15', '#ef4444', '#3b82f6', '#22c55e', '#f8fafc', '#e879f9'][Math.floor(Math.random() * 6)], r: Math.random() * 6 }));
-  const groundY = H * 0.92, bw = W * 0.24;
-  const PODS = [{ rank: 2, x: W * 0.5 - bw * 1.02, h: H * 0.22 }, { rank: 1, x: W * 0.5, h: H * 0.32 }, { rank: 3, x: W * 0.5 + bw * 1.02, h: H * 0.15 }];
+  const groundY = H * 0.94, bw = W * 0.24, fw = bw * 0.62, fh = fw * 0.62;
+  // 3위 시상대도 국기 + 순위 숫자가 다 보이는 높이로 잡고, 2·1위는 그만큼 위로 더 쌓는다
+  const base = fh + 30;
+  const PODS = [{ rank: 2, x: W * 0.5 - bw * 1.02, h: base + H * 0.07 }, { rank: 1, x: W * 0.5, h: base + H * 0.16 }, { rank: 3, x: W * 0.5 + bw * 1.02, h: base }];
   const CUP = { 1: ['#facc15', '#a16207'], 2: ['#e5e7eb', '#6b7280'], 3: ['#d97706', '#78350f'] };
   const person = (x, feet, color, me, phase, arms, cup) => {
     const s = H * 0.0042, jump = arms ? Math.abs(Math.sin(phase * 6)) * 10 * s : 0, y = feet - jump;
@@ -1490,14 +1492,14 @@ function gpPodiumAnim(cv, top3) {
     const t = (now - t0) / 1000;
     const sky = g.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#1e3a8a'); sky.addColorStop(1, '#312e81'); g.fillStyle = sky; g.fillRect(0, 0, W, H);
     // 관중(점) + 조명
-    for (let i = 0; i < 60; i++) { g.fillStyle = `hsl(${(i * 47) % 360} 50% ${40 + (i % 3) * 8}%)`; g.beginPath(); g.arc((i * 37) % W, H * 0.3 + ((i * 13) % 20) - Math.abs(Math.sin(t * 5 + i)) * 3, 4, 0, Math.PI * 2); g.fill(); }
+    for (let i = 0; i < 60; i++) { g.fillStyle = `hsl(${(i * 47) % 360} 50% ${40 + (i % 3) * 8}%)`; g.beginPath(); g.arc((i * 37) % W, H * 0.22 + ((i * 13) % 20) - Math.abs(Math.sin(t * 5 + i)) * 3, 4, 0, Math.PI * 2); g.fill(); }
     g.fillStyle = '#374151'; g.fillRect(0, groundY, W, H - groundY);
     // 시상대(국기)
     PODS.forEach((p, i) => {
       const c = top3[p.rank - 1]; if (!c) return;
       g.fillStyle = '#e5e7eb'; g.fillRect(p.x - bw / 2, groundY - p.h, bw, p.h);
       g.fillStyle = '#9ca3af'; g.fillRect(p.x - bw / 2, groundY - p.h, bw, 3);
-      const fw = bw * 0.62, fh = fw * 0.62; gpFlag(g, c.nat.code, p.x - fw / 2, groundY - p.h + 8, fw, Math.min(fh, p.h - 26));
+      gpFlag(g, c.nat.code, p.x - fw / 2, groundY - p.h + 7, fw, fh);
       g.fillStyle = '#111827'; g.font = `900 ${Math.round(bw * 0.2)}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillText(String(p.rank), p.x, groundY - 6);
     });
     // 선수: 0~1.6초 걸어 나옴 → 1.6~2.2초 올라섬 → 2.2초부터 트로피 들고 환호
@@ -1587,8 +1589,9 @@ function runGrandprix(el, M, T, mi) {
     const steer = (keys.R ? 1 : 0) - (keys.L ? 1 : 0);
     P.x += steer * M.steer * Math.min(1, 0.35 + P.v / GP_VMAX) * dt;
     // 기름 웅덩이 — 밟으면 잠깐 미끄러지며 감속
-    if (oilAt(P.d, P.x) && !(P.slipT > 0)) { P.slipT = 0.8; P.slipDir = Math.random() < 0.5 ? -1 : 1; P.v *= 0.82; beep(200, 0.25, 'triangle'); }
-    if (P.slipT > 0) { P.slipT -= dt; P.x += P.slipDir * 46 * dt; }
+    // 밟는 순간 속도가 절반으로 뚝 떨어지고, 미끄러지는 0.8초 동안은 다시 속도를 내지 못한다
+    if (oilAt(P.d, P.x) && !(P.slipT > 0)) { P.slipT = 0.8; P.slipDir = Math.random() < 0.5 ? -1 : 1; P.v *= 0.5; st.oilT = st.t; beep(200, 0.3, 'triangle'); if (navigator.vibrate) try { navigator.vibrate([30, 40, 30]); } catch {} }
+    if (P.slipT > 0) { P.slipT -= dt; P.x += P.slipDir * 46 * dt; P.v = Math.min(P.v, GP_VMAX * 0.45); }
     P.x = Math.max(4, Math.min(196, P.x));
     P.d += P.v * dt;
     // AI — 실력(SK)에 따라: 코너를 얼마나 앞서 보고 감속하는지, 줄을 얼마나 빨리 따라가는지, 실수·추월·막기
@@ -1614,7 +1617,7 @@ function runGrandprix(el, M, T, mi) {
       c.lane = Math.max(-lim, Math.min(lim, c.lane));
       const tx = cen(c.d) + c.lane + (c.wobT > 0 ? c.wob : 0);
       c.x += Math.sign(tx - c.x) * Math.min(Math.abs(tx - c.x), (80 + 120 * SK) * dt);
-      if (oilAt(c.d, c.x) && !(c.slipT > 0)) { c.slipT = 0.6; c.v *= 0.85; c.x += (Math.random() < 0.5 ? -1 : 1) * 6; }
+      if (oilAt(c.d, c.x) && !(c.slipT > 0)) { c.slipT = 0.6; c.v *= 0.55; c.x += (Math.random() < 0.5 ? -1 : 1) * 6; }
       if (c.slipT > 0) c.slipT -= dt;
       c.d += c.v * dt;
     }
@@ -1759,6 +1762,9 @@ function runGrandprix(el, M, T, mi) {
       g.fillStyle = st.t < 0 ? '#ef4444' : '#22c55e'; g.fillText(st.t < 0 ? String(n) : 'GO!', W / 2, H * 0.38);
     }
     if (st.t - st.bump < 0.25 && st.t > 0) { g.fillStyle = 'rgba(239,68,68,.18)'; g.fillRect(0, 0, W, H); }
+    if (st.oilT != null && st.t - st.oilT < 0.9) {   // 기름 밟음 알림
+      g.fillStyle = 'rgba(88,28,135,.22)'; g.fillRect(0, 0, W, H);
+      g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `900 ${Math.round(W * 0.07)}px system-ui,sans-serif`; g.fillStyle = '#f5d0fe'; g.fillText('🛢️ 미끄러짐!', W / 2, H * 0.42); }
   };
   let raf = 0, last = performance.now();
   const loop = now => {
