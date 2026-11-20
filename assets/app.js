@@ -1791,7 +1791,7 @@ function runGrandprix(el, M, T, mi) {
 // ── 미니게임: 슬라이딩퍼즐 ────────────────────────────
 // 그림 고르기(내 사진·기본 그림) → 정사각형 자를 부분 끌어서 고르기 → 크기(4×4~9×9) → 퍼즐.
 // 섞기는 완성 상태에서 빈칸을 무작위로 움직여 만든다(항상 풀 수 있음). 그림은 폰 안(localStorage)에만, 기록은 동기화.
-const SLIDE_SIZES = [4, 5, 6, 7, 8, 9];
+const SLIDE_SIZES = [4, 5];   // 2026-11-21 사용자 요청으로 4×4·5×5만(6×6~9×9 제외)
 const SLIDE_SAVE = 'gw-slide-cur', SLIDE_RES = 720;
 const slideTime = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 const slideFmt = s => s ? `${s.plays}판 · 최고 ${s.best != null ? slideTime(s.best) : '-'}${s.moves ? ' · 최소 ' + s.moves + '번' : ''}` : '아직 기록 없음';

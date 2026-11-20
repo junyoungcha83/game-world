@@ -831,7 +831,7 @@ body.yb-playing { overflow: hidden; }
 .sl-box i { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.35) 1px, transparent 1px); background-size: 33.33% 33.33%; }
 .slide-crop .sl-cropwrap { overflow: hidden; }
 .sl-zoom { display: flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--muted); } .sl-zoom input { width: 180px; }
-.sl-sizes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: min(94vw, 440px); }
+.sl-sizes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; width: min(94vw, 440px); }
 .sl-sizes button { display: flex; flex-direction: column; align-items: center; padding: 10px 4px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); font: inherit; font-weight: 900; font-size: 1.05rem; cursor: pointer; }
 .sl-sizes button small { font-size: .62rem; color: var(--muted); font-weight: 600; text-align: center; }
 .mg.slide { gap: 10px; padding: 14px 8px; }
