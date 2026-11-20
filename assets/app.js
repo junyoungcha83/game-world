@@ -65,6 +65,8 @@ function mergeStat(a, b, gid) {
   if (bs.length) out.best = dir === 'high' ? Math.max(...bs) : Math.min(...bs);
   const ls = [a.lap, b.lap].filter(v => v != null);          // 그랑프리 최고 랩(작을수록 좋음)
   if (ls.length) out.lap = Math.min(...ls);
+  const ms = [a.moves, b.moves].filter(v => v != null);      // 슬라이딩퍼즐 최소 이동 수
+  if (ms.length) out.moves = Math.min(...ms);
   return out;
 }
 // 로컬·원격 상태를 '이름' 기준으로 정규화 병합 → { state, remap(oldId→canonId) }.
@@ -526,6 +528,9 @@ const GAMES = [
     fmtStat: () => yeoubiAggFmt(), start: startYeoubi },
   { id: 'grandprix', name: '그랑프리', emoji: '🏎️', color: '#dc2626', best: 'low',
     fmtStat: () => gpAggFmt(), start: startGrandprix },
+  { id: 'slide', name: '슬라이딩퍼즐', emoji: '🧩', color: '#0ea5e9', best: 'low',
+    svg: '<svg viewBox="0 0 100 100" width="100%" height="100%"><g stroke="#0c4a6e" stroke-width="2"><rect x="18" y="18" width="20" height="20" rx="3" fill="#fde047"/><rect x="40" y="18" width="20" height="20" rx="3" fill="#f97316"/><rect x="62" y="18" width="20" height="20" rx="3" fill="#ef4444"/><rect x="18" y="40" width="20" height="20" rx="3" fill="#a3e635"/><rect x="40" y="40" width="20" height="20" rx="3" fill="#22d3ee"/><rect x="18" y="62" width="20" height="20" rx="3" fill="#c084fc"/><rect x="62" y="62" width="20" height="20" rx="3" fill="#f9a8d4"/><rect x="40" y="62" width="20" height="20" rx="3" fill="#fff" opacity=".35"/></g><path d="M62 50 h12 m-5 -5 l5 5 -5 5" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round"/></svg>',
+    fmtStat: () => slideAggFmt(), start: startSlide },
   { id: 'tetris', name: '테트리스', emoji: '🟦', color: '#0ea5e9', best: 'high',
     fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startTetris },
 ];
@@ -588,6 +593,7 @@ function boardGames() {
     if (g.id === 'omok') for (const l of OMOK_LEVELS) out.push({ id: l.key, emoji: '⚫', name: `오목 ${l.label}`, best: 'high', fmtStat: omokFmt });
     else if (g.id === 'janggi') for (const l of JANGGI_LEVELS) out.push({ id: l.key, emoji: '漢', name: `장기 ${l.label}`, best: 'high', fmtStat: janggiFmt });
     else if (g.id === 'chess') for (const l of CHESS_LEVELS) out.push({ id: l.key, emoji: '♞', name: `체스 ${l.label}`, best: 'high', fmtStat: chessFmt });
+    else if (g.id === 'slide') for (const k of SLIDE_SIZES) out.push({ id: 'slide_' + k, emoji: '🧩', name: `슬라이딩퍼즐 ${k}×${k}`, best: 'low', fmtStat: slideFmt });
     else if (g.id === 'grandprix') for (const m of GP_MODES) out.push({ id: m.key, emoji: '🏎️', name: `그랑프리 ${m.label}`, best: 'low', fmtStat: gpFmt });
     else if (g.id === 'yeoubi') for (const m of YB_MODES) out.push({ id: m.key, emoji: '🌧️', name: `소나기 ${m.label}`, best: 'high', fmtStat: ybFmt });
     else if (g.id === 'sudoku') for (const l of SUDOKU_LEVELS) out.push({ id: l.key, emoji: '🔲', name: `스도쿠 ${l.label}`, best: 'low', fmtStat: sudokuFmt });
@@ -602,7 +608,7 @@ function boardGames() {
 // bgm: 이 분류의 게임에 깔릴 배경음악(BGM_SONGS 의 키)
 const HUB_CATEGORIES = [
   { label: '🎨 자유',  bgm: 'bright', ids: ['color', 'brush', 'draw', 'roulette'] },
-  { label: '♟️ 보드',  bgm: 'calm',   ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot'] },
+  { label: '♟️ 보드',  bgm: 'calm',   ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot', 'slide'] },
   { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball', 'grandprix'] },
   { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess', 'sudoku', 'yeoubi'] },
   { label: '🧠 퀴즈',  bgm: 'bright', ids: ['quizworld', 'flags', 'capital', 'mapq'] },
@@ -1780,6 +1786,193 @@ function runGrandprix(el, M, T, mi) {
   gpRunning = cleanup;
   document.getElementById('gameBack').onclick = () => { cleanup(); gpRunning = null; startGrandprix(el, mi); };
   raf = requestAnimationFrame(t => { last = t; loop(t); });
+}
+
+// ── 미니게임: 슬라이딩퍼즐 ────────────────────────────
+// 그림 고르기(내 사진·기본 그림) → 정사각형 자를 부분 끌어서 고르기 → 크기(4×4~9×9) → 퍼즐.
+// 섞기는 완성 상태에서 빈칸을 무작위로 움직여 만든다(항상 풀 수 있음). 그림은 폰 안(localStorage)에만, 기록은 동기화.
+const SLIDE_SIZES = [4, 5, 6, 7, 8, 9];
+const SLIDE_SAVE = 'gw-slide-cur', SLIDE_RES = 720;
+const slideTime = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+const slideFmt = s => s ? `${s.plays}판 · 최고 ${s.best != null ? slideTime(s.best) : '-'}${s.moves ? ' · 최소 ' + s.moves + '번' : ''}` : '아직 기록 없음';
+function slideAggFmt() {
+  const u = getCurrentUser(); if (!u) return '아직 기록 없음';
+  const parts = SLIDE_SIZES.map(n => { const s = getStat('slide_' + n, u); return s && s.plays ? `${n}×${n} ${slideTime(s.best)}` : null; }).filter(Boolean);
+  return parts.length ? parts.join(' · ') : '아직 기록 없음';
+}
+// 기본 그림 — 색칠하기 밑그림에 색을 입혀 만든다(사진이 없어도 바로 해 볼 수 있게)
+const SLIDE_SAMPLES = [
+  { pic: '강아지', bg: '#bae6fd', cols: ['#d2a679', '#92400e', '#f5d0b5', '#000000', '#ef4444', '#f9a8d4'] },
+  { pic: '로켓',   bg: '#1e3a8a', cols: ['#e5e7eb', '#ef4444', '#facc15', '#22d3ee', '#f97316', '#9ca3af'] },
+  { pic: '공룡',   bg: '#fde68a', cols: ['#22c55e', '#4d7c0f', '#86efac', '#f97316', '#000000', '#ffffff'] },
+  { pic: '문어',   bg: '#a5f3fc', cols: ['#ec4899', '#f9a8d4', '#c084fc', '#000000', '#ffffff', '#facc15'] },
+  { pic: '펭귄',   bg: '#dbeafe', cols: ['#000000', '#ffffff', '#f97316', '#3b82f6', '#fde047', '#9ca3af'] },
+];
+function slideSampleUrl(i, done) {
+  const smp = SLIDE_SAMPLES[i], cp = COLOR_PICS.find(p => p.name === smp.pic);
+  if (!cp) { done(null); return; }
+  const tmp = document.createElement('div');
+  tmp.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" fill="${smp.bg}"/>${cp.svg}</svg>`;
+  const svg = tmp.firstElementChild;
+  svg.querySelectorAll('.cregion').forEach((r, k) => r.setAttribute('fill', smp.cols[k % smp.cols.length]));
+  svgToCanvas(svg, SLIDE_RES, smp.bg, c => done(c ? c.toDataURL('image/jpeg', 0.9) : null));
+}
+function slideSaved() {
+  try { const s = JSON.parse(localStorage.getItem(SLIDE_SAVE) || 'null'); const u = getCurrentUser(); return s && u && s.uid === u.id && s.img && s.tiles ? s : null; } catch { return null; }
+}
+function startSlide(el) {
+  document.getElementById('gameBack').onclick = () => showView('hub');
+  const saved = slideSaved(), imgs = galleryGet();
+  el.innerHTML = `<div class="mg omok-pick slide-pick">
+    <div class="mg-msg">🧩 슬라이딩퍼즐 — 그림을 골라요</div>
+    ${saved ? `<button class="btn primary" id="slResume">이어 하기 (${saved.n}×${saved.n} · ${saved.moves}번 · ${slideTime(saved.time || 0)})</button>` : ''}
+    <div class="sl-sec">내 그림 <small>${imgs.length}장</small></div>
+    <div class="sl-thumbs" id="slMine">
+      <button class="sl-add" id="slAdd">＋<small>그림 추가</small></button>
+      ${imgs.map((u, i) => `<button class="sl-th" data-g="${i}"><img src="${u}" alt=""></button>`).join('')}
+    </div>
+    <div class="sl-sec">기본 그림</div>
+    <div class="sl-thumbs" id="slSmp">${SLIDE_SAMPLES.map((s, i) => `<button class="sl-th" data-s="${i}"><span>${escapeHtml(s.pic)}</span></button>`).join('')}</div>
+    <div class="sd-help">고른 그림에서 퍼즐로 쓸 정사각형 부분을 직접 정할 수 있어요.<br>그림은 이 폰 안에만 저장돼요(색칠하기·붓칠하기·그림그리기와 같은 목록).</div>
+    <input type="file" accept="image/*" multiple id="slFile" style="display:none">
+  </div>`;
+  if (saved) el.querySelector('#slResume').onclick = () => runSlide(el, saved.img, saved.n, saved);
+  const fileEl = el.querySelector('#slFile');
+  el.querySelector('#slAdd').onclick = () => fileEl.click();
+  fileEl.onchange = () => addFilesToGallery(fileEl, (added) => { if (added == null) return; const g = galleryGet(); if (added && g.length) slideCrop(el, g[g.length - 1]); else startSlide(el); });
+  el.querySelectorAll('[data-g]').forEach(b => b.onclick = () => slideCrop(el, galleryGet()[+b.dataset.g]));
+  // 기본 그림 미리보기
+  el.querySelectorAll('[data-s]').forEach(b => {
+    slideSampleUrl(+b.dataset.s, url => { if (url) { b.dataset.url = url; b.innerHTML = `<img src="${url}" alt="">`; } });
+    b.onclick = () => { if (b.dataset.url) slideCrop(el, b.dataset.url); };
+  });
+}
+// 자를 부분 고르기 — 정사각형 틀을 끌어서 옮기고, 아래 막대로 크기를 정한다
+function slideCrop(el, url) {
+  document.getElementById('gameBack').onclick = () => startSlide(el);
+  el.innerHTML = `<div class="mg omok-pick slide-crop">
+    <div class="mg-msg">✂️ 퍼즐로 쓸 부분을 골라요</div>
+    <div class="sl-cropwrap" id="slWrap"><img id="slImg" src="${url}" alt=""><div class="sl-box" id="slBox"><i></i></div></div>
+    <label class="sl-zoom">작게 <input type="range" id="slZoom" min="30" max="100" value="100"> 크게</label>
+    <div class="sd-help">사각형을 끌어서 옮기고, 막대로 크기를 바꿔요.</div>
+    <div class="sl-sec">크기를 고르면 시작해요</div>
+    <div class="sl-sizes">${SLIDE_SIZES.map(n => `<button data-n="${n}">${n}×${n}<small>${escapeHtml(slideFmt(getStat('slide_' + n)))}</small></button>`).join('')}</div>
+  </div>`;
+  const img = el.querySelector('#slImg'), box = el.querySelector('#slBox'), wrap = el.querySelector('#slWrap'), zoom = el.querySelector('#slZoom');
+  let bx = 0, by = 0, bs = 0, iw = 0, ih = 0;   // 화면 좌표(표시된 그림 기준)
+  const layout = () => {
+    iw = img.clientWidth; ih = img.clientHeight; if (!iw || !ih) return;
+    const max = Math.min(iw, ih); bs = max * (+zoom.value / 100);
+    bx = Math.max(0, Math.min(iw - bs, bx || (iw - bs) / 2)); by = Math.max(0, Math.min(ih - bs, by || (ih - bs) / 2));
+    box.style.cssText = `left:${bx}px;top:${by}px;width:${bs}px;height:${bs}px`;
+  };
+  img.onload = () => { bx = by = 0; layout(); };
+  if (img.complete) layout();
+  zoom.oninput = () => { const cx = bx + bs / 2, cy = by + bs / 2; const max = Math.min(iw, ih); bs = max * (+zoom.value / 100); bx = cx - bs / 2; by = cy - bs / 2; bx = Math.max(0, Math.min(iw - bs, bx)); by = Math.max(0, Math.min(ih - bs, by)); box.style.cssText = `left:${bx}px;top:${by}px;width:${bs}px;height:${bs}px`; };
+  let drag = null;
+  box.addEventListener('pointerdown', e => { e.preventDefault(); box.setPointerCapture(e.pointerId); drag = { x: e.clientX, y: e.clientY, bx, by }; });
+  box.addEventListener('pointermove', e => { if (!drag) return; bx = Math.max(0, Math.min(iw - bs, drag.bx + e.clientX - drag.x)); by = Math.max(0, Math.min(ih - bs, drag.by + e.clientY - drag.y)); box.style.left = bx + 'px'; box.style.top = by + 'px'; });
+  const up = () => { drag = null; }; box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
+  el.querySelectorAll('[data-n]').forEach(b => b.onclick = () => {
+    const k = img.naturalWidth / iw, c = document.createElement('canvas'); c.width = c.height = SLIDE_RES;
+    c.getContext('2d').drawImage(img, bx * k, by * k, bs * k, bs * k, 0, 0, SLIDE_RES, SLIDE_RES);
+    let out = ''; try { out = c.toDataURL('image/jpeg', 0.86); } catch {}
+    if (out) runSlide(el, out, +b.dataset.n, null);
+  });
+}
+function runSlide(el, img, n, saved) {
+  const N = n * n, u = getCurrentUser();
+  let tiles, moves = 0, time = 0, done = false, timer = null, showNum = n >= 7, peek = false;
+  if (saved) ({ tiles, moves, time } = saved); else {
+    tiles = [...Array(N).keys()];            // tiles[칸] = 조각 번호, N-1 = 빈칸
+    let blank = N - 1, prev = -1;
+    for (let k = 0; k < N * 40; k++) {         // 빈칸 무작위 이동(바로 되돌리기 금지) — 항상 풀 수 있는 배치
+      const r = Math.floor(blank / n), c = blank % n, nb = [];
+      if (r > 0) nb.push(blank - n); if (r < n - 1) nb.push(blank + n); if (c > 0) nb.push(blank - 1); if (c < n - 1) nb.push(blank + 1);
+      const opts = nb.filter(x => x !== prev), t = opts[Math.floor(Math.random() * opts.length)];
+      tiles[blank] = tiles[t]; tiles[t] = N - 1; prev = blank; blank = t;
+    }
+    if (tiles.every((v, i) => v === i)) return runSlide(el, img, n, null);
+  }
+  try { showNum = JSON.parse(localStorage.getItem('gw-slide-num-' + n)) ?? showNum; } catch {}
+  const persist = () => { try { if (done) localStorage.removeItem(SLIDE_SAVE); else localStorage.setItem(SLIDE_SAVE, JSON.stringify({ uid: u && u.id, n, img, tiles, moves, time })); } catch {} };
+  el.innerHTML = `<div class="mg slide">
+    <div class="sd-top"><span>${n}×${n}</span><span>👣 <b id="slMoves">${moves}</b>번</span><span>⏱ <b id="slTime">${slideTime(time)}</b></span></div>
+    <div class="sl-board" id="slBoard" style="--n:${n}"></div>
+    <div class="omok-btns sd-btns">
+      <button class="btn ghost small${showNum ? ' on' : ''}" id="slNum">🔢 숫자 ${showNum ? '켬' : '끔'}</button>
+      <button class="btn ghost small" id="slPeek">👁 원본 보기</button>
+      <button class="btn ghost small" id="slShuffle">🔀 새로 섞기</button>
+    </div>
+    <div class="sd-help" id="slMsg">빈칸 옆(같은 줄) 조각을 누르거나 밀면 움직여요</div>
+  </div>`;
+  const board = el.querySelector('#slBoard');
+  board.style.backgroundImage = 'none';
+  const tileEls = [];
+  for (let p = 0; p < N - 1; p++) {
+    const d = document.createElement('div'); d.className = 'sl-tile';
+    d.style.backgroundImage = `url(${img})`; d.style.backgroundSize = `${n * 100}% ${n * 100}%`;
+    d.style.backgroundPosition = `${(p % n) / (n - 1) * 100}% ${Math.floor(p / n) / (n - 1) * 100}%`;
+    d.innerHTML = `<b>${p + 1}</b>`; board.appendChild(d); tileEls[p] = d;
+  }
+  const place = () => {
+    tiles.forEach((p, i) => { if (p === N - 1) return; const d = tileEls[p]; d.style.transform = `translate(${(i % n) * 100}%, ${Math.floor(i / n) * 100}%)`; d.classList.toggle('ok', p === i); });
+    board.classList.toggle('nums', showNum); board.classList.toggle('peek', peek);
+    el.querySelector('#slMoves').textContent = moves;
+  };
+  const blankIdx = () => tiles.indexOf(N - 1);
+  // idx 칸의 조각을 빈칸 쪽으로 — 같은 줄이면 사이의 조각까지 한꺼번에
+  const moveFrom = (idx) => {
+    if (done) return false;
+    const b = blankIdx(), br = Math.floor(b / n), bc = b % n, r = Math.floor(idx / n), c = idx % n;
+    if (idx === b || (r !== br && c !== bc)) return false;
+    const step = r === br ? (c > bc ? 1 : -1) : (r > br ? n : -n);
+    let cur = b; while (cur !== idx) { const nx = cur + step; tiles[cur] = tiles[nx]; tiles[nx] = N - 1; cur = nx; moves++; }
+    place(); persist();
+    if (tiles.every((v, i) => v === i)) win();
+    return true;
+  };
+  const win = () => {
+    done = true; clearInterval(timer); persist();
+    recordStat('slide_' + n, { result: 'win', best: time });
+    const s = getStat('slide_' + n); if (s && (!s.moves || moves < s.moves)) { s.moves = moves; save(); }
+    const gb = document.getElementById('gameBest'); if (gb) gb.textContent = slideAggFmt();
+    board.classList.add('solved');
+    el.querySelector('#slMsg').innerHTML = `<b>완성! 🎉 ${moves}번 · ${slideTime(time)}</b>`;
+    el.querySelector('#slShuffle').textContent = '🔀 다시 하기';
+  };
+  // 누르기 / 밀기(스와이프)
+  let start = null;
+  board.addEventListener('pointerdown', e => { const r = board.getBoundingClientRect(); start = { x: e.clientX, y: e.clientY, idx: Math.floor((e.clientY - r.top) / r.height * n) * n + Math.floor((e.clientX - r.left) / r.width * n) }; });
+  board.addEventListener('pointerup', e => {
+    if (!start) return; const dx = e.clientX - start.x, dy = e.clientY - start.y, idx = start.idx; start = null;
+    if (Math.hypot(dx, dy) > 18) {   // 민 방향의 반대편에 빈칸이 있으면 그쪽 줄을 민다
+      const b = blankIdx(), br = Math.floor(b / n), bc = b % n;
+      if (Math.abs(dx) > Math.abs(dy)) { const c = bc + (dx > 0 ? -1 : 1); if (c >= 0 && c < n) moveFrom(br * n + c); }
+      else { const r = br + (dy > 0 ? -1 : 1); if (r >= 0 && r < n) moveFrom(r * n + bc); }
+    } else if (idx >= 0 && idx < N) moveFrom(idx);
+  });
+  const onKey = e => {
+    if (!el.querySelector('.mg.slide')) { removeEventListener('keydown', onKey); return; }
+    const b = blankIdx(), br = Math.floor(b / n), bc = b % n;
+    const m = { ArrowLeft: [0, 1], ArrowRight: [0, -1], ArrowUp: [1, 0], ArrowDown: [-1, 0] }[e.key];
+    if (!m) return; e.preventDefault(); const r = br + m[0], c = bc + m[1]; if (r >= 0 && r < n && c >= 0 && c < n) moveFrom(r * n + c);
+  };
+  addEventListener('keydown', onKey);
+  el.querySelector('#slNum').onclick = e => { showNum = !showNum; try { localStorage.setItem('gw-slide-num-' + n, JSON.stringify(showNum)); } catch {} e.target.textContent = `🔢 숫자 ${showNum ? '켬' : '끔'}`; e.target.classList.toggle('on', showNum); place(); };
+  const pk = el.querySelector('#slPeek');
+  const setPeek = v => { peek = v; place(); };
+  pk.addEventListener('pointerdown', e => { e.preventDefault(); setPeek(true); }); ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => pk.addEventListener(t, () => setPeek(false)));
+  el.querySelector('#slShuffle').onclick = () => { clearInterval(timer); try { localStorage.removeItem(SLIDE_SAVE); } catch {} runSlide(el, img, n, null); };
+  document.getElementById('gameBack').onclick = () => { clearInterval(timer); persist(); startSlide(el); };
+  board.style.setProperty('--img', `url(${img})`);
+  timer = setInterval(() => {
+    if (!el.querySelector('.mg.slide')) { clearInterval(timer); return; }
+    if (document.hidden || done || moves === 0) return;
+    time++; const t = el.querySelector('#slTime'); if (t) t.textContent = slideTime(time);
+    if (time % 5 === 0) persist();
+  }, 1000);
+  place(); persist();
 }
 
 // ── 미니게임: 틱택토 ──────────────────────────────────

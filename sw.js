@@ -1,8 +1,8 @@
 // 앱 셸 오프라인 캐시. 캐시 이름 바꾸면 옛 캐시 자동 폐기.
-const CACHE = 'game-world-v129';
+const CACHE = 'game-world-v130';
 self.addEventListener('message', (e) => { if (e.data === 'skip-waiting') self.skipWaiting(); });
 // app.css/app.js 는 버전 쿼리(?v=)로 참조 — 배포마다 URL 이 바뀌어 옛 캐시가 절대 재사용되지 않는다.
-const ASSETS = ['./', './index.html', './assets/app.css?v=129', './assets/app.js?v=129', './assets/yeoubi-words.js?v=129', './manifest.webmanifest?v=129', './assets/icon.svg', './assets/icon-192.png', './assets/icon-512.png',
+const ASSETS = ['./', './index.html', './assets/app.css?v=130', './assets/app.js?v=130', './assets/yeoubi-words.js?v=130', './manifest.webmanifest?v=130', './assets/icon.svg', './assets/icon-192.png', './assets/icon-512.png',
   './assets/kbo-bg.jpg', './assets/bg/janggi.svg'];   // 게임 배경화면
 // 지도 맞히기용 국가 실루엣 — 완전 오프라인 위해 프리캐시
 const MAP_CODES = ['kr','jp','cn','us','gb','fr','de','it','es','pt','ca','br','ar','mx','au','in','ru','th','vn','id','ph','tr','eg','za','nl','se','no','ch','gr',
