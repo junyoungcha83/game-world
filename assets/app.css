@@ -691,7 +691,7 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .mg.sudoku { gap: 12px; padding: 16px 10px; }
 .sd-top { display: flex; justify-content: space-between; width: 100%; font-weight: 800; font-size: .95rem; padding: 0 4px; }
 .sd-top small { color: var(--muted); font-weight: 600; margin-left: 4px; }
-.sd-grid { display: grid; width: min(94vw, 460px, calc(100vh - var(--header-h) - var(--tab-h) - 262px)); aspect-ratio: 1; background: #0f172a; border: 3px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.sd-grid { display: grid; width: min(94vw, 460px, calc(100vh - var(--header-h) - var(--tab-h) - 17.5rem)); aspect-ratio: 1; background: #0f172a; border: 3px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
 .sd-c { border: 0; border-right: 1px solid #475569; border-bottom: 1px solid #475569; background: #f8fafc; color: #1e3a8a;
   font-weight: 800; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; font-family: inherit; }
 .sd-grid.n4 .sd-c { font-size: 2.2rem; } .sd-grid.n6 .sd-c { font-size: 1.7rem; } .sd-grid.n9 .sd-c { font-size: clamp(1rem, 5.2vw, 1.55rem); }
@@ -717,8 +717,8 @@ body.playing .app-main { overscroll-behavior-y: contain; }
 .omok-levels .sd-resume { border-color: var(--gc, #14b8a6); }
 .sd-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 460px; }
 .sd-btns .btn { white-space: nowrap; }
-@supports (height: 1dvh) { .sd-grid { width: min(94vw, 460px, calc(100dvh - var(--header-h) - var(--tab-h) - 262px)); } }
-.sd-grid { min-width: 240px; }
+@supports (height: 1dvh) { .sd-grid { width: min(94vw, 460px, calc(100dvh - var(--header-h) - var(--tab-h) - 17.5rem)); } }
+.sd-grid { min-width: 200px; }
 .sd-grid.n9 + .sd-pad button { font-size: 1.15rem; }
 .sd-btns .btn { padding: 7px 10px; font-size: .78rem; }
 .mg.sudoku { gap: 8px; padding: 12px 8px; }
@@ -802,3 +802,12 @@ body.yb-playing { overflow: hidden; }
 .gp-ceremony { inset: 4% 4% auto; max-height: 92%; overflow: auto; }
 .gp-pod-cv { width: 100%; height: min(50vh, 330px); border-radius: 12px; display: block; }
 .gp-unlock { color: #fde047; font-weight: 800; }
+
+/* 스도쿠 판 — 줄 높이를 판 크기의 1/n 로 고정(글자 크기 설정이 커도 아래 줄이 밀려 잘리지 않게).
+   숫자 크기도 폰 글꼴 설정이 아니라 판 너비(cqw)에 맞춘다 */
+.sd-grid { container-type: inline-size; }
+.sd-c { min-width: 0; min-height: 0; overflow: hidden; line-height: 1; padding: 0; }
+.sd-grid.n9 .sd-c { font-size: calc(100cqw / 9 * .56); }
+.sd-grid.n4 .sd-c { font-size: calc(100cqw / 4 * .5); }
+.sd-grid.n9 .sd-notes i { font-size: calc(100cqw / 9 * .24); }
+.sd-grid.n4 .sd-notes i { font-size: calc(100cqw / 4 * .2); }

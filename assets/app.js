@@ -961,7 +961,7 @@ function runSudoku(el, L, saved) {
   el.innerHTML = `<div class="mg sudoku">
     <div class="sd-top"><span>${L.label} <small>${L.desc}</small></span><span>⏱ <b id="sdTime">${sudokuTime(time)}</b></span></div>
     <div class="mg-msg" id="sdMsg">칸을 누르고 아래 숫자를 골라요</div>
-    <div class="sd-grid n${n}" id="sdGrid" style="grid-template-columns:repeat(${n},1fr)"></div>
+    <div class="sd-grid n${n}" id="sdGrid" style="grid-template-columns:repeat(${n},1fr);grid-template-rows:repeat(${n},1fr);--n:${n}"></div>
     <div class="sd-pad" id="sdPad" style="grid-template-columns:repeat(${n + 1},1fr)">
       ${Array.from({ length: n }, (_, i) => `<button data-v="${i + 1}">${i + 1}</button>`).join('')}
       <button data-v="0" class="sd-erase">⌫</button>
