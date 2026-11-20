@@ -519,6 +519,8 @@ const GAMES = [
   { id: 'yeoubi', name: '소나기', emoji: '🌧️', color: '#f59e0b', best: 'high',
     svg: '<svg viewBox="0 0 100 100" width="100%" height="100%"><g fill="#e2e8f0"><circle cx="36" cy="40" r="16"/><circle cx="56" cy="32" r="20"/><circle cx="72" cy="44" r="13"/><rect x="24" y="40" width="58" height="17" rx="8"/></g><g stroke="#e0f2fe" stroke-width="5" stroke-linecap="round"><line x1="32" y1="66" x2="26" y2="84"/><line x1="50" y1="66" x2="44" y2="84"/><line x1="68" y1="66" x2="62" y2="84"/></g></svg>',
     fmtStat: () => yeoubiAggFmt(), start: startYeoubi },
+  { id: 'grandprix', name: '그랑프리', emoji: '🏎️', color: '#dc2626', best: 'low',
+    fmtStat: () => gpAggFmt(), start: startGrandprix },
   { id: 'tetris', name: '테트리스', emoji: '🟦', color: '#0ea5e9', best: 'high',
     fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startTetris },
 ];
@@ -581,6 +583,7 @@ function boardGames() {
     if (g.id === 'omok') for (const l of OMOK_LEVELS) out.push({ id: l.key, emoji: '⚫', name: `오목 ${l.label}`, best: 'high', fmtStat: omokFmt });
     else if (g.id === 'janggi') for (const l of JANGGI_LEVELS) out.push({ id: l.key, emoji: '漢', name: `장기 ${l.label}`, best: 'high', fmtStat: janggiFmt });
     else if (g.id === 'chess') for (const l of CHESS_LEVELS) out.push({ id: l.key, emoji: '♞', name: `체스 ${l.label}`, best: 'high', fmtStat: chessFmt });
+    else if (g.id === 'grandprix') for (const m of GP_MODES) out.push({ id: m.key, emoji: '🏎️', name: `그랑프리 ${m.label}`, best: 'low', fmtStat: gpFmt });
     else if (g.id === 'yeoubi') for (const m of YB_MODES) out.push({ id: m.key, emoji: '🌧️', name: `소나기 ${m.label}`, best: 'high', fmtStat: ybFmt });
     else if (g.id === 'sudoku') for (const l of SUDOKU_LEVELS) out.push({ id: l.key, emoji: '🔲', name: `스도쿠 ${l.label}`, best: 'low', fmtStat: sudokuFmt });
     else if (g.id === 'fourball') for (const m of FOUR_MODES) out.push({ id: m.key, emoji: '🔴', name: m.name, best: 'high', fmtStat: m.fmt });
@@ -595,7 +598,7 @@ function boardGames() {
 const HUB_CATEGORIES = [
   { label: '🎨 자유',  bgm: 'bright', ids: ['color', 'brush', 'roulette'] },
   { label: '♟️ 보드',  bgm: 'calm',   ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot'] },
-  { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball'] },
+  { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball', 'grandprix'] },
   { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess', 'sudoku', 'yeoubi'] },
   { label: '🧠 퀴즈',  bgm: 'bright', ids: ['quizworld', 'flags', 'capital', 'mapq'] },
 ];
@@ -658,7 +661,8 @@ let currentGameId = null;   // 지금 열려 있는 게임 id — 배경화면·
 function showView(name) {
   currentView = name;
   // 게임을 나가면 배경화면·배경음악을 원래대로 (뒤로가기·하단 탭 어느 쪽으로 나가도 여기를 지난다)
-  if (name !== 'game' && ybRunning) { ybRunning(); ybRunning = null; }   // 소나기 판 정리(전체화면·키보드 감지 해제)
+  if (name !== 'game' && ybRunning) { ybRunning(); ybRunning = null; }
+  if (name !== 'game' && gpRunning) { gpRunning(); gpRunning = null; }   // 소나기 판 정리(전체화면·키보드 감지 해제)
   if (name !== 'game') {
     delete document.body.dataset.game; document.body.style.removeProperty('--gc');
     currentGameId = null; bgmStop();
@@ -759,6 +763,7 @@ function boardCmp(g, a, b) {
 function openGame(id) {
   const g = GAMES.find(x => x.id === id); if (!g) return;
   if (ybRunning) { ybRunning(); ybRunning = null; }
+  if (gpRunning) { gpRunning(); gpRunning = null; }
   if (!getCurrentUser()) { showReg(); return; }   // 사용자 없으면 기록이 안 쌓이므로 먼저 선택
   document.getElementById('gameTitle').textContent = g.emoji + ' ' + g.name;
   document.getElementById('gameBest').textContent = g.fmtStat(getStat(id));
@@ -1265,6 +1270,238 @@ function runYeoubi(el, mode, startLv) {
   hud(); drawSites();
   raf = requestAnimationFrame((t) => { last = t; loop(t); });
   inp.focus();
+}
+
+// ── 미니게임: 그랑프리 (세로 스크롤 탑다운 F1) ─────────────
+// 위에서 내려다본 도트 F1. 12대 중 꼴찌에서 출발해 4바퀴 동안 추월한다.
+// 쉬움 = 가속 자동 + 핸들만 · 보통 = 가속·브레이크 직접. 기록은 모드별 최고 순위(낮을수록 좋음) + 최고 랩 타임.
+const GP_MODES = [
+  { key: 'gp_easy',   label: '쉬움', desc: '가속 자동 · 핸들만', auto: true,  amp: 0.6, steer: 82, ai: [0.78, 0.92] },
+  { key: 'gp_normal', label: '보통', desc: '가속·브레이크 직접', auto: false, amp: 1.0, steer: 74, ai: [0.86, 0.98] },
+];
+const GP_LAPS = 4, GP_LEN = 7200, GP_VMAX = 300, GP_HALF = 46;   // 한 바퀴 길이·최고 속도(km/h로 표시)·도로 반폭(세계 단위)
+const GP_TEAMS = ['#e11d48', '#2563eb', '#f59e0b', '#10b981', '#8b5cf6', '#f97316', '#0ea5e9', '#84cc16', '#ec4899', '#64748b', '#facc15'];
+const GP_ADS = ['한빛타이어', '거북오일', '무궁화모터스', '소나기음료', '다보은행', '첨성텔레콤', '백두라면', '한라전자'];
+const gpTime = ms => { const s = ms / 1000; return `${Math.floor(s / 60)}:${(s % 60).toFixed(2).padStart(5, '0')}`; };
+const gpFmt = s => s ? `${s.plays}경기 · 최고 ${s.best != null ? s.best + '위' : '-'}${s.lap ? ' · 랩 ' + gpTime(s.lap) : ''}` : '아직 기록 없음';
+function gpAggFmt() {
+  const u = getCurrentUser(); if (!u) return '아직 기록 없음';
+  const parts = GP_MODES.map(m => { const s = getStat(m.key, u); return s && s.plays ? `${m.label} ${s.best}위` : null; }).filter(Boolean);
+  return parts.length ? parts.join(' · ') : '아직 기록 없음';
+}
+// 도로 중심(세계 x, 0~200) — 한 바퀴(GP_LEN)마다 같은 모양이 되도록 주기를 바퀴 길이의 약수로
+const gpCenter = (d, amp) => { const u = d / GP_LEN * Math.PI * 2; return 100 + amp * (34 * Math.sin(3 * u) + 18 * Math.sin(7 * u + 1)); };
+// 도트 F1 한 대(세계 12×22) — 팀 색으로 몸체·날개, 검은 타이어, 헬멧
+function gpCarSprite(color, scale) {
+  const c = document.createElement('canvas'), w = 14, h = 24, s = Math.max(1, Math.round(scale * 1.0));
+  c.width = w * s; c.height = h * s; const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+  const R = (x, y, ww, hh, col) => { g.fillStyle = col; g.fillRect(x * s, y * s, ww * s, hh * s); };
+  R(1, 1, 12, 2, color);                 // 앞날개
+  R(6, 0, 2, 3, color);
+  R(0, 4, 3, 5, '#111'); R(11, 4, 3, 5, '#111');     // 앞바퀴
+  R(5, 3, 4, 8, color);                  // 코
+  R(3, 10, 8, 8, color);                 // 몸통
+  R(6, 11, 2, 3, '#facc15');             // 헬멧
+  R(5, 14, 4, 1, '#111');
+  R(0, 15, 3, 6, '#111'); R(11, 15, 3, 6, '#111');   // 뒷바퀴
+  R(1, 21, 12, 3, '#1f2937'); R(2, 21, 10, 1, color); // 뒷날개
+  return c;
+}
+function startGrandprix(el) {
+  if (gpRunning) { gpRunning(); gpRunning = null; }
+  document.getElementById('gameBack').onclick = () => showView('hub');
+  el.innerHTML = `<div class="mg omok-pick">
+    <div class="mg-msg">🏎️ 그랑프리 — 12대 중 꼴찌에서 출발! 4바퀴 동안 추월하세요</div>
+    <div class="omok-levels">
+      ${GP_MODES.map((m, i) => `<button data-i="${i}">${m.label}<small>${m.desc} · ${escapeHtml(gpFmt(getStat(m.key)))}</small></button>`).join('')}
+    </div>
+    <div class="sd-help">폰: 화면 아래 ◀ ▶ 로 핸들${'' }, 보통은 오른쪽 가속·브레이크.<br>PC: ← → 핸들, ↑ 가속, ↓ 브레이크.<br>잔디로 나가면 느려지고, 부딪히면 속도가 떨어져요.</div>
+  </div>`;
+  el.querySelectorAll('[data-i]').forEach(b => b.onclick = () => runGrandprix(el, GP_MODES[+b.dataset.i]));
+}
+let gpRunning = null;
+function runGrandprix(el, M) {
+  el.innerHTML = `<div class="mg gp">
+    <canvas id="gpCv"></canvas>
+    <div class="gp-pad ${M.auto ? 'easy' : 'normal'}">
+      <div class="gp-steer"><button data-k="L">◀</button><button data-k="R">▶</button></div>
+      ${M.auto ? '' : '<div class="gp-ped"><button data-k="B" class="brake">브레이크</button><button data-k="A" class="gas">가속</button></div>'}
+    </div>
+  </div>`;
+  const cv = el.querySelector('#gpCv'), wrap = el.querySelector('.mg.gp');
+  const g = cv.getContext('2d');
+  let W = 0, H = 0, SC = 1, sprites = {};
+  const resize = () => {
+    const r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = r.width; H = r.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.imageSmoothingEnabled = false;
+    SC = W / 200;
+    sprites = {}; [...GP_TEAMS, '#ffffff'].forEach(c => { sprites[c] = gpCarSprite(c, SC); });
+  };
+  resize(); addEventListener('resize', resize);
+  // 출발: 2열 그리드, 플레이어가 맨 뒤(12위)
+  const cars = [];
+  const [lo, hi] = M.ai;
+  for (let i = 0; i < 11; i++) {
+    const f = hi - (hi - lo) * (i / 10) + (Math.random() - 0.5) * 0.02;
+    cars.push({ ai: true, color: GP_TEAMS[i], d: 300 - i * 26, lane: (i % 2 ? 1 : -1) * 16, x: 0, v: 0, vmax: GP_VMAX * f, done: 0, name: `${i + 1}` });
+  }
+  const P = { ai: false, color: '#ffffff', d: 300 - 11 * 26, lane: 16, x: 0, v: 0, vmax: GP_VMAX, done: 0, name: '나' };
+  cars.push(P);
+  cars.forEach(c => { c.x = gpCenter(c.d, M.amp) + c.lane; });
+  const keys = { L: false, R: false, A: false, B: false };
+  const st = { t: -3, lapStart: 0, lap: 0, best: null, last: null, over: false, bump: 0, finishOrder: [] };
+  const startD = P.d;
+  // 입력: 키보드 + 화면 버튼(누르고 있는 동안)
+  const kmap = { ArrowLeft: 'L', ArrowRight: 'R', ArrowUp: 'A', ArrowDown: 'B', a: 'L', d: 'R', w: 'A', s: 'B' };
+  const kd = e => { const k = kmap[e.key]; if (k) { keys[k] = true; e.preventDefault(); } };
+  const ku = e => { const k = kmap[e.key]; if (k) { keys[k] = false; e.preventDefault(); } };
+  addEventListener('keydown', kd); addEventListener('keyup', ku);
+  el.querySelectorAll('.gp-pad button').forEach(b => {
+    const on = e => { e.preventDefault(); keys[b.dataset.k] = true; b.classList.add('on'); };
+    const off = e => { e.preventDefault(); keys[b.dataset.k] = false; b.classList.remove('on'); };
+    b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointerleave', off); b.addEventListener('pointercancel', off);
+  });
+  const curv = d => (gpCenter(d + 40, M.amp) - gpCenter(d - 40, M.amp)) / 80;   // 커브 정도(가로 변화/세로)
+  const rank = () => cars.slice().sort((a, b) => b.d - a.d).indexOf(P) + 1;
+  const beep = (f, dur, type) => { try { if (!sfxEnabled()) return; const c = sfxCtx(); if (!c) return; const o = c.createOscillator(), gg = c.createGain(), t = c.currentTime;
+    o.type = type || 'square'; o.frequency.setValueAtTime(f, t); gg.gain.setValueAtTime(0.07, t); gg.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(gg).connect(sfx.master); o.start(t); o.stop(t + dur + 0.02); } catch {} };
+  let lastCount = 4;
+  const step = (dt) => {
+    st.t += dt;
+    if (st.t < 0) { const n = Math.ceil(-st.t); if (n !== lastCount) { lastCount = n; beep(440, 0.15); } return; }
+    if (lastCount !== 0) { lastCount = 0; beep(880, 0.35); st.lapStart = st.t; }
+    // 플레이어
+    const cP = gpCenter(P.d, M.amp), off = Math.abs(P.x - cP) > GP_HALF - 5;
+    const vcap = off ? GP_VMAX * 0.38 : P.vmax;
+    if (M.auto) { const target = vcap * (1 - 0.18 * Math.min(1, Math.abs(curv(P.d + 120)) / 0.2)); P.v += Math.sign(target - P.v) * Math.min(Math.abs(target - P.v), (target > P.v ? 120 : 200) * dt); }
+    else {
+      if (keys.A) P.v += 115 * dt; else P.v -= 38 * dt;
+      if (keys.B) P.v -= 270 * dt;
+      if (P.v > vcap) P.v -= (off ? 260 : 60) * dt;
+    }
+    P.v = Math.max(0, Math.min(P.vmax, P.v));
+    const steer = (keys.R ? 1 : 0) - (keys.L ? 1 : 0);
+    P.x += steer * M.steer * Math.min(1, 0.35 + P.v / GP_VMAX) * dt;
+    P.x = Math.max(4, Math.min(196, P.x));
+    P.d += P.v * dt;
+    // AI — 자기 줄(lane)을 따라가다 앞차가 막으면 옆 줄로, 커브에선 감속
+    for (const c of cars) {
+      if (!c.ai) continue;
+      const k = Math.min(1, Math.abs(curv(c.d + 100)) / 0.2);
+      const target = c.vmax * (1 - 0.2 * k);
+      c.v += Math.sign(target - c.v) * Math.min(Math.abs(target - c.v), (target > c.v ? 90 : 160) * dt);
+      const ahead = cars.find(o => o !== c && o.d > c.d && o.d - c.d < 70 && Math.abs(o.x - c.x) < 15 && o.v < c.v);
+      c.cool = (c.cool || 0) - dt;
+      if (ahead && c.cool <= 0) { c.cool = 1.2; const tryL = c.lane - 22, tryR = c.lane + 22; c.lane = Math.abs(tryL) <= 34 && (Math.abs(tryR) > 34 || Math.random() < 0.5) ? tryL : Math.max(-34, Math.min(34, tryR)); }
+      const tx = gpCenter(c.d, M.amp) + c.lane;
+      c.x += Math.sign(tx - c.x) * Math.min(Math.abs(tx - c.x), 50 * dt);
+      c.d += c.v * dt;
+    }
+    // 충돌 — 겹치면 뒤차 감속·밀어내기
+    for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) {
+      const a = cars[i], b = cars[j], dd = a.d - b.d, dx = a.x - b.x;
+      if (Math.abs(dd) < 20 && Math.abs(dx) < 12) {
+        const back = dd > 0 ? b : a, front = dd > 0 ? a : b;
+        back.v = Math.min(back.v, front.v * 0.85); back.d = Math.min(back.d, front.d - 20);
+        const push = dx >= 0 ? 1 : -1; a.x += push * 3; b.x -= push * 3;
+        if (a === P || b === P) { if (st.t - st.bump > 0.4) { beep(120, 0.18, 'sawtooth'); if (navigator.vibrate) try { navigator.vibrate(40); } catch {} } st.bump = st.t; }
+      }
+    }
+    // 랩
+    const lapsDone = Math.floor((P.d - startD) / GP_LEN);
+    if (lapsDone > st.lap) {
+      const lt = (st.t - st.lapStart) * 1000; st.last = lt; if (st.best == null || lt < st.best) st.best = lt;
+      st.lap = lapsDone; st.lapStart = st.t; beep(660, 0.2);
+      if (st.lap >= GP_LAPS) finish();
+    }
+  };
+  const finish = () => {
+    st.over = true;
+    const pos = rank();
+    recordStat(M.key, { result: pos === 1 ? 'win' : pos <= 3 ? 'draw' : 'loss', best: pos });
+    const s = getStat(M.key); if (s && st.best && (!s.lap || st.best < s.lap)) { s.lap = Math.round(st.best); save(); }
+    const gb = document.getElementById('gameBest'); if (gb) gb.textContent = gpAggFmt();
+    const box = document.createElement('div'); box.className = 'gp-over';
+    box.innerHTML = `<b>${pos === 1 ? '🏆 우승!' : pos <= 3 ? `🥈 ${pos}위 시상대!` : `🏁 ${pos}위로 완주`}</b>
+      <div>총 시간 ${gpTime(st.t * 1000)} · 최고 랩 ${st.best ? gpTime(st.best) : '-'}</div>
+      <div class="yb-over-btns"><button class="btn primary" id="gpAgain">다시 달리기</button><button class="btn ghost" id="gpBack">모드 선택</button></div>`;
+    wrap.appendChild(box);
+    box.querySelector('#gpAgain').onclick = () => { cleanup(); runGrandprix(el, M); };
+    box.querySelector('#gpBack').onclick = () => { cleanup(); startGrandprix(el); };
+  };
+  // ── 그리기 ──
+  const draw = () => {
+    const pY = H * 0.74, toY = d => pY - (d - P.d) * SC, toX = x => x * SC;
+    const dAt = y => P.d + (pY - y) / SC;
+    // 잔디(줄무늬)
+    for (let y = 0; y < H; y += 6) {
+      const d = dAt(y), band = Math.floor(d / 90) % 2;
+      g.fillStyle = band ? '#3f8f3a' : '#4aa443'; g.fillRect(0, y, W, 6);
+      const cx = gpCenter(d, M.amp), l = toX(cx - GP_HALF), r = toX(cx + GP_HALF);
+      g.fillStyle = '#5b5f66'; g.fillRect(l, y, r - l, 6);
+      const kerb = Math.floor(d / 22) % 2 ? '#ef4444' : '#f8fafc';
+      g.fillStyle = kerb; g.fillRect(l - 4 * SC, y, 4 * SC, 6); g.fillRect(r, y, 4 * SC, 6);
+      // 결승선(체크무늬)
+      const m = ((d - startD) % GP_LEN + GP_LEN) % GP_LEN;
+      if (m < 10) { const cs = 6 * SC; for (let x = l, i = 0; x < r; x += cs, i++) { g.fillStyle = (i + Math.floor(m / 5)) % 2 ? '#111' : '#fff'; g.fillRect(x, y, cs, 6); } }
+    }
+    // 길가 광고판·관중석·나무 — 거리마다 같은 자리에 고정
+    const d0 = Math.floor(dAt(H) / 240) * 240, d1 = dAt(0);
+    for (let d = d0; d < d1; d += 240) {
+      const idx = Math.round(d / 240), y = toY(d), cx = gpCenter(d, M.amp);
+      for (const side of [-1, 1]) {
+        const h = (idx * 7 + (side > 0 ? 3 : 0)) % 8;
+        const x = side < 0 ? toX(cx - GP_HALF - 16) : toX(cx + GP_HALF + 10);
+        if (h < 5) {   // 광고판
+          g.save(); g.translate(x + 3 * SC, y); g.fillStyle = ['#1d4ed8', '#b91c1c', '#f59e0b', '#0f766e', '#7c3aed'][h]; g.fillRect(-3 * SC, -32 * SC, 6 * SC, 64 * SC);
+          g.rotate(side < 0 ? -Math.PI / 2 : Math.PI / 2); g.fillStyle = '#fff'; g.font = `bold ${Math.max(8, 3.6 * SC)}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+          g.fillText(GP_ADS[(idx + (side > 0 ? 4 : 0)) % GP_ADS.length], 0, 0); g.restore();
+        } else if (h < 7) {  // 타이어 벽
+          for (let k = 0; k < 4; k++) { g.fillStyle = '#1f2937'; g.beginPath(); g.arc(x + 3 * SC, y + (k * 9 - 13) * SC, 3.4 * SC, 0, 7); g.fill(); g.fillStyle = '#9ca3af'; g.beginPath(); g.arc(x + 3 * SC, y + (k * 9 - 13) * SC, 1.2 * SC, 0, 7); g.fill(); }
+        } else {           // 나무
+          g.fillStyle = '#166534'; g.beginPath(); g.arc(x + (side < 0 ? -6 : 10) * SC, y, 9 * SC, 0, 7); g.fill();
+        }
+      }
+    }
+    // 차
+    for (const c of cars) {
+      const y = toY(c.d); if (y < -40 || y > H + 40) continue;
+      const sp = sprites[c.color]; const w = 14 * SC, h = 24 * SC;
+      g.drawImage(sp, toX(c.x) - w / 2, y - h / 2, w, h);
+    }
+    // 내 차 표시
+    const px = toX(P.x), py = toY(P.d);
+    g.fillStyle = 'rgba(15,23,42,.75)'; g.font = `bold ${Math.max(10, 4.2 * SC)}px system-ui,sans-serif`; g.textAlign = 'right'; g.textBaseline = 'middle';
+    const lw = g.measureText('나 ▶').width + 8; g.fillRect(px - 9 * SC - lw, py - 7, lw, 14); g.fillStyle = '#fff'; g.fillText('나 ▶', px - 9 * SC - 4, py);
+    // HUD
+    const pos = rank();
+    g.textBaseline = 'top'; g.textAlign = 'left'; g.fillStyle = 'rgba(15,23,42,.55)'; g.fillRect(0, 0, W, 44);
+    g.fillStyle = '#f8fafc'; g.font = `900 ${Math.round(W * 0.075)}px ui-monospace,monospace`; g.fillText(`${pos}위`, 8, 4);
+    g.font = `700 ${Math.round(W * 0.034)}px ui-monospace,monospace`; g.fillStyle = '#cbd5e1'; g.fillText(`${Math.round(P.v)} km/h`, 8 + W * 0.2, 8);
+    const lapT = st.t > 0 && !st.over ? (st.t - st.lapStart) * 1000 : 0;
+    g.textAlign = 'center'; g.fillStyle = '#f8fafc'; g.fillText(gpTime(lapT), W * 0.58, 8);
+    if (st.best) { g.fillStyle = '#fde047'; g.font = `700 ${Math.round(W * 0.026)}px ui-monospace,monospace`; g.fillText('최고 ' + gpTime(st.best), W * 0.58, 26); }
+    g.textAlign = 'right'; g.fillStyle = '#f8fafc'; g.font = `900 ${Math.round(W * 0.06)}px ui-monospace,monospace`; g.fillText(`${Math.min(st.lap + 1, GP_LAPS)}/${GP_LAPS}`, W - 8, 6);
+    // 출발 신호
+    if (st.t < 0.6) {
+      const n = Math.ceil(-st.t); g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `900 ${Math.round(W * 0.22)}px system-ui,sans-serif`;
+      g.fillStyle = st.t < 0 ? '#ef4444' : '#22c55e'; g.fillText(st.t < 0 ? String(n) : 'GO!', W / 2, H * 0.38);
+    }
+    if (st.t - st.bump < 0.25 && st.t > 0) { g.fillStyle = 'rgba(239,68,68,.18)'; g.fillRect(0, 0, W, H); }
+  };
+  let raf = 0, last = performance.now();
+  const loop = now => {
+    raf = requestAnimationFrame(loop);
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (!el.querySelector('.mg.gp')) { cleanup(); return; }
+    if (!document.hidden && !st.over) step(dt);
+    draw();
+  };
+  const cleanup = () => { cancelAnimationFrame(raf); removeEventListener('resize', resize); removeEventListener('keydown', kd); removeEventListener('keyup', ku); st.over = true; };
+  gpRunning = cleanup;
+  document.getElementById('gameBack').onclick = () => { cleanup(); gpRunning = null; startGrandprix(el); };
+  raf = requestAnimationFrame(t => { last = t; loop(t); });
 }
 
 // ── 미니게임: 틱택토 ──────────────────────────────────

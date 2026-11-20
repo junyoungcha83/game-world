@@ -772,3 +772,20 @@ body.yb-playing { overflow: hidden; }
 .yb-over { position: absolute; inset: 20% 8% auto; padding: 16px; border-radius: 16px; background: rgba(15,23,42,.92); color: #fff; text-align: center;
   display: flex; flex-direction: column; gap: 8px; z-index: 5; }
 .yb-over-btns { display: flex; gap: 8px; justify-content: center; margin-top: 4px; }
+
+/* ── 그랑프리 ── */
+.mg.gp { gap: 6px; width: 100%; padding: 6px; background: var(--card); -webkit-backdrop-filter: none; backdrop-filter: none;
+  height: calc(100vh - var(--header-h) - var(--tab-h) - 62px); }
+@supports (height: 1dvh) { .mg.gp { height: calc(100dvh - var(--header-h) - var(--tab-h) - 62px); } }
+.mg.gp { position: relative; }
+#gpCv { flex: 1; width: 100%; min-height: 0; border-radius: 10px; touch-action: none; image-rendering: pixelated; }
+.gp-pad { display: flex; justify-content: space-between; gap: 8px; width: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
+.gp-pad.easy .gp-steer { flex: 1; }
+.gp-steer, .gp-ped { display: flex; gap: 8px; }
+.gp-pad button { flex: 1; min-width: 64px; height: 58px; border-radius: 14px; border: 1px solid var(--border); background: var(--bg2); color: var(--text);
+  font-size: 1.4rem; font-weight: 900; touch-action: none; -webkit-touch-callout: none; }
+.gp-pad .gas { background: #15803d; border-color: #15803d; color: #fff; font-size: 1rem; }
+.gp-pad .brake { background: #b91c1c; border-color: #b91c1c; color: #fff; font-size: .9rem; white-space: nowrap; }
+.gp-pad button.on { filter: brightness(1.35); transform: scale(.96); }
+.gp-over { position: absolute; inset: 24% 8% auto; padding: 16px; border-radius: 16px; background: rgba(15,23,42,.92); color: #fff; text-align: center;
+  display: flex; flex-direction: column; gap: 8px; z-index: 5; }
