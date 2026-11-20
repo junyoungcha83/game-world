@@ -811,3 +811,9 @@ body.yb-playing { overflow: hidden; }
 .sd-grid.n4 .sd-c { font-size: calc(100cqw / 4 * .5); }
 .sd-grid.n9 .sd-notes i { font-size: calc(100cqw / 9 * .24); }
 .sd-grid.n4 .sd-notes i { font-size: calc(100cqw / 4 * .2); }
+
+/* 그림그리기 — 도구 4종 */
+.draw-tools { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.draw-tools button { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; }
+.draw-tools button.sel { border-color: var(--primary2); box-shadow: 0 0 0 2px var(--primary2); }
+.mg.draw .brush-sizes .bsz span { border-radius: 50%; }

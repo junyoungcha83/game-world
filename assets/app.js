@@ -505,6 +505,8 @@ const GAMES = [
     fmtStat: s => s ? `${s.plays}판 · 최고 ±${s.best != null ? (s.best / 1000).toFixed(2) : '-'}초` : '아직 기록 없음', start: startTimer10 },
   { id: 'brush', name: '붓칠하기', emoji: '🖌️', color: '#f59e0b', best: 'high',
     fmtStat: () => '자유롭게 붓칠해요', start: startBrush },
+  { id: 'draw', name: '그림그리기', emoji: '✏️', color: '#64748b', best: 'high',
+    fmtStat: () => '자유롭게 그려요', start: startDraw },
   { id: 'roulette', name: '룰렛', emoji: '🎡', color: '#f43f5e', best: 'high',
     fmtStat: () => '돌려돌려 룰렛~', start: startRoulette },
   { id: 'kbo', name: '프로야구', emoji: '🏟️', color: '#22c55e', best: 'high',
@@ -582,7 +584,7 @@ function chessAggFmt() {
 function boardGames() {
   const out = [];
   for (const g of GAMES) {
-    if (g.id === 'color' || g.id === 'brush' || g.id === 'roulette') continue;   // 기록 없는 게임 → 순위판 제외
+    if (g.id === 'color' || g.id === 'brush' || g.id === 'draw' || g.id === 'roulette') continue;   // 기록 없는 게임 → 순위판 제외
     if (g.id === 'omok') for (const l of OMOK_LEVELS) out.push({ id: l.key, emoji: '⚫', name: `오목 ${l.label}`, best: 'high', fmtStat: omokFmt });
     else if (g.id === 'janggi') for (const l of JANGGI_LEVELS) out.push({ id: l.key, emoji: '漢', name: `장기 ${l.label}`, best: 'high', fmtStat: janggiFmt });
     else if (g.id === 'chess') for (const l of CHESS_LEVELS) out.push({ id: l.key, emoji: '♞', name: `체스 ${l.label}`, best: 'high', fmtStat: chessFmt });
@@ -599,7 +601,7 @@ function boardGames() {
 // 홈 화면 카테고리 분류
 // bgm: 이 분류의 게임에 깔릴 배경음악(BGM_SONGS 의 키)
 const HUB_CATEGORIES = [
-  { label: '🎨 자유',  bgm: 'bright', ids: ['color', 'brush', 'roulette'] },
+  { label: '🎨 자유',  bgm: 'bright', ids: ['color', 'brush', 'draw', 'roulette'] },
   { label: '♟️ 보드',  bgm: 'calm',   ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot'] },
   { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball', 'grandprix'] },
   { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess', 'sudoku', 'yeoubi'] },
@@ -2778,6 +2780,142 @@ function startBrush(el) {
       } else {
         const clone = el.querySelector('.brush-outline').cloneNode(true);
         clone.querySelectorAll('.cregion').forEach(r => r.setAttribute('fill', 'none'));   // 외곽선만(채움 제거)
+        svgToCanvas(clone, RES, null, (sc) => { if (sc) oc.drawImage(sc, 0, 0); saveCanvasToGallery(out, artFilename()); });
+      }
+    };
+  };
+  render();
+}
+
+// ── 그림그리기 (기록 없음) ───────────────────────────
+// 붓칠하기와 같은 틀(밑그림·내 사진·저장)에 빈 종이를 더하고, 도구 4종을 고른다. 처음엔 빈 종이 + 검은 연필.
+//  연필: 가늘고 살짝 연한 결 · 볼펜: 또렷하고 가늘게 · 붓: 굵고 빠르게 그으면 가늘어짐 · 형광펜: 반투명 납작 촉(겹쳐도 한 획 안에선 진해지지 않음)
+const DRAW_TOOLS = [
+  { id: 'pencil', label: '✏️ 연필',   sizes: [2, 4, 7] },
+  { id: 'pen',    label: '🖊️ 볼펜',   sizes: [1.5, 3, 5] },
+  { id: 'brush',  label: '🖌️ 붓',     sizes: [10, 20, 34] },
+  { id: 'marker', label: '🖍️ 형광펜', sizes: [12, 22, 34] },
+];
+function startDraw(el) {
+  const RES = 600, SCALE = RES / 200;
+  let pic = -1, color = '#000000', tool = DRAW_TOOLS[0], sizeIdx = 1;   // pic -1 = 빈 종이
+  const render = () => {
+    const imgs = galleryGet();
+    const total = COLOR_PICS.length + imgs.length;
+    if (pic >= total) pic = -1;
+    const blank = pic < 0, ci = pic - COLOR_PICS.length, custom = !blank && ci >= 0;
+    const name = blank ? '빈 종이' : custom ? `내 그림 ${ci + 1}/${imgs.length}` : COLOR_PICS[pic].name;
+    const overlay = blank ? '' : custom
+      ? `<img class="brush-outline brush-img" src="${imgs[ci]}" alt="내 그림">`
+      : `<svg class="brush-outline" viewBox="0 0 200 200">${COLOR_PICS[pic].svg}</svg>`;
+    el.innerHTML = `<div class="mg brush draw">
+      <div class="mg-msg">${name} — 자유롭게 그려요 ✏️</div>
+      <div class="draw-tools" id="drawTools">${DRAW_TOOLS.map(t => `<button data-t="${t.id}">${t.label}</button>`).join('')}</div>
+      <div class="brush-stage">
+        <canvas id="drawCv"></canvas>
+        ${overlay}
+      </div>
+      <div class="color-palette" id="drawPal">${COLOR_PALETTE.map(c => `<button class="sw" data-c="${c}" style="background:${c}"></button>`).join('')}</div>
+      <div class="brush-sizes" id="drawSizes"></div>
+      <div class="color-btns">
+        <button class="btn ghost small" id="drawPrev">◀ 이전</button>
+        <button class="btn ghost small" id="drawUndo">되돌리기</button>
+        <button class="btn ghost small" id="drawClear">전부삭제</button>
+        <button class="btn ghost small" id="drawNext">다음 ▶</button>
+      </div>
+      <div class="color-btns">
+        <button class="btn ghost small" id="drawLoad">🖼️ 내 사진 추가</button>
+        <button class="btn ghost small" id="drawSave" title="사진첩(갤러리)에 저장">💾 저장하기</button>
+        ${custom ? `<button class="btn ghost small" id="drawDelImg">🗑 이 사진 삭제</button>` : ''}
+      </div>
+      <input type="file" accept="image/*" multiple id="drawFile" style="display:none">
+    </div>`;
+    const cv = el.querySelector('#drawCv');
+    cv.width = RES; cv.height = RES;
+    const ctx = cv.getContext('2d');
+    let drawing = false, pts = [], base = null, lastT = 0, lastW = 0;
+    const history = [], HMAX = 25;
+    const pos = (e) => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * (cv.width / r.width), y: (e.clientY - r.top) * (cv.height / r.height), t: performance.now() }; };
+    const W = () => tool.sizes[sizeIdx] * SCALE;
+    const seg = (a, b, w) => { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineWidth = w; ctx.stroke(); };
+    const setStyle = () => {
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+      ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      if (tool.id === 'pencil') ctx.globalAlpha = 0.82;
+      if (tool.id === 'brush') { ctx.shadowColor = color; ctx.shadowBlur = W() * 0.25; }
+    };
+    // 형광펜 — 획 시작 화면(base) 위에 지금까지의 획 전체를 한 번에 반투명으로 다시 그린다(겹친 부분이 진해지지 않게)
+    const drawMarker = () => {
+      ctx.putImageData(base, 0, 0);
+      ctx.save(); ctx.globalAlpha = 0.38; ctx.globalCompositeOperation = 'multiply'; ctx.strokeStyle = color; ctx.lineCap = 'butt'; ctx.lineJoin = 'round'; ctx.lineWidth = W();
+      ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); if (pts.length === 1) ctx.lineTo(pts[0].x + 0.1, pts[0].y); ctx.stroke(); ctx.restore();
+    };
+    cv.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); drawing = true; cv.setPointerCapture(e.pointerId);
+      base = ctx.getImageData(0, 0, RES, RES);
+      history.push(base); if (history.length > HMAX) history.shift();
+      const p = pos(e); pts = [p]; lastT = p.t; lastW = W();
+      if (tool.id === 'marker') { drawMarker(); return; }
+      setStyle(); ctx.beginPath(); ctx.arc(p.x, p.y, (tool.id === 'brush' ? W() * 0.45 : W() / 2), 0, Math.PI * 2); ctx.fill();
+    });
+    cv.addEventListener('pointermove', (e) => {
+      if (!drawing) return; e.preventDefault();
+      let list = e.getCoalescedEvents ? e.getCoalescedEvents() : null;
+      if (!list || !list.length) list = [e];   // 빈 목록을 주는 브라우저도 있다
+      for (const ev of list) {
+        const p = pos(ev), a = pts[pts.length - 1]; pts.push(p);
+        if (tool.id === 'marker') continue;
+        setStyle();
+        if (tool.id === 'brush') {   // 빠르게 그을수록 가늘게(붓 느낌), 굵기 변화는 부드럽게
+          const dist = Math.hypot(p.x - a.x, p.y - a.y), dt = Math.max(1, p.t - lastT), v = dist / dt;
+          const target = W() * Math.max(0.35, Math.min(1.1, 1.15 - v * 0.35));
+          lastW = lastW + (target - lastW) * 0.3; lastT = p.t; seg(a, p, lastW);
+        } else if (tool.id === 'pencil') {   // 연필 결 — 아주 살짝 흔들린 가는 선을 겹쳐 그린다
+          seg(a, p, W());
+          ctx.globalAlpha = 0.25; const j = W() * 0.35; seg({ x: a.x + j, y: a.y - j }, { x: p.x + j, y: p.y - j }, Math.max(1, W() * 0.4));
+        } else seg(a, p, W());
+      }
+      if (tool.id === 'marker') drawMarker();
+    });
+    const end = () => { drawing = false; ctx.globalAlpha = 1; ctx.shadowBlur = 0; ctx.globalCompositeOperation = 'source-over'; };
+    cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+    // 도구·색·굵기
+    const toolsEl = el.querySelector('#drawTools'), szEl = el.querySelector('#drawSizes'), pal = el.querySelector('#drawPal');
+    const drawSizes = () => {
+      szEl.innerHTML = tool.sizes.map((s, i) => { const px = Math.max(3, Math.min(30, s * (tool.id === 'pen' ? 3 : tool.id === 'pencil' ? 2.2 : 0.9)));
+        return `<button class="bsz${i === sizeIdx ? ' sel' : ''}" data-i="${i}" title="${['가늘게', '보통', '굵게'][i]}"><span style="width:${px}px;height:${px}px;${tool.id === 'marker' ? 'border-radius:2px;opacity:.5;' : ''}background:${color === '#ffffff' ? '#cbd5e1' : color}"></span></button>`; }).join('');
+      szEl.querySelectorAll('.bsz').forEach(b => b.onclick = () => { sizeIdx = +b.dataset.i; drawSizes(); });
+    };
+    const markT = () => toolsEl.querySelectorAll('button').forEach(b => b.classList.toggle('sel', b.dataset.t === tool.id));
+    toolsEl.querySelectorAll('button').forEach(b => b.onclick = () => { tool = DRAW_TOOLS.find(t => t.id === b.dataset.t); markT(); drawSizes(); });
+    const markC = () => pal.querySelectorAll('.sw').forEach(s => s.classList.toggle('sel', s.dataset.c === color));
+    pal.querySelectorAll('.sw').forEach(s => s.onclick = () => { color = s.dataset.c; markC(); drawSizes(); });
+    markT(); markC(); drawSizes();
+    // 그림 넘기기(빈 종이 → 밑그림들 → 내 사진들)
+    const n = total + 1;
+    el.querySelector('#drawPrev').onclick = () => { pic = ((pic + 1 - 1 + n) % n) - 1; render(); };
+    el.querySelector('#drawNext').onclick = () => { pic = ((pic + 1 + 1) % n) - 1; render(); };
+    el.querySelector('#drawUndo').onclick = () => { const s = history.pop(); if (s) ctx.putImageData(s, 0, 0); };
+    el.querySelector('#drawClear').onclick = () => { if (!confirm('그린 것을 모두 지울까요?')) return; ctx.clearRect(0, 0, RES, RES); history.length = 0; };
+    const fileEl = el.querySelector('#drawFile');
+    el.querySelector('#drawLoad').onclick = () => fileEl.click();
+    fileEl.onchange = () => addFilesToGallery(fileEl, (added) => { if (added == null) return; const g = galleryGet(); if (g.length) pic = COLOR_PICS.length + g.length - 1; render(); });
+    const delImg = el.querySelector('#drawDelImg');
+    if (delImg) delImg.onclick = () => { if (!confirm('이 사진을 삭제할까요?')) return; galleryRemoveAt(ci); pic = -1; render(); };
+    // 저장하기 — 흰 바탕 + 그림 + (밑그림/사진 외곽선)
+    el.querySelector('#drawSave').onclick = () => {
+      const out = document.createElement('canvas'); out.width = RES; out.height = RES;
+      const oc = out.getContext('2d'); oc.fillStyle = '#fff'; oc.fillRect(0, 0, RES, RES); oc.drawImage(cv, 0, 0);
+      if (blank) { saveCanvasToGallery(out, artFilename()); return; }
+      if (custom) {
+        const im2 = new Image();
+        im2.onload = () => { const s = Math.min(RES / im2.naturalWidth, RES / im2.naturalHeight), w = im2.naturalWidth * s, h = im2.naturalHeight * s;
+          oc.globalCompositeOperation = 'multiply'; oc.drawImage(im2, (RES - w) / 2, (RES - h) / 2, w, h); oc.globalCompositeOperation = 'source-over'; saveCanvasToGallery(out, artFilename()); };
+        im2.onerror = () => saveCanvasToGallery(out, artFilename());
+        im2.src = imgs[ci];
+      } else {
+        const clone = el.querySelector('.brush-outline').cloneNode(true);
+        clone.querySelectorAll('.cregion').forEach(r => r.setAttribute('fill', 'none'));
         svgToCanvas(clone, RES, null, (sc) => { if (sc) oc.drawImage(sc, 0, 0); saveCanvasToGallery(out, artFilename()); });
       }
     };
