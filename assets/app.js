@@ -57,11 +57,14 @@ function normName(s) { return String(s || '').trim().replace(/\s+/g, ' ').toLowe
 // 같은 게임 통계 병합 — 카운터는 max (멱등: 같은 데이터를 여러 번 병합해도 커지지 않음)
 function mergeStat(a, b, gid) {
   if (!a) return b ? { ...b } : b; if (!b) return { ...a };
-  const dir = (GAMES.find(x => x.id === gid) || {}).best || 'high';
+  // 단계별 기록 키(sudoku_3·gp_easy 등)는 GAMES 에 없으므로 기록판 목록에서도 찾는다 — 못 찾으면 순위·시간이 '높을수록 좋음'으로 잘못 합쳐짐
+  const dir = (GAMES.find(x => x.id === gid) || (typeof boardGames === 'function' && boardGames().find(x => x.id === gid)) || {}).best || 'high';
   const out = { plays: Math.max(a.plays||0, b.plays||0), wins: Math.max(a.wins||0, b.wins||0),
     losses: Math.max(a.losses||0, b.losses||0), draws: Math.max(a.draws||0, b.draws||0), best: null };
   const bs = [a.best, b.best].filter(v => v != null);
   if (bs.length) out.best = dir === 'high' ? Math.max(...bs) : Math.min(...bs);
+  const ls = [a.lap, b.lap].filter(v => v != null);          // 그랑프리 최고 랩(작을수록 좋음)
+  if (ls.length) out.lap = Math.min(...ls);
   return out;
 }
 // 로컬·원격 상태를 '이름' 기준으로 정규화 병합 → { state, remap(oldId→canonId) }.
@@ -1331,7 +1334,33 @@ function gpAggFmt() {
   return parts.length ? parts.join(' · ') : '아직 기록 없음';
 }
 // 도로 중심(세계 x, 0~200) — 한 바퀴(GP_LEN)마다 같은 모양이 되도록 주기를 바퀴 길이의 약수로
-const gpCenter = (d, amp) => { const u = d / GP_LEN * Math.PI * 2; return 100 + amp * (34 * Math.sin(3 * u) + 18 * Math.sin(7 * u + 1)); };
+// 레이스 단계 = 14개국 수도 코스(나라 이름 가나다순). harm: [주기 수, 휨 폭, 위상] — 단계가 오를수록 커브가 잦고 급해지며 도로가 좁아진다.
+// ground: 잔디 두 줄 색 · scene: 길가 풍경 · half: 도로 반폭 · ai: AI 속도 가산
+const GP_TRACKS = [
+  { code: 'ng', country: '나이지리아', city: '아부자',      harm: [[2, 30, 0]],                         half: 48, ground: ['#9bbf5a', '#a9c968'], scene: 'savanna' },
+  { code: 'us', country: '미국',       city: '워싱턴 D.C.', harm: [[3, 34, 0], [5, 10, 1]],             half: 47, ground: ['#3f8f3a', '#4aa443'], scene: 'tree' },
+  { code: 'vn', country: '베트남',     city: '하노이',      harm: [[3, 28, 0], [8, 14, .5]],            half: 46, ground: ['#57a63c', '#66b548'], scene: 'palm' },
+  { code: 'es', country: '스페인',     city: '마드리드',    harm: [[2, 24, 0], [6, 22, 1.3]],           half: 46, ground: ['#c9b47a', '#d4c08a'], scene: 'olive' },
+  { code: 'gb', country: '영국',       city: '런던',        harm: [[4, 26, 0], [9, 16, 2]],             half: 45, ground: ['#2f6f35', '#37803d'], scene: 'tree' },
+  { code: 'il', country: '이스라엘',   city: '예루살렘',    harm: [[3, 30, 0], [7, 18, 1]],             half: 44, ground: ['#d6c9a8', '#e0d4b4'], scene: 'stone' },
+  { code: 'eg', country: '이집트',     city: '카이로',      harm: [[2, 36, 0], [11, 10, .7]],           half: 44, ground: ['#e2c27a', '#e9cc8a'], scene: 'pyramid' },
+  { code: 'in', country: '인도',       city: '뉴델리',      harm: [[5, 26, 0], [9, 18, .3]],            half: 43, ground: ['#a3b86c', '#b0c47a'], scene: 'tree' },
+  { code: 'jp', country: '일본',       city: '도쿄',        harm: [[4, 30, 0], [12, 12, 1.1]],          half: 42, ground: ['#6b8f71', '#77997c'], scene: 'building' },
+  { code: 'cn', country: '중국',       city: '베이징',      harm: [[3, 32, 0], [10, 16, 2.2]],          half: 42, ground: ['#8fa86a', '#9bb376'], scene: 'wall' },
+  { code: 'th', country: '태국',       city: '방콕',        harm: [[6, 26, 0], [13, 14, .9]],           half: 41, ground: ['#4c9a4a', '#58a656'], scene: 'palm' },
+  { code: 'tr', country: '튀르키예',   city: '앙카라',      harm: [[5, 30, 0], [11, 18, 1.6]],          half: 40, ground: ['#b8ad7a', '#c3b886'], scene: 'stone' },
+  { code: 'fr', country: '프랑스',     city: '파리',        harm: [[4, 28, 0], [14, 16, .4], [2, 8, 1]], half: 39, ground: ['#3f8f3a', '#4aa443'], scene: 'tree' },
+  { code: 'au', country: '호주',       city: '캔버라',      harm: [[6, 28, 0], [15, 16, .8], [3, 8, 2]], half: 38, ground: ['#8a9a4a', '#97a756'], scene: 'eucalyptus' },
+].map((t, i) => ({ ...t, lv: i + 1, ai: i * 0.006, flag: (GP_NATIONS.find(n => n.code === t.code) || {}).flag || '' }));
+const gpCenter = (d, T, amp) => { const u = d / GP_LEN * Math.PI * 2; let o = 0; for (const [k, a, p] of T.harm) o += a * Math.sin(k * u + p); return 100 + amp * o; };
+// 단계 열림 — 바로 앞 단계를 3위 안에 들면 다음 단계가 열린다(사용자별, 기기 간 동기화되는 기록 키 gp_unlock.best)
+const gpUnlocked = () => { const s = getStat('gp_unlock'); return Math.max(1, (s && s.best) || 1); };
+function gpSetUnlocked(n) {
+  const u = getCurrentUser(); if (!u) return;
+  state.scores[u.id] = state.scores[u.id] || {};
+  const s = state.scores[u.id].gp_unlock = normStat(state.scores[u.id].gp_unlock);
+  if (n > (s.best || 1)) { s.best = Math.min(GP_TRACKS.length, n); save(); }
+}
 // 도트 F1 한 대(세계 12×22) — 팀 색으로 몸체·날개, 검은 타이어, 헬멧
 function gpCarSprite(color, scale, code) {
   const c = document.createElement('canvas'), w = 14, h = 24, s = Math.max(2, Math.round(scale * 2));
@@ -1349,20 +1378,110 @@ function gpCarSprite(color, scale, code) {
   if (code) gpFlag(g, code, 3 * s, 14.5 * s, 8 * s, 5.5 * s);   // 엔진 덮개 위 국기
   return c;
 }
-function startGrandprix(el) {
+function startGrandprix(el, mi) {
   if (gpRunning) { gpRunning(); gpRunning = null; }
-  document.getElementById('gameBack').onclick = () => showView('hub');
+  document.getElementById('gameBack').onclick = () => (mi == null ? showView('hub') : startGrandprix(el));
+  if (mi == null) {
+    el.innerHTML = `<div class="mg omok-pick">
+      <div class="mg-msg">🏎️ 그랑프리 — 🇰🇷 태극기를 단 내 차로 12대 중 꼴찌에서 출발! 4바퀴 동안 추월하세요</div>
+      <div class="omok-levels">
+        ${GP_MODES.map((m, i) => `<button data-i="${i}">${m.label}<small>${m.desc} · ${escapeHtml(gpFmt(getStat(m.key)))}</small></button>`).join('')}
+      </div>
+      <div class="sd-help">폰: 화면 아래 ◀ ▶ 로 핸들, 보통은 오른쪽 가속·브레이크.<br>PC: ← → 핸들, ↑ 가속, ↓ 브레이크.<br>잔디로 나가면 느려지고, 부딪히면 속도가 떨어져요.</div>
+    </div>`;
+    el.querySelectorAll('[data-i]').forEach(b => b.onclick = () => startGrandprix(el, +b.dataset.i));
+    return;
+  }
+  const M = GP_MODES[mi], open = gpUnlocked();
   el.innerHTML = `<div class="mg omok-pick">
-    <div class="mg-msg">🏎️ 그랑프리 — 🇰🇷 태극기를 단 내 차로 12대 중 꼴찌에서 출발! 4바퀴 동안 추월하세요</div>
-    <div class="omok-levels">
-      ${GP_MODES.map((m, i) => `<button data-i="${i}">${m.label}<small>${m.desc} · ${escapeHtml(gpFmt(getStat(m.key)))}</small></button>`).join('')}
-    </div>
-    <div class="sd-help">폰: 화면 아래 ◀ ▶ 로 핸들${'' }, 보통은 오른쪽 가속·브레이크.<br>PC: ← → 핸들, ↑ 가속, ↓ 브레이크.<br>잔디로 나가면 느려지고, 부딪히면 속도가 떨어져요.</div>
+    <div class="mg-msg">🏁 코스 선택 <small class="gp-mode-tag">${M.label}</small></div>
+    <div class="sd-help">세계 14개국 수도 코스 · 단계가 오를수록 커브가 급하고 길이 좁아져요.<br>바로 앞 단계에서 <b>3위 안</b>에 들면 다음 단계가 열려요. (${open}/${GP_TRACKS.length} 열림)</div>
+    <div class="gp-tracks">${GP_TRACKS.map(t => `<button data-lv="${t.lv}" ${t.lv > open ? 'disabled' : ''}>
+      <span class="gp-lv">${t.lv}</span><span class="gp-fl">${t.flag}</span><b>${escapeHtml(t.city)}</b><small>${escapeHtml(t.country)}${t.lv > open ? ' · 🔒' : ''}</small></button>`).join('')}</div>
   </div>`;
-  el.querySelectorAll('[data-i]').forEach(b => b.onclick = () => runGrandprix(el, GP_MODES[+b.dataset.i]));
+  el.querySelectorAll('[data-lv]').forEach(b => b.onclick = () => runGrandprix(el, M, GP_TRACKS[+b.dataset.lv - 1], mi));
 }
 let gpRunning = null;
-function runGrandprix(el, M) {
+// 코스별 길가 풍경(세계 좌표 SC 배율) — 단순한 실루엣
+function gpScene(g, type, x, y, SC, seed) {
+  const C = (c, cx, cy, r) => { g.fillStyle = c; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill(); };
+  switch (type) {
+    case 'savanna': g.fillStyle = '#6b4f2a'; g.fillRect(x - 1 * SC, y - 2 * SC, 2 * SC, 8 * SC); g.fillStyle = '#4d7c0f'; g.beginPath(); g.ellipse(x, y - 4 * SC, 9 * SC, 3.5 * SC, 0, 0, Math.PI * 2); g.fill(); break;
+    case 'palm': g.fillStyle = '#8b5a2b'; g.fillRect(x - 1 * SC, y - 4 * SC, 2 * SC, 10 * SC); g.fillStyle = '#15803d';
+      for (let k = 0; k < 5; k++) { g.save(); g.translate(x, y - 4 * SC); g.rotate(k * Math.PI * 2 / 5 + seed); g.beginPath(); g.ellipse(4 * SC, 0, 5 * SC, 1.6 * SC, 0, 0, Math.PI * 2); g.fill(); g.restore(); } break;
+    case 'olive': C('#6b8e23', x, y, 6 * SC); C('#7fa33a', x + 2 * SC, y - 2 * SC, 3 * SC); break;
+    case 'stone': g.fillStyle = '#cbbf9a'; g.fillRect(x - 6 * SC, y - 10 * SC, 12 * SC, 20 * SC); g.strokeStyle = '#a89a72'; g.lineWidth = 1; for (let k = -10; k < 10; k += 5) { g.beginPath(); g.moveTo(x - 6 * SC, y + k * SC); g.lineTo(x + 6 * SC, y + k * SC); g.stroke(); } break;
+    case 'pyramid': g.fillStyle = '#d4a94f'; g.beginPath(); g.moveTo(x, y - 9 * SC); g.lineTo(x + 9 * SC, y + 6 * SC); g.lineTo(x - 9 * SC, y + 6 * SC); g.closePath(); g.fill();
+      g.fillStyle = '#b88a35'; g.beginPath(); g.moveTo(x, y - 9 * SC); g.lineTo(x + 9 * SC, y + 6 * SC); g.lineTo(x + 2 * SC, y + 6 * SC); g.closePath(); g.fill(); break;
+    case 'building': g.fillStyle = ['#94a3b8', '#64748b', '#cbd5e1'][seed % 3]; g.fillRect(x - 6 * SC, y - 12 * SC, 12 * SC, 24 * SC); g.fillStyle = '#fde68a';
+      for (let r = -10; r < 10; r += 4) for (let c = -4; c < 5; c += 4) if ((r + c + seed) % 3) g.fillRect(x + c * SC - SC, y + r * SC, 2 * SC, 2 * SC); break;
+    case 'wall': g.fillStyle = '#a8a29e'; g.fillRect(x - 4 * SC, y - 14 * SC, 8 * SC, 28 * SC); g.fillStyle = '#78716c'; for (let r = -14; r < 14; r += 4) g.fillRect(x + 4 * SC, y + r * SC, 2 * SC, 2 * SC); break;
+    case 'eucalyptus': C('#7c9a6b', x, y, 6 * SC); C('#9fb98d', x - 2 * SC, y - 2 * SC, 3 * SC); break;
+    default: C('#166534', x, y, 7 * SC); C('#1f7a3f', x + 2 * SC, y - 2 * SC, 3.5 * SC);
+  }
+}
+// 시상식 — 1~3위 선수가 걸어 나와 시상대에 올라 금·은·동 트로피를 들고 환호. 시상대 앞면에 국기
+function gpPodiumAnim(cv, top3) {
+  const g = cv.getContext('2d'); let raf = 0, t0 = performance.now(), dead = false;
+  const dpr = Math.min(2, devicePixelRatio || 1), W = cv.clientWidth || 300, H = cv.clientHeight || 200;
+  cv.width = W * dpr; cv.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const conf = Array.from({ length: 70 }, () => ({ x: Math.random() * W, y: -Math.random() * H, v: 40 + Math.random() * 60, c: ['#facc15', '#ef4444', '#3b82f6', '#22c55e', '#f8fafc', '#e879f9'][Math.floor(Math.random() * 6)], r: Math.random() * 6 }));
+  const groundY = H * 0.92, bw = W * 0.24;
+  const PODS = [{ rank: 2, x: W * 0.5 - bw * 1.02, h: H * 0.22 }, { rank: 1, x: W * 0.5, h: H * 0.32 }, { rank: 3, x: W * 0.5 + bw * 1.02, h: H * 0.15 }];
+  const CUP = { 1: ['#facc15', '#a16207'], 2: ['#e5e7eb', '#6b7280'], 3: ['#d97706', '#78350f'] };
+  const person = (x, feet, color, me, phase, arms, cup) => {
+    const s = H * 0.0042, jump = arms ? Math.abs(Math.sin(phase * 6)) * 10 * s : 0, y = feet - jump;
+    g.fillStyle = '#1f2937'; g.fillRect(x - 5 * s, y - 14 * s, 4 * s, 14 * s); g.fillRect(x + 1 * s, y - 14 * s, 4 * s, 14 * s);   // 다리
+    g.fillStyle = color; g.fillRect(x - 7 * s, y - 32 * s, 14 * s, 19 * s);                                                       // 몸(레이싱 슈트)
+    g.fillStyle = '#f2c79b'; g.beginPath(); g.arc(x, y - 38 * s, 6 * s, 0, Math.PI * 2); g.fill();                                // 얼굴
+    g.fillStyle = me ? '#ef4444' : color; g.fillRect(x - 6 * s, y - 45 * s, 12 * s, 4 * s);                                        // 모자
+    g.strokeStyle = color; g.lineWidth = 4 * s; g.lineCap = 'round';
+    if (arms) {   // 두 팔 번쩍 + 트로피
+      g.beginPath(); g.moveTo(x - 6 * s, y - 30 * s); g.lineTo(x - 9 * s, y - 50 * s); g.moveTo(x + 6 * s, y - 30 * s); g.lineTo(x + 9 * s, y - 50 * s); g.stroke();
+      const [c1, c2] = CUP[cup]; const cy = y - 58 * s;
+      g.fillStyle = c1; g.beginPath(); g.moveTo(x - 9 * s, cy - 8 * s); g.lineTo(x + 9 * s, cy - 8 * s); g.lineTo(x + 5 * s, cy + 3 * s); g.lineTo(x - 5 * s, cy + 3 * s); g.closePath(); g.fill();
+      g.strokeStyle = c1; g.lineWidth = 2 * s; g.beginPath(); g.arc(x - 10 * s, cy - 4 * s, 3 * s, 0, Math.PI * 2); g.arc(x + 10 * s, cy - 4 * s, 3 * s, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = c2; g.fillRect(x - 2 * s, cy + 3 * s, 4 * s, 4 * s); g.fillRect(x - 5 * s, cy + 7 * s, 10 * s, 3 * s);
+    } else {      // 걷는 팔
+      const sw = Math.sin(phase * 10) * 5 * s;
+      g.beginPath(); g.moveTo(x - 7 * s, y - 30 * s); g.lineTo(x - 9 * s + sw, y - 16 * s); g.moveTo(x + 7 * s, y - 30 * s); g.lineTo(x + 9 * s - sw, y - 16 * s); g.stroke();
+    }
+    if (me) { g.fillStyle = '#fff'; g.font = `900 ${Math.round(11 * s * 1.6)}px system-ui,sans-serif`; g.textAlign = 'center'; g.fillText('나', x, y - 66 * s - (arms ? 10 * s : 0)); }
+  };
+  const frame = now => {
+    if (dead) return; raf = requestAnimationFrame(frame);
+    const t = (now - t0) / 1000;
+    const sky = g.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#1e3a8a'); sky.addColorStop(1, '#312e81'); g.fillStyle = sky; g.fillRect(0, 0, W, H);
+    // 관중(점) + 조명
+    for (let i = 0; i < 60; i++) { g.fillStyle = `hsl(${(i * 47) % 360} 50% ${40 + (i % 3) * 8}%)`; g.beginPath(); g.arc((i * 37) % W, H * 0.3 + ((i * 13) % 20) - Math.abs(Math.sin(t * 5 + i)) * 3, 4, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#374151'; g.fillRect(0, groundY, W, H - groundY);
+    // 시상대(국기)
+    PODS.forEach((p, i) => {
+      const c = top3[p.rank - 1]; if (!c) return;
+      g.fillStyle = '#e5e7eb'; g.fillRect(p.x - bw / 2, groundY - p.h, bw, p.h);
+      g.fillStyle = '#9ca3af'; g.fillRect(p.x - bw / 2, groundY - p.h, bw, 3);
+      const fw = bw * 0.62, fh = fw * 0.62; gpFlag(g, c.nat.code, p.x - fw / 2, groundY - p.h + 8, fw, Math.min(fh, p.h - 26));
+      g.fillStyle = '#111827'; g.font = `900 ${Math.round(bw * 0.2)}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillText(String(p.rank), p.x, groundY - 6);
+    });
+    // 선수: 0~1.6초 걸어 나옴 → 1.6~2.2초 올라섬 → 2.2초부터 트로피 들고 환호
+    PODS.forEach((p, i) => {
+      const c = top3[p.rank - 1]; if (!c) return;
+      const delay = (p.rank - 1) * 0.25, k = Math.max(0, Math.min(1, (t - delay) / 1.6));
+      const fromX = i === 0 ? -20 : i === 2 ? W + 20 : W * 0.5;
+      let x = fromX + (p.x - fromX) * k, feet = groundY;
+      if (i === 1 && k < 1) { x = p.x; feet = groundY + (1 - k) * 60; }   // 1위는 가운데 아래에서 올라옴
+      const up = Math.max(0, Math.min(1, (t - delay - 1.6) / 0.6));
+      feet = feet - p.h * up;
+      person(x, feet, c.nat.color === '#f8fafc' ? '#e2e8f0' : c.nat.color, c.me, t, t - delay > 2.2, p.rank);
+    });
+    if (t > 2.2) conf.forEach(c => { c.y += c.v / 60; c.x += Math.sin(c.y / 20 + c.r) * 0.6; if (c.y > H) { c.y = -10; c.x = Math.random() * W; } g.fillStyle = c.c; g.fillRect(c.x, c.y, 4, 6); });
+  };
+  raf = requestAnimationFrame(frame);
+  return () => { dead = true; cancelAnimationFrame(raf); };
+}
+function runGrandprix(el, M, T, mi) {
+  T = T || GP_TRACKS[0];
+  const HALF = T.half, cen = d => gpCenter(d, T, M.amp);
   el.innerHTML = `<div class="mg gp">
     <canvas id="gpCv"></canvas>
     <div class="gp-pad ${M.auto ? 'easy' : 'normal'}">
@@ -1383,15 +1502,15 @@ function runGrandprix(el, M) {
   resize(); addEventListener('resize', resize);
   // 출발: 2열 그리드, 플레이어가 맨 뒤(12위)
   const cars = [];
-  const [lo, hi] = M.ai;
+  const [lo, hi] = M.ai.map(v => v + T.ai);
   const field = GP_NATIONS.slice().sort(() => Math.random() - 0.5).slice(0, 11);   // 이번 경기 출전국
   for (let i = 0; i < 11; i++) {
     const f = hi - (hi - lo) * (i / 10) + (Math.random() - 0.5) * 0.02;
-    cars.push({ ai: true, nat: field[i], d: 300 - i * 26, lane: (i % 2 ? 1 : -1) * 16, x: 0, v: 0, vmax: GP_VMAX * f, done: 0 });
+    cars.push({ ai: true, nat: field[i], d: 300 - i * 26, lane: (i % 2 ? 1 : -1) * Math.min(16, HALF - 14), x: 0, v: 0, vmax: GP_VMAX * f, done: 0 });
   }
   const P = { ai: false, nat: GP_ME, d: 300 - 11 * 26, lane: 16, x: 0, v: 0, vmax: GP_VMAX, done: 0 };
   cars.push(P);
-  cars.forEach(c => { c.x = gpCenter(c.d, M.amp) + c.lane; });
+  cars.forEach(c => { c.x = cen(c.d) + c.lane; });
   const keys = { L: false, R: false, A: false, B: false };
   const st = { t: -3, lapStart: 0, lap: 0, best: null, last: null, over: false, bump: 0, finishOrder: [] };
   const startD = P.d;
@@ -1405,7 +1524,7 @@ function runGrandprix(el, M) {
     const off = e => { e.preventDefault(); keys[b.dataset.k] = false; b.classList.remove('on'); };
     b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointerleave', off); b.addEventListener('pointercancel', off);
   });
-  const curv = d => (gpCenter(d + 40, M.amp) - gpCenter(d - 40, M.amp)) / 80;   // 커브 정도(가로 변화/세로)
+  const curv = d => (cen(d + 40) - cen(d - 40)) / 80;   // 커브 정도(가로 변화/세로)
   const rank = () => cars.slice().sort((a, b) => b.d - a.d).indexOf(P) + 1;
   const beep = (f, dur, type) => { try { if (!sfxEnabled()) return; const c = sfxCtx(); if (!c) return; const o = c.createOscillator(), gg = c.createGain(), t = c.currentTime;
     o.type = type || 'square'; o.frequency.setValueAtTime(f, t); gg.gain.setValueAtTime(0.07, t); gg.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(gg).connect(sfx.master); o.start(t); o.stop(t + dur + 0.02); } catch {} };
@@ -1415,7 +1534,7 @@ function runGrandprix(el, M) {
     if (st.t < 0) { const n = Math.ceil(-st.t); if (n !== lastCount) { lastCount = n; beep(440, 0.15); } return; }
     if (lastCount !== 0) { lastCount = 0; beep(880, 0.35); st.lapStart = st.t; }
     // 플레이어
-    const cP = gpCenter(P.d, M.amp), off = Math.abs(P.x - cP) > GP_HALF - 5;
+    const cP = cen(P.d), off = Math.abs(P.x - cP) > HALF - 5;
     const vcap = off ? GP_VMAX * 0.38 : P.vmax;
     if (M.auto) { const target = vcap * (1 - 0.18 * Math.min(1, Math.abs(curv(P.d + 120)) / 0.2)); P.v += Math.sign(target - P.v) * Math.min(Math.abs(target - P.v), (target > P.v ? 120 : 200) * dt); }
     else {
@@ -1431,14 +1550,13 @@ function runGrandprix(el, M) {
     // AI — 자기 줄(lane)을 따라가다 앞차가 막으면 옆 줄로, 커브에선 감속
     for (const c of cars) {
       if (!c.ai) continue;
-      const k = Math.min(1, Math.abs(curv(c.d + 100)) / 0.2);
-      const target = c.vmax * (1 - 0.2 * k);
+      const target = c.vmax * (1 - Math.min(0.42, Math.abs(curv(c.d + 100)) * 1.15));
       c.v += Math.sign(target - c.v) * Math.min(Math.abs(target - c.v), (target > c.v ? 90 : 160) * dt);
       const ahead = cars.find(o => o !== c && o.d > c.d && o.d - c.d < 70 && Math.abs(o.x - c.x) < 15 && o.v < c.v);
       c.cool = (c.cool || 0) - dt;
-      if (ahead && c.cool <= 0) { c.cool = 1.2; const tryL = c.lane - 22, tryR = c.lane + 22; c.lane = Math.abs(tryL) <= 34 && (Math.abs(tryR) > 34 || Math.random() < 0.5) ? tryL : Math.max(-34, Math.min(34, tryR)); }
-      const tx = gpCenter(c.d, M.amp) + c.lane;
-      c.x += Math.sign(tx - c.x) * Math.min(Math.abs(tx - c.x), 50 * dt);
+      if (ahead && c.cool <= 0) { c.cool = 1.2; const lim = HALF - 12, tryL = c.lane - 22, tryR = c.lane + 22; c.lane = Math.abs(tryL) <= lim && (Math.abs(tryR) > lim || Math.random() < 0.5) ? tryL : Math.max(-lim, Math.min(lim, tryR)); }
+      const tx = cen(c.d) + c.lane;
+      c.x += Math.sign(tx - c.x) * Math.min(Math.abs(tx - c.x), 150 * dt);
       c.d += c.v * dt;
     }
     // 충돌 — 겹치면 뒤차 감속·밀어내기
@@ -1464,15 +1582,27 @@ function runGrandprix(el, M) {
     const pos = rank();
     recordStat(M.key, { result: pos === 1 ? 'win' : pos <= 3 ? 'draw' : 'loss', best: pos });
     const s = getStat(M.key); if (s && st.best && (!s.lap || st.best < s.lap)) { s.lap = Math.round(st.best); save(); }
+    const opened = pos <= 3 && T.lv < GP_TRACKS.length && gpUnlocked() <= T.lv;
+    if (pos <= 3) gpSetUnlocked(T.lv + 1);
     const gb = document.getElementById('gameBest'); if (gb) gb.textContent = gpAggFmt();
-    const box = document.createElement('div'); box.className = 'gp-over';
-    box.innerHTML = `<b>${pos === 1 ? '🏆 우승!' : pos <= 3 ? `🥈 ${pos}위 시상대!` : `🏁 ${pos}위로 완주`}</b>
+    const top3 = cars.slice().sort((a, b) => b.d - a.d).slice(0, 3).map(c => ({ nat: c.nat, me: c === P }));
+    const next = GP_TRACKS[T.lv];   // 다음 단계(없으면 undefined)
+    const box = document.createElement('div'); box.className = 'gp-over gp-ceremony';
+    box.innerHTML = `<canvas class="gp-pod-cv"></canvas>
+      <b>${pos === 1 ? '🏆 우승!' : pos <= 3 ? `🏅 ${pos}위 시상대!` : `🏁 ${pos}위로 완주`} <small>${T.flag} ${escapeHtml(T.city)}</small></b>
+      <div class="gp-podium">${top3.map((c, i) => `<span>${['🥇', '🥈', '🥉'][i]} ${c.nat.flag} ${escapeHtml(c.me ? '나 (대한민국)' : c.nat.name)}</span>`).join('')}</div>
       <div>총 시간 ${gpTime(st.t * 1000)} · 최고 랩 ${st.best ? gpTime(st.best) : '-'}</div>
-      <div class="gp-podium">${cars.slice().sort((a, b) => b.d - a.d).slice(0, 3).map((c, i) => `<span>${['🥇', '🥈', '🥉'][i]} ${c.nat.flag} ${escapeHtml(c === P ? '나 (대한민국)' : c.nat.name)}</span>`).join('')}</div>
-      <div class="yb-over-btns"><button class="btn primary" id="gpAgain">다시 달리기</button><button class="btn ghost" id="gpBack">모드 선택</button></div>`;
+      ${opened ? `<div class="gp-unlock">🔓 ${next.lv}단계 ${next.flag} ${escapeHtml(next.city)} 코스가 열렸어요!</div>` : ''}
+      <div class="yb-over-btns">
+        <button class="btn primary" id="gpAgain">다시 달리기</button>
+        ${next && gpUnlocked() > T.lv ? `<button class="btn primary" id="gpNext">다음 코스 ▶</button>` : ''}
+        <button class="btn ghost" id="gpBack">코스 선택</button></div>`;
     wrap.appendChild(box);
-    box.querySelector('#gpAgain').onclick = () => { cleanup(); runGrandprix(el, M); };
-    box.querySelector('#gpBack').onclick = () => { cleanup(); startGrandprix(el); };
+    const stopAnim = gpPodiumAnim(box.querySelector('.gp-pod-cv'), top3);
+    const go = f => () => { stopAnim(); cleanup(); f(); };
+    box.querySelector('#gpAgain').onclick = go(() => runGrandprix(el, M, T, mi));
+    const nb = box.querySelector('#gpNext'); if (nb) nb.onclick = go(() => runGrandprix(el, M, next, mi));
+    box.querySelector('#gpBack').onclick = go(() => startGrandprix(el, mi));
   };
   // ── 그리기 ──
   const draw = () => {
@@ -1480,9 +1610,9 @@ function runGrandprix(el, M) {
     const dAt = y => P.d + (pY - y) / SC;
     // 잔디(줄무늬)
     for (let y = 0; y < H; y += 6) {
-      const d = dAt(y), band = Math.floor(d / 90) % 2;
-      g.fillStyle = band ? '#3f8f3a' : '#4aa443'; g.fillRect(0, y, W, 6);
-      const cx = gpCenter(d, M.amp), l = toX(cx - GP_HALF), r = toX(cx + GP_HALF);
+      const d = dAt(y), band = ((Math.floor(d / 90) % 2) + 2) % 2;   // 출발선 뒤(음수 거리)도 0·1
+      g.fillStyle = T.ground[band]; g.fillRect(0, y, W, 6);
+      const cx = cen(d), l = toX(cx - HALF), r = toX(cx + HALF);
       g.fillStyle = '#5b5f66'; g.fillRect(l, y, r - l, 6);
       const kerb = Math.floor(d / 22) % 2 ? '#ef4444' : '#f8fafc';
       g.fillStyle = kerb; g.fillRect(l - 4 * SC, y, 4 * SC, 6); g.fillRect(r, y, 4 * SC, 6);
@@ -1493,21 +1623,24 @@ function runGrandprix(el, M) {
     // 길가 광고판·관중석·나무 — 거리마다 같은 자리에 고정
     const d0 = Math.floor(dAt(H) / 240) * 240, d1 = dAt(0);
     for (let d = d0; d < d1; d += 240) {
-      const idx = Math.round(d / 240), y = toY(d), cx = gpCenter(d, M.amp);
+      const idx = Math.round(d / 240), y = toY(d), cx = cen(d);
       for (const side of [-1, 1]) {
         const h = (idx * 7 + (side > 0 ? 3 : 0)) % 8;
-        const x = side < 0 ? toX(cx - GP_HALF - 16) : toX(cx + GP_HALF + 10);
-        if (h < 5) {   // 광고판
-          g.save(); g.translate(x + 3 * SC, y); g.fillStyle = ['#1d4ed8', '#b91c1c', '#f59e0b', '#0f766e', '#7c3aed'][h]; g.fillRect(-3 * SC, -32 * SC, 6 * SC, 64 * SC);
+        const x = side < 0 ? toX(cx - HALF - 16) : toX(cx + HALF + 10);
+        if (h < 3) {   // 광고판(가상 브랜드)
+          g.save(); g.translate(x + 3 * SC, y); g.fillStyle = ['#1d4ed8', '#b91c1c', '#f59e0b'][h]; g.fillRect(-3 * SC, -32 * SC, 6 * SC, 64 * SC);
           g.rotate(side < 0 ? -Math.PI / 2 : Math.PI / 2); g.fillStyle = '#fff'; g.font = `bold ${Math.max(8, 3.6 * SC)}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
           g.fillText(GP_ADS[(idx + (side > 0 ? 4 : 0)) % GP_ADS.length], 0, 0); g.restore();
-        } else if (h < 7) {  // 타이어 벽
-          for (let k = 0; k < 4; k++) { g.fillStyle = '#1f2937'; g.beginPath(); g.arc(x + 3 * SC, y + (k * 9 - 13) * SC, 3.4 * SC, 0, 7); g.fill(); g.fillStyle = '#9ca3af'; g.beginPath(); g.arc(x + 3 * SC, y + (k * 9 - 13) * SC, 1.2 * SC, 0, 7); g.fill(); }
-        } else {           // 나무
-          g.fillStyle = '#166534'; g.beginPath(); g.arc(x + (side < 0 ? -6 : 10) * SC, y, 9 * SC, 0, 7); g.fill();
-        }
+        } else if (h === 3) {   // 도시 표지판 — 국기 + 도시 이름
+          g.save(); g.translate(x + 3 * SC, y); g.fillStyle = '#f8fafc'; g.fillRect(-3.5 * SC, -34 * SC, 7 * SC, 68 * SC);
+          gpFlag(g, T.code, -3 * SC, -33 * SC, 6 * SC, 9 * SC);
+          g.rotate(side < 0 ? -Math.PI / 2 : Math.PI / 2); g.fillStyle = '#0f172a'; g.font = `900 ${Math.max(8, 3.6 * SC)}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+          g.fillText(T.city, side < 0 ? -6 * SC : 6 * SC, 0); g.restore();
+        } else gpScene(g, T.scene, x + (side < 0 ? -4 : 8) * SC, y, SC, idx + h);
       }
     }
+    // 출발선 위 아치 — 코스 이름
+    { const m0 = startD + Math.ceil((dAt(H) - startD) / GP_LEN) * GP_LEN; const ya = toY(m0) - 14 * SC; if (ya > -20 && ya < H) { const cx = cen(m0); g.fillStyle = 'rgba(15,23,42,.85)'; g.fillRect(toX(cx - HALF - 6), ya - 6 * SC, toX(2 * HALF + 12), 10 * SC); g.fillStyle = '#fde047'; g.font = `900 ${Math.max(10, 4.6 * SC)}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(`${T.flag} ${T.city} 그랑프리`, toX(cx), ya - 1 * SC); } }
     // 차
     for (const c of cars) {
       const y = toY(c.d); if (y < -40 || y > H + 40) continue;
@@ -1567,7 +1700,7 @@ function runGrandprix(el, M) {
   };
   const cleanup = () => { cancelAnimationFrame(raf); removeEventListener('resize', resize); removeEventListener('keydown', kd); removeEventListener('keyup', ku); st.over = true; };
   gpRunning = cleanup;
-  document.getElementById('gameBack').onclick = () => { cleanup(); gpRunning = null; startGrandprix(el); };
+  document.getElementById('gameBack').onclick = () => { cleanup(); gpRunning = null; startGrandprix(el, mi); };
   raf = requestAnimationFrame(t => { last = t; loop(t); });
 }
 

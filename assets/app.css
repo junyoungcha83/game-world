@@ -790,3 +790,15 @@ body.yb-playing { overflow: hidden; }
 .gp-over { position: absolute; inset: 24% 8% auto; padding: 16px; border-radius: 16px; background: rgba(15,23,42,.92); color: #fff; text-align: center;
   display: flex; flex-direction: column; gap: 8px; z-index: 5; }
 .gp-podium { display: flex; flex-direction: column; gap: 2px; font-size: .9rem; }
+
+.gp-tracks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: min(94vw, 420px); }
+.gp-tracks button { display: grid; grid-template-columns: auto auto 1fr; grid-template-rows: auto auto; column-gap: 6px; align-items: center; text-align: left;
+  padding: 8px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); font-family: inherit; cursor: pointer; }
+.gp-tracks button:disabled { opacity: .45; cursor: default; }
+.gp-tracks .gp-lv { grid-row: span 2; font-weight: 900; font-size: 1.1rem; color: var(--gc, #dc2626); min-width: 1.4em; text-align: center; }
+.gp-tracks .gp-fl { grid-row: span 2; font-size: 1.5rem; }
+.gp-tracks b { font-size: .95rem; } .gp-tracks small { color: var(--muted); font-size: .72rem; }
+.gp-mode-tag { font-size: .75rem; padding: 2px 8px; border-radius: 999px; background: var(--gc, #dc2626); color: #fff; margin-left: 6px; }
+.gp-ceremony { inset: 4% 4% auto; max-height: 92%; overflow: auto; }
+.gp-pod-cv { width: 100%; height: min(46vh, 300px); border-radius: 12px; display: block; }
+.gp-unlock { color: #fde047; font-weight: 800; }
