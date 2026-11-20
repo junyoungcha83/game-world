@@ -516,8 +516,8 @@ const GAMES = [
   { id: 'sudoku', name: '스도쿠', emoji: '🔲', color: '#14b8a6', best: 'low',
     svg: '<svg viewBox="0 0 100 100" width="100%" height="100%"><rect x="14" y="14" width="72" height="72" rx="6" fill="#f8fafc"/><g stroke="#94a3b8" stroke-width="1.5"><line x1="38" y1="14" x2="38" y2="86"/><line x1="62" y1="14" x2="62" y2="86"/><line x1="14" y1="38" x2="86" y2="38"/><line x1="14" y1="62" x2="86" y2="62"/></g><rect x="14" y="14" width="72" height="72" rx="6" fill="none" stroke="#0f766e" stroke-width="4"/><g font-family="system-ui,sans-serif" font-weight="800" font-size="17" text-anchor="middle" fill="#0f766e"><text x="26" y="32">5</text><text x="74" y="32">3</text><text x="50" y="56">7</text><text x="26" y="80">1</text><text x="74" y="80">9</text></g><text x="50" y="80" font-family="system-ui,sans-serif" font-weight="800" font-size="17" text-anchor="middle" fill="#f97316">4</text></svg>',
     fmtStat: () => sudokuAggFmt(), start: startSudoku },
-  { id: 'yeoubi', name: '여우비', emoji: '🦊', color: '#f59e0b', best: 'high',
-    svg: '<svg viewBox="0 0 100 100" width="100%" height="100%"><circle cx="70" cy="26" r="13" fill="#fde047"/><g stroke="#e0f2fe" stroke-width="5" stroke-linecap="round"><line x1="22" y1="14" x2="16" y2="30"/><line x1="44" y1="10" x2="38" y2="26"/><line x1="30" y1="36" x2="24" y2="52"/></g><text x="50" y="86" text-anchor="middle" font-size="40">🦊</text></svg>',
+  { id: 'yeoubi', name: '소나기', emoji: '🌧️', color: '#f59e0b', best: 'high',
+    svg: '<svg viewBox="0 0 100 100" width="100%" height="100%"><g fill="#e2e8f0"><circle cx="36" cy="40" r="16"/><circle cx="56" cy="32" r="20"/><circle cx="72" cy="44" r="13"/><rect x="24" y="40" width="58" height="17" rx="8"/></g><g stroke="#e0f2fe" stroke-width="5" stroke-linecap="round"><line x1="32" y1="66" x2="26" y2="84"/><line x1="50" y1="66" x2="44" y2="84"/><line x1="68" y1="66" x2="62" y2="84"/></g></svg>',
     fmtStat: () => yeoubiAggFmt(), start: startYeoubi },
   { id: 'tetris', name: '테트리스', emoji: '🟦', color: '#0ea5e9', best: 'high',
     fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startTetris },
@@ -581,7 +581,7 @@ function boardGames() {
     if (g.id === 'omok') for (const l of OMOK_LEVELS) out.push({ id: l.key, emoji: '⚫', name: `오목 ${l.label}`, best: 'high', fmtStat: omokFmt });
     else if (g.id === 'janggi') for (const l of JANGGI_LEVELS) out.push({ id: l.key, emoji: '漢', name: `장기 ${l.label}`, best: 'high', fmtStat: janggiFmt });
     else if (g.id === 'chess') for (const l of CHESS_LEVELS) out.push({ id: l.key, emoji: '♞', name: `체스 ${l.label}`, best: 'high', fmtStat: chessFmt });
-    else if (g.id === 'yeoubi') for (const m of YB_MODES) out.push({ id: m.key, emoji: '🦊', name: `여우비 ${m.label}`, best: 'high', fmtStat: ybFmt });
+    else if (g.id === 'yeoubi') for (const m of YB_MODES) out.push({ id: m.key, emoji: '🌧️', name: `소나기 ${m.label}`, best: 'high', fmtStat: ybFmt });
     else if (g.id === 'sudoku') for (const l of SUDOKU_LEVELS) out.push({ id: l.key, emoji: '🔲', name: `스도쿠 ${l.label}`, best: 'low', fmtStat: sudokuFmt });
     else if (g.id === 'fourball') for (const m of FOUR_MODES) out.push({ id: m.key, emoji: '🔴', name: m.name, best: 'high', fmtStat: m.fmt });
     else out.push(g);
@@ -658,7 +658,7 @@ let currentGameId = null;   // 지금 열려 있는 게임 id — 배경화면·
 function showView(name) {
   currentView = name;
   // 게임을 나가면 배경화면·배경음악을 원래대로 (뒤로가기·하단 탭 어느 쪽으로 나가도 여기를 지난다)
-  if (name !== 'game' && ybRunning) { ybRunning(); ybRunning = null; }   // 여우비 판 정리(전체화면·키보드 감지 해제)
+  if (name !== 'game' && ybRunning) { ybRunning(); ybRunning = null; }   // 소나기 판 정리(전체화면·키보드 감지 해제)
   if (name !== 'game') {
     delete document.body.dataset.game; document.body.style.removeProperty('--gc');
     currentGameId = null; bgmStop();
@@ -1050,7 +1050,7 @@ function runSudoku(el, L, saved) {
   draw(); persist();
 }
 
-// ── 미니게임: 여우비 (타자 연습) ───────────────────────
+// ── 미니게임: 소나기 (타자 연습) ── (내부 id·기록 키는 처음 이름 yeoubi 그대로)─────────────────────
 // 한메타자교사 '베네치아'·한컴 '산성비'처럼 떨어지는 낱말을 쳐서 없애 우리 문화재를 지킨다.
 // 한글·영어·섞어 3가지, 1~5단계(낱말 20개마다 한 단계씩 올라감). 기록은 갈래별 최고 점수.
 const YB_MODES = [
@@ -1104,7 +1104,7 @@ function startYeoubi(el) {
   const draw = () => {
     const md = YB_MODES.find(m => m.id === mode) || YB_MODES[0];
     el.innerHTML = `<div class="mg omok-pick yb-pick">
-      <div class="mg-msg">🦊 여우비 — 떨어지는 낱말을 쳐서 문화재를 지켜요</div>
+      <div class="mg-msg">🌧️ 소나기 — 떨어지는 낱말을 쳐서 문화재를 지켜요</div>
       <div class="yb-modes">${YB_MODES.map(m => `<button class="chip-btn${m.id === mode ? ' on' : ''}" data-m="${m.id}">${m.label}<small>${m.desc}</small></button>`).join('')}</div>
       <div class="sd-help">${escapeHtml(md.label)} 최고 기록: ${escapeHtml(ybFmt(getStat(md.key)))}</div>
       <div class="omok-levels">
@@ -1125,11 +1125,11 @@ function runYeoubi(el, mode, startLv) {
   el.innerHTML = `<div class="mg yeoubi">
     <div class="yb-hud">
       <button class="yb-quit" id="ybQuit">‹ 그만</button>
-      <span>🦊 <b id="ybLv"></b></span><span>★ <b id="ybScore">0</b></span><span>⌨ <b id="ybSpm">0</b>타</span>
+      <span>🌧️ <b id="ybLv"></b></span><span>★ <b id="ybScore">0</b></span><span>⌨ <b id="ybSpm">0</b>타</span>
       <span class="yb-fx" id="ybFx"></span>
     </div>
     <div class="yb-stage" id="ybStage">
-      <div class="yb-sun">☀️</div>
+      <div class="yb-sun">⛅</div>
       <div class="yb-sites" id="ybSites">${YB_SITES.map((s, i) => `<div class="yb-site" data-i="${i}" title="${s.name}"><svg viewBox="0 0 60 50">${s.svg}</svg><small>${s.name}</small></div>`).join('')}</div>
       <div class="yb-water"></div>
       <div class="yb-msg" id="ybMsg"></div>
