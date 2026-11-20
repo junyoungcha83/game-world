@@ -1279,8 +1279,8 @@ function runYeoubi(el, mode, startLv) {
 // 위에서 내려다본 도트 F1. 12대 중 꼴찌에서 출발해 4바퀴 동안 추월한다.
 // 쉬움 = 가속 자동 + 핸들만 · 보통 = 가속·브레이크 직접. 기록은 모드별 최고 순위(낮을수록 좋음) + 최고 랩 타임.
 const GP_MODES = [
-  { key: 'gp_easy',   label: '쉬움', desc: '가속 자동 · 핸들만', auto: true,  amp: 0.6, steer: 82, ai: [0.78, 0.92] },
-  { key: 'gp_normal', label: '보통', desc: '가속·브레이크 직접', auto: false, amp: 1.0, steer: 74, ai: [0.86, 0.98] },
+  { key: 'gp_easy',   label: '쉬움', desc: '가속 자동 · 핸들만', auto: true,  amp: 0.6, steer: 90, ai: [0.78, 0.92] },
+  { key: 'gp_normal', label: '보통', desc: '가속·브레이크 직접', auto: false, amp: 1.0, steer: 96, ai: [0.86, 0.98] },
 ];
 const GP_LAPS = 4, GP_LEN = 7200, GP_VMAX = 300, GP_HALF = 46;   // 한 바퀴 길이·최고 속도(km/h로 표시)·도로 반폭(세계 단위)
 // 출전국 — 내 차는 태극기, AI 11대는 아래 14개국 중 매 경기 무작위. color = 차체 색
@@ -1353,8 +1353,38 @@ const GP_TRACKS = [
   { code: 'au', country: '호주',       city: '캔버라',      harm: [[6, 28, 0], [15, 16, .8], [3, 8, 2]], half: 38, ground: ['#8a9a4a', '#97a756'], scene: 'eucalyptus' },
   // 마지막(15단계)은 우리나라 — 가장 어려운 코스
   { code: 'kr', country: '대한민국',   city: '서울',        harm: [[6, 30, 0], [16, 16, 1.2], [3, 8, .4]], half: 37, ground: ['#4f7f4a', '#5a8b54'], scene: 'seoul' },
-].map((t, i) => ({ ...t, lv: i + 1, ai: i * 0.006, flag: ([GP_ME, ...GP_NATIONS].find(n => n.code === t.code) || {}).flag || '' }));
-const gpCenter = (d, T, amp) => { const u = d / GP_LEN * Math.PI * 2; let o = 0; for (const [k, a, p] of T.harm) o += a * Math.sin(k * u + p); return 100 + amp * o; };
+].map((t, i) => ({ ...t, lv: i + 1, ai: i * 0.004, flag: ([GP_ME, ...GP_NATIONS].find(n => n.code === t.code) || {}).flag || '' }));
+// 단계별 코스 요소 — 코스마다 같은 자리에 오도록 나라 코드로 씨앗을 정한 난수로 배치한다.
+//  시케인(S자 급커브): 단계마다 늘고 날카로워짐 · 좁은 구간: 4단계부터 · 기름 웅덩이: 5단계부터
+function gpTrackFx(T) {
+  if (T._fx) return T._fx;
+  let seed = [...T.code].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) >>> 0;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const lv = T.lv, used = { c: [], n: [], o: [] };
+  // 같은 종류끼리만 겹치지 않게 놓는다(높은 단계에선 좁은 길 안에 시케인·기름이 함께 올 수 있음)
+  const place = (len, kind) => { const U = used[kind]; for (let k = 0; k < 60; k++) { const d = 450 + rnd() * (GP_LEN - 900 - len); if (U.every(([a, b]) => d + len < a - 120 || d > b + 120)) { U.push([d, d + len]); return d; } } return null; };
+  const chic = [], narrow = [], oil = [];
+  const nC = Math.round(lv * 0.55), w = 280 - lv * 9, a = 12 + lv * 1.7;
+  for (let i = 0; i < nC; i++) { const d = place(w * 4, 'c'); if (d != null) chic.push({ d: d + w, a: (i % 2 ? -1 : 1) * a, w }); }
+  const nN = lv >= 4 ? Math.floor((lv - 1) / 3) : 0;
+  for (let i = 0; i < nN; i++) { const len = 600 + rnd() * 400, d = place(len, 'n'); if (d != null) narrow.push({ d, len, dw: 6 + lv * 0.55 }); }
+  const nO = lv >= 5 ? lv - 4 : 0;
+  for (let i = 0; i < nO; i++) { const d = place(60, 'o'); if (d != null) oil.push({ d: d + 30, o: (rnd() * 2 - 1) * (T.half - 14), r: 9 }); }
+  return (T._fx = { chic, narrow, oil });
+}
+const gpWrap = (m) => { m %= GP_LEN; if (m > GP_LEN / 2) m -= GP_LEN; if (m < -GP_LEN / 2) m += GP_LEN; return m; };
+function gpHalf(d, T) {
+  const fx = gpTrackFx(T), m = ((d % GP_LEN) + GP_LEN) % GP_LEN; let h = T.half;
+  for (const n of fx.narrow) { const x = m - n.d; if (x > -150 && x < n.len + 150) h -= n.dw * Math.min(1, Math.max(0, Math.min(x + 150, n.len + 150 - x) / 150)); }
+  return h;
+}
+const gpCenter = (d, T, amp) => {
+  const u = d / GP_LEN * Math.PI * 2; let o = 0; for (const [k, a, p] of T.harm) o += a * Math.sin(k * u + p);
+  const fx = gpTrackFx(T), m = ((d % GP_LEN) + GP_LEN) % GP_LEN;
+  for (const c of fx.chic) { const x1 = gpWrap(m - c.d) / c.w, x2 = gpWrap(m - c.d - 2.2 * c.w) / c.w; o += c.a * (Math.exp(-x1 * x1) - Math.exp(-x2 * x2)); }
+  const h = gpHalf(d, T), c = 100 + amp * o;
+  return Math.max(h + 6, Math.min(200 - h - 6, c));
+};
 // 단계 열림 — 바로 앞 단계를 3위 안에 들면 다음 단계가 열린다(사용자별, 기기 간 동기화되는 기록 키 gp_unlock.best)
 const gpUnlocked = () => { const s = getStat('gp_unlock'); return Math.max(1, (s && s.best) || 1); };
 function gpSetUnlocked(n) {
@@ -1397,7 +1427,7 @@ function startGrandprix(el, mi) {
   const M = GP_MODES[mi], open = gpUnlocked();
   el.innerHTML = `<div class="mg omok-pick">
     <div class="mg-msg">🏁 코스 선택 <small class="gp-mode-tag">${M.label}</small></div>
-    <div class="sd-help">세계 14개국 수도를 돌고 마지막 15단계는 🇰🇷 서울 · 단계가 오를수록 커브가 급하고 길이 좁아져요.<br>바로 앞 단계에서 <b>3위 안</b>에 들면 다음 단계가 열려요. (${open}/${GP_TRACKS.length} 열림)</div>
+    <div class="sd-help">세계 14개국 수도를 돌고 마지막 15단계는 🇰🇷 서울 · 단계가 오를수록 S자 급커브(⟩⟨ 표지)·좁은 길·기름 웅덩이가 늘고 상대 차도 영리해져요.<br>바로 앞 단계에서 <b>3위 안</b>에 들면 다음 단계가 열려요. (${open}/${GP_TRACKS.length} 열림)</div>
     <div class="gp-tracks">${GP_TRACKS.map(t => `<button data-lv="${t.lv}" ${t.lv > open ? 'disabled' : ''}>
       <span class="gp-lv">${t.lv}</span><span class="gp-fl">${t.flag}</span><b>${escapeHtml(t.city)}</b><small>${escapeHtml(t.country)}${t.lv > open ? ' · 🔒' : ''}</small></button>`).join('')}</div>
   </div>`;
@@ -1488,7 +1518,11 @@ function gpPodiumAnim(cv, top3) {
 }
 function runGrandprix(el, M, T, mi) {
   T = T || GP_TRACKS[0];
-  const HALF = T.half, cen = d => gpCenter(d, T, M.amp);
+  const HALF = T.half, cen = d => gpCenter(d, T, M.amp), half = d => gpHalf(d, T), FX = gpTrackFx(T);
+  // AI 실력(0~1) — 단계가 오를수록 코너를 미리 보고, 덜 실수하고, 추월·막기가 영리해진다. 쉬움 모드는 한 단계 낮춤
+  const SK = Math.max(0, Math.min(1, (T.lv - 1) / 14 - (M.auto ? 0.2 : 0)));
+  const oilAt = (d, x) => { const m = ((d % GP_LEN) + GP_LEN) % GP_LEN; return FX.oil.find(o => Math.abs(gpWrap(m - o.d)) < o.r * 1.4 && Math.abs(x - (cen(d) + o.o)) < o.r); };
+  const curvMax = (d, look) => { let k = 0; for (let s = 20; s <= look; s += 30) k = Math.max(k, Math.abs(curv(d + s))); return k; };
   el.innerHTML = `<div class="mg gp">
     <canvas id="gpCv"></canvas>
     <div class="gp-pad ${M.auto ? 'easy' : 'normal'}">
@@ -1509,11 +1543,11 @@ function runGrandprix(el, M, T, mi) {
   resize(); addEventListener('resize', resize);
   // 출발: 2열 그리드, 플레이어가 맨 뒤(12위)
   const cars = [];
-  const [lo, hi] = M.ai.map(v => v + T.ai);
+  const [lo, hi] = M.ai.map(v => Math.min(0.97, v + T.ai));   // AI 최고 속도는 내 차(300)보다 조금 낮게 — 변별력은 코너·추월 실력(SK)으로
   const field = GP_NATIONS.slice().sort(() => Math.random() - 0.5).slice(0, 11);   // 이번 경기 출전국
   for (let i = 0; i < 11; i++) {
     const f = hi - (hi - lo) * (i / 10) + (Math.random() - 0.5) * 0.02;
-    cars.push({ ai: true, nat: field[i], d: 300 - i * 26, lane: (i % 2 ? 1 : -1) * Math.min(16, HALF - 14), x: 0, v: 0, vmax: GP_VMAX * f, done: 0 });
+    cars.push({ ai: true, nat: field[i], d: 300 - i * 26, lane: (i % 2 ? 1 : -1) * Math.min(16, T.half - 14), x: 0, v: 0, vmax: GP_VMAX * f, done: 0 });
   }
   const P = { ai: false, nat: GP_ME, d: 300 - 11 * 26, lane: 16, x: 0, v: 0, vmax: GP_VMAX, done: 0 };
   cars.push(P);
@@ -1541,9 +1575,9 @@ function runGrandprix(el, M, T, mi) {
     if (st.t < 0) { const n = Math.ceil(-st.t); if (n !== lastCount) { lastCount = n; beep(440, 0.15); } return; }
     if (lastCount !== 0) { lastCount = 0; beep(880, 0.35); st.lapStart = st.t; }
     // 플레이어
-    const cP = cen(P.d), off = Math.abs(P.x - cP) > HALF - 5;
+    const cP = cen(P.d), off = Math.abs(P.x - cP) > half(P.d) - 5;
     const vcap = off ? GP_VMAX * 0.38 : P.vmax;
-    if (M.auto) { const target = vcap * (1 - 0.18 * Math.min(1, Math.abs(curv(P.d + 120)) / 0.2)); P.v += Math.sign(target - P.v) * Math.min(Math.abs(target - P.v), (target > P.v ? 120 : 200) * dt); }
+    if (M.auto) { const target = vcap * (1 - Math.min(0.45, curvMax(P.d, 180) * 1.2)); P.v += Math.sign(target - P.v) * Math.min(Math.abs(target - P.v), (target > P.v ? 120 : 200) * dt); }
     else {
       if (keys.A) P.v += 115 * dt; else P.v -= 38 * dt;
       if (keys.B) P.v -= 270 * dt;
@@ -1552,18 +1586,36 @@ function runGrandprix(el, M, T, mi) {
     P.v = Math.max(0, Math.min(P.vmax, P.v));
     const steer = (keys.R ? 1 : 0) - (keys.L ? 1 : 0);
     P.x += steer * M.steer * Math.min(1, 0.35 + P.v / GP_VMAX) * dt;
+    // 기름 웅덩이 — 밟으면 잠깐 미끄러지며 감속
+    if (oilAt(P.d, P.x) && !(P.slipT > 0)) { P.slipT = 0.8; P.slipDir = Math.random() < 0.5 ? -1 : 1; P.v *= 0.82; beep(200, 0.25, 'triangle'); }
+    if (P.slipT > 0) { P.slipT -= dt; P.x += P.slipDir * 46 * dt; }
     P.x = Math.max(4, Math.min(196, P.x));
     P.d += P.v * dt;
-    // AI — 자기 줄(lane)을 따라가다 앞차가 막으면 옆 줄로, 커브에선 감속
+    // AI — 실력(SK)에 따라: 코너를 얼마나 앞서 보고 감속하는지, 줄을 얼마나 빨리 따라가는지, 실수·추월·막기
     for (const c of cars) {
       if (!c.ai) continue;
-      const target = c.vmax * (1 - Math.min(0.42, Math.abs(curv(c.d + 100)) * 1.15));
-      c.v += Math.sign(target - c.v) * Math.min(Math.abs(target - c.v), (target > c.v ? 90 : 160) * dt);
-      const ahead = cars.find(o => o !== c && o.d > c.d && o.d - c.d < 70 && Math.abs(o.x - c.x) < 15 && o.v < c.v);
-      c.cool = (c.cool || 0) - dt;
-      if (ahead && c.cool <= 0) { c.cool = 1.2; const lim = HALF - 12, tryL = c.lane - 22, tryR = c.lane + 22; c.lane = Math.abs(tryL) <= lim && (Math.abs(tryR) > lim || Math.random() < 0.5) ? tryL : Math.max(-lim, Math.min(lim, tryR)); }
-      const tx = cen(c.d) + c.lane;
-      c.x += Math.sign(tx - c.x) * Math.min(Math.abs(tx - c.x), 150 * dt);
+      const look = 60 + 150 * SK, hw = half(c.d), lim = hw - 12;
+      let target = c.vmax * (1 - Math.min(0.5, curvMax(c.d, look) * (1.5 - 0.8 * SK)));
+      const offR = Math.abs(c.x - cen(c.d)) > hw - 5;
+      if (offR) target = Math.min(target, GP_VMAX * 0.38);
+      c.v += Math.sign(target - c.v) * Math.min(Math.abs(target - c.v), (target > c.v ? 80 + 40 * SK : 170) * dt);
+      c.cool = (c.cool || 0) - dt; c.wobT = (c.wobT || 0) - dt;
+      // 추월: 앞차가 막으면 옆 줄로 (실력이 높을수록 빨리 판단)
+      const ahead = cars.find(o => o !== c && o.d > c.d && o.d - c.d < 50 + 50 * SK && Math.abs(o.x - c.x) < 15 && o.v < c.v + 5);
+      if (ahead && c.cool <= 0) { c.cool = 1.6 - SK; const tryL = c.lane - 22, tryR = c.lane + 22; c.lane = Math.abs(tryL) <= lim && (Math.abs(tryR) > lim || Math.random() < 0.5) ? tryL : Math.max(-lim, Math.min(lim, tryR)); }
+      // 기름 피하기(실력 0.35 이상)
+      if (SK > 0.35 && c.cool <= 0) { const m = ((c.d % GP_LEN) + GP_LEN) % GP_LEN; const oil = FX.oil.find(o => { const dd = gpWrap(o.d - m); return dd > 0 && dd < look && Math.abs(o.o - c.lane) < 14; }); if (oil) { c.lane = oil.o > 0 ? Math.max(-lim, oil.o - 24) : Math.min(lim, oil.o + 24); c.cool = 0.8; } }
+      // 막기(실력 0.55 이상): 바로 뒤에서 더 빠르게 오는 내 차 쪽으로 줄을 옮긴다
+      const dP = c.d - P.d;
+      if (SK > 0.55 && dP > 10 && dP < 55 && P.v > c.v && Math.abs(P.x - c.x) < 22 && c.cool <= 0 && Math.random() < SK * 0.6 * dt * 4) {
+        c.lane = Math.max(-lim, Math.min(lim, P.x - cen(c.d))); c.cool = 1.4; }
+      // 실수(실력이 낮을수록 자주): 잠깐 줄에서 벗어나 비틀거림
+      if (c.wobT <= 0 && Math.random() < (1 - SK) * 0.22 * dt) { c.wobT = 0.9; c.wob = (Math.random() < 0.5 ? -1 : 1) * (10 + 16 * (1 - SK)); }
+      c.lane = Math.max(-lim, Math.min(lim, c.lane));
+      const tx = cen(c.d) + c.lane + (c.wobT > 0 ? c.wob : 0);
+      c.x += Math.sign(tx - c.x) * Math.min(Math.abs(tx - c.x), (80 + 120 * SK) * dt);
+      if (oilAt(c.d, c.x) && !(c.slipT > 0)) { c.slipT = 0.6; c.v *= 0.85; c.x += (Math.random() < 0.5 ? -1 : 1) * 6; }
+      if (c.slipT > 0) c.slipT -= dt;
       c.d += c.v * dt;
     }
     // 충돌 — 겹치면 뒤차 감속·밀어내기
@@ -1619,7 +1671,7 @@ function runGrandprix(el, M, T, mi) {
     for (let y = 0; y < H; y += 6) {
       const d = dAt(y), band = ((Math.floor(d / 90) % 2) + 2) % 2;   // 출발선 뒤(음수 거리)도 0·1
       g.fillStyle = T.ground[band]; g.fillRect(0, y, W, 6);
-      const cx = cen(d), l = toX(cx - HALF), r = toX(cx + HALF);
+      const cx = cen(d), hw = half(d), l = toX(cx - hw), r = toX(cx + hw);
       g.fillStyle = '#5b5f66'; g.fillRect(l, y, r - l, 6);
       const kerb = Math.floor(d / 22) % 2 ? '#ef4444' : '#f8fafc';
       g.fillStyle = kerb; g.fillRect(l - 4 * SC, y, 4 * SC, 6); g.fillRect(r, y, 4 * SC, 6);
@@ -1633,7 +1685,7 @@ function runGrandprix(el, M, T, mi) {
       const idx = Math.round(d / 240), y = toY(d), cx = cen(d);
       for (const side of [-1, 1]) {
         const h = (idx * 7 + (side > 0 ? 3 : 0)) % 8;
-        const x = side < 0 ? toX(cx - HALF - 16) : toX(cx + HALF + 10);
+        const x = side < 0 ? toX(cx - half(d) - 16) : toX(cx + half(d) + 10);
         if (h < 3) {   // 광고판(가상 브랜드)
           g.save(); g.translate(x + 3 * SC, y); g.fillStyle = ['#1d4ed8', '#b91c1c', '#f59e0b'][h]; g.fillRect(-3 * SC, -32 * SC, 6 * SC, 64 * SC);
           g.rotate(side < 0 ? -Math.PI / 2 : Math.PI / 2); g.fillStyle = '#fff'; g.font = `bold ${Math.max(8, 3.6 * SC)}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -1646,8 +1698,19 @@ function runGrandprix(el, M, T, mi) {
         } else gpScene(g, T.scene, x + (side < 0 ? -4 : 8) * SC, y, SC, idx + h);
       }
     }
+    // 기름 웅덩이·시케인 경고 표지 — 화면에 보이는 바퀴 범위만
+    { const lapA = Math.floor(dAt(H) / GP_LEN) - 1, lapB = Math.floor(dAt(0) / GP_LEN) + 1;
+      for (let L = lapA; L <= lapB; L++) {
+        for (const o of FX.oil) { const d = L * GP_LEN + o.d, y = toY(d); if (y < -30 || y > H + 30) continue;
+          g.fillStyle = 'rgba(17,24,39,.85)'; g.beginPath(); g.ellipse(toX(cen(d) + o.o), y, o.r * SC, o.r * 0.7 * SC, 0, 0, Math.PI * 2); g.fill();
+          g.fillStyle = 'rgba(147,51,234,.35)'; g.beginPath(); g.ellipse(toX(cen(d) + o.o) - 2 * SC, y - 1 * SC, o.r * .5 * SC, o.r * .3 * SC, 0, 0, Math.PI * 2); g.fill(); }
+        for (const ch of FX.chic) { const d = L * GP_LEN + ch.d - 2.2 * ch.w, y = toY(d); if (y < -30 || y > H + 30) continue;
+          const cx = cen(d), xs = ch.a > 0 ? toX(cx + half(d) + 8) : toX(cx - half(d) - 16);
+          g.fillStyle = '#facc15'; g.fillRect(xs, y - 8 * SC, 8 * SC, 16 * SC); g.fillStyle = '#111'; g.font = `900 ${Math.max(9, 4.4 * SC)}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+          g.fillText(ch.a > 0 ? '⟩' : '⟨', xs + 4 * SC, y - 3 * SC); g.fillText(ch.a > 0 ? '⟨' : '⟩', xs + 4 * SC, y + 4 * SC); }
+      } }
     // 출발선 위 아치 — 코스 이름
-    { const m0 = startD + Math.ceil((dAt(H) - startD) / GP_LEN) * GP_LEN; const ya = toY(m0) - 14 * SC; if (ya > -20 && ya < H) { const cx = cen(m0); g.fillStyle = 'rgba(15,23,42,.85)'; g.fillRect(toX(cx - HALF - 6), ya - 6 * SC, toX(2 * HALF + 12), 10 * SC); g.fillStyle = '#fde047'; g.font = `900 ${Math.max(10, 4.6 * SC)}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(`${T.flag} ${T.city} 그랑프리`, toX(cx), ya - 1 * SC); } }
+    { const m0 = startD + Math.ceil((dAt(H) - startD) / GP_LEN) * GP_LEN; const ya = toY(m0) - 14 * SC; if (ya > -20 && ya < H) { const cx = cen(m0); g.fillStyle = 'rgba(15,23,42,.85)'; g.fillRect(toX(cx - half(m0) - 6), ya - 6 * SC, toX(2 * half(m0) + 12), 10 * SC); g.fillStyle = '#fde047'; g.font = `900 ${Math.max(10, 4.6 * SC)}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(`${T.flag} ${T.city} 그랑프리`, toX(cx), ya - 1 * SC); } }
     // 차
     for (const c of cars) {
       const y = toY(c.d); if (y < -40 || y > H + 40) continue;
