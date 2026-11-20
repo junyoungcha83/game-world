@@ -1518,6 +1518,29 @@ function runGrandprix(el, M) {
     const px = toX(P.x), py = toY(P.d);
     g.fillStyle = 'rgba(15,23,42,.75)'; g.font = `bold ${Math.max(10, 4.2 * SC)}px system-ui,sans-serif`; g.textAlign = 'right'; g.textBaseline = 'middle';
     const lw = g.measureText('나 ▶').width + 8; g.fillRect(px - 9 * SC - lw, py - 7, lw, 14); g.fillStyle = '#fff'; g.fillText('나 ▶', px - 9 * SC - 4, py);
+    // 진행 막대 — 출발(아래)부터 결승(위)까지 전체 레이스(4바퀴) 위에 모든 차를 점으로
+    {
+      const bx = W - 16, top = 54, bot = H - 14, len = bot - top, total = GP_LAPS * GP_LEN;
+      g.fillStyle = 'rgba(15,23,42,.55)'; g.beginPath(); g.roundRect(bx - 7, top - 8, 14, len + 16, 7); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(bx - 1.5, top, 3, len);
+      g.font = `700 ${Math.max(9, W * 0.024)}px system-ui,sans-serif`; g.textAlign = 'right'; g.textBaseline = 'middle';
+      for (let k = 0; k <= GP_LAPS; k++) {                       // 바퀴 눈금
+        const y = bot - len * k / GP_LAPS;
+        g.fillStyle = k === GP_LAPS ? '#facc15' : 'rgba(255,255,255,.8)'; g.fillRect(bx - 6, y - 1, 12, 2);
+        g.fillStyle = 'rgba(255,255,255,.85)'; g.fillText(k === GP_LAPS ? '🏁' : k === 0 ? '출발' : String(k), bx - 9, y);
+      }
+      const prog = c => Math.max(0, Math.min(1, (c.d - startD) / total));
+      for (const c of cars) {                                     // AI 먼저, 내 차는 맨 위에
+        if (c === P) continue;
+        const y = bot - len * prog(c);
+        g.fillStyle = c.nat.color; g.beginPath(); g.arc(bx, y, 3.6, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = 1; g.stroke();
+      }
+      const yP = bot - len * prog(P);
+      g.fillStyle = '#ef4444'; g.beginPath(); g.arc(bx, yP, 5.5, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
+      g.fillStyle = '#fff'; g.textAlign = 'right'; g.fillText('나', bx - 9, yP);
+    }
     // HUD
     const pos = rank();
     g.textBaseline = 'top'; g.textAlign = 'left'; g.fillStyle = 'rgba(15,23,42,.55)'; g.fillRect(0, 0, W, 44);
