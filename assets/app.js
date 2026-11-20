@@ -516,6 +516,9 @@ const GAMES = [
   { id: 'sudoku', name: '스도쿠', emoji: '🔲', color: '#14b8a6', best: 'low',
     svg: '<svg viewBox="0 0 100 100" width="100%" height="100%"><rect x="14" y="14" width="72" height="72" rx="6" fill="#f8fafc"/><g stroke="#94a3b8" stroke-width="1.5"><line x1="38" y1="14" x2="38" y2="86"/><line x1="62" y1="14" x2="62" y2="86"/><line x1="14" y1="38" x2="86" y2="38"/><line x1="14" y1="62" x2="86" y2="62"/></g><rect x="14" y="14" width="72" height="72" rx="6" fill="none" stroke="#0f766e" stroke-width="4"/><g font-family="system-ui,sans-serif" font-weight="800" font-size="17" text-anchor="middle" fill="#0f766e"><text x="26" y="32">5</text><text x="74" y="32">3</text><text x="50" y="56">7</text><text x="26" y="80">1</text><text x="74" y="80">9</text></g><text x="50" y="80" font-family="system-ui,sans-serif" font-weight="800" font-size="17" text-anchor="middle" fill="#f97316">4</text></svg>',
     fmtStat: () => sudokuAggFmt(), start: startSudoku },
+  { id: 'yeoubi', name: '여우비', emoji: '🦊', color: '#f59e0b', best: 'high',
+    svg: '<svg viewBox="0 0 100 100" width="100%" height="100%"><circle cx="70" cy="26" r="13" fill="#fde047"/><g stroke="#e0f2fe" stroke-width="5" stroke-linecap="round"><line x1="22" y1="14" x2="16" y2="30"/><line x1="44" y1="10" x2="38" y2="26"/><line x1="30" y1="36" x2="24" y2="52"/></g><text x="50" y="86" text-anchor="middle" font-size="40">🦊</text></svg>',
+    fmtStat: () => yeoubiAggFmt(), start: startYeoubi },
   { id: 'tetris', name: '테트리스', emoji: '🟦', color: '#0ea5e9', best: 'high',
     fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startTetris },
 ];
@@ -578,6 +581,7 @@ function boardGames() {
     if (g.id === 'omok') for (const l of OMOK_LEVELS) out.push({ id: l.key, emoji: '⚫', name: `오목 ${l.label}`, best: 'high', fmtStat: omokFmt });
     else if (g.id === 'janggi') for (const l of JANGGI_LEVELS) out.push({ id: l.key, emoji: '漢', name: `장기 ${l.label}`, best: 'high', fmtStat: janggiFmt });
     else if (g.id === 'chess') for (const l of CHESS_LEVELS) out.push({ id: l.key, emoji: '♞', name: `체스 ${l.label}`, best: 'high', fmtStat: chessFmt });
+    else if (g.id === 'yeoubi') for (const m of YB_MODES) out.push({ id: m.key, emoji: '🦊', name: `여우비 ${m.label}`, best: 'high', fmtStat: ybFmt });
     else if (g.id === 'sudoku') for (const l of SUDOKU_LEVELS) out.push({ id: l.key, emoji: '🔲', name: `스도쿠 ${l.label}`, best: 'low', fmtStat: sudokuFmt });
     else if (g.id === 'fourball') for (const m of FOUR_MODES) out.push({ id: m.key, emoji: '🔴', name: m.name, best: 'high', fmtStat: m.fmt });
     else out.push(g);
@@ -592,7 +596,7 @@ const HUB_CATEGORIES = [
   { label: '🎨 자유',  bgm: 'bright', ids: ['color', 'brush', 'roulette'] },
   { label: '♟️ 보드',  bgm: 'calm',   ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot'] },
   { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball'] },
-  { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess', 'sudoku'] },
+  { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess', 'sudoku', 'yeoubi'] },
   { label: '🧠 퀴즈',  bgm: 'bright', ids: ['quizworld', 'flags', 'capital', 'mapq'] },
 ];
 // 게임이 아니라 다른 앱으로 가는 카드 — GAMES 에 넣지 않아 기록·순위판에는 안 나온다.
@@ -654,6 +658,7 @@ let currentGameId = null;   // 지금 열려 있는 게임 id — 배경화면·
 function showView(name) {
   currentView = name;
   // 게임을 나가면 배경화면·배경음악을 원래대로 (뒤로가기·하단 탭 어느 쪽으로 나가도 여기를 지난다)
+  if (name !== 'game' && ybRunning) { ybRunning(); ybRunning = null; }   // 여우비 판 정리(전체화면·키보드 감지 해제)
   if (name !== 'game') {
     delete document.body.dataset.game; document.body.style.removeProperty('--gc');
     currentGameId = null; bgmStop();
@@ -753,6 +758,7 @@ function boardCmp(g, a, b) {
 }
 function openGame(id) {
   const g = GAMES.find(x => x.id === id); if (!g) return;
+  if (ybRunning) { ybRunning(); ybRunning = null; }
   if (!getCurrentUser()) { showReg(); return; }   // 사용자 없으면 기록이 안 쌓이므로 먼저 선택
   document.getElementById('gameTitle').textContent = g.emoji + ' ' + g.name;
   document.getElementById('gameBest').textContent = g.fmtStat(getStat(id));
@@ -1042,6 +1048,223 @@ function runSudoku(el, L, saved) {
     if (time % 5 === 0) persist();
   }, 1000);
   draw(); persist();
+}
+
+// ── 미니게임: 여우비 (타자 연습) ───────────────────────
+// 한메타자교사 '베네치아'·한컴 '산성비'처럼 떨어지는 낱말을 쳐서 없애 우리 문화재를 지킨다.
+// 한글·영어·섞어 3가지, 1~5단계(낱말 20개마다 한 단계씩 올라감). 기록은 갈래별 최고 점수.
+const YB_MODES = [
+  { key: 'yeoubi_ko',  id: 'ko',  label: '한글',  desc: '낱말 → 속담' },
+  { key: 'yeoubi_en',  id: 'en',  label: '영어',  desc: '교육부 기본 어휘' },
+  { key: 'yeoubi_mix', id: 'mix', label: '섞어',  desc: '한글·영어 번갈아' },
+];
+const YB_STAGE = [   // 떨어지는 빠르기(화면 높이/초) · 새 낱말 간격(초)
+  { fall: 0.055, gap: 2.6, desc: '아주 느림' },
+  { fall: 0.070, gap: 2.3, desc: '느림' },
+  { fall: 0.085, gap: 2.0, desc: '보통' },
+  { fall: 0.090, gap: 2.4, desc: '빠름' },
+  { fall: 0.070, gap: 3.4, desc: '긴 문장' },
+];
+const YB_STAGE_DESC = { ko: ['두 글자', '세 글자', '네 글자까지', '두 낱말', '속담'], en: ['2~3글자', '4글자', '5~6글자', '6~8글자', '9글자 이상'] };
+const ybFmt = s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음';
+function yeoubiAggFmt() {
+  const u = getCurrentUser(); if (!u) return '아직 기록 없음';
+  const parts = YB_MODES.map(m => { const s = getStat(m.key, u); return s && s.plays ? `${m.label} ${(s.best || 0).toLocaleString('ko-KR')}` : null; }).filter(Boolean);
+  return parts.length ? parts.join(' · ') : '아직 기록 없음';
+}
+// 타수 — 한글은 자모를 하나씩 누르는 수로 센다(ㅘ·ㅢ 같은 겹모음, ㄳ·ㄺ 같은 겹받침은 2타)
+function ybStrokes(t) {
+  const VV = new Set([9, 10, 11, 14, 15, 16, 19]);                 // 중성 인덱스: ㅘㅙㅚㅝㅞㅟㅢ
+  const JJ = new Set([3, 5, 6, 9, 10, 11, 12, 13, 14, 15, 18]);    // 종성 인덱스: ㄳㄵㄶㄺㄻㄼㄽㄾㄿㅀㅄ
+  let n = 0;
+  for (const ch of t) {
+    const c = ch.codePointAt(0) - 0xAC00;
+    if (c >= 0 && c < 11172) { const jung = Math.floor((c % 588) / 28), jong = c % 28; n += 1 + (VV.has(jung) ? 2 : 1) + (jong ? (JJ.has(jong) ? 2 : 1) : 0); }
+    else n += 1;
+  }
+  return n;
+}
+// 지켜야 할 우리 문화재 8곳 — 작은 크기에서도 알아보게 실루엣 위주
+const YB_SITES = [
+  { name: '경회루', svg: '<rect x="4" y="44" width="52" height="6" fill="#9ca3af"/><g fill="#b91c1c"><rect x="8" y="27" width="3" height="17"/><rect x="18" y="27" width="3" height="17"/><rect x="28.5" y="27" width="3" height="17"/><rect x="39" y="27" width="3" height="17"/><rect x="49" y="27" width="3" height="17"/></g><rect x="6" y="25" width="48" height="3" fill="#7c2d12"/><path d="M2 25 Q30 4 58 25 Q30 18 2 25Z" fill="#475569"/><path d="M14 14 Q30 4 46 14" stroke="#334155" stroke-width="2" fill="none"/>' },
+  { name: '숭례문', svg: '<rect x="6" y="36" width="48" height="14" fill="#a8a29e"/><path d="M24 50 V42 Q30 34 36 42 V50Z" fill="#1f2937"/><rect x="12" y="27" width="36" height="9" fill="#b91c1c"/><path d="M4 28 Q30 16 56 28 Q30 23 4 28Z" fill="#475569"/><rect x="16" y="15" width="28" height="7" fill="#b91c1c"/><path d="M8 16 Q30 2 52 16 Q30 10 8 16Z" fill="#475569"/>' },
+  { name: '첨성대', svg: '<rect x="14" y="46" width="32" height="4" fill="#a8a29e"/><path d="M18 46 Q14 30 22 14 H38 Q46 30 42 46Z" fill="#d6c7a1"/><g stroke="#a8946a" stroke-width="1"><line x1="17" y1="40" x2="43" y2="40"/><line x1="17" y1="34" x2="43" y2="34"/><line x1="19" y1="28" x2="41" y2="28"/><line x1="20" y1="22" x2="40" y2="22"/></g><rect x="27" y="26" width="6" height="6" fill="#3f3f46"/><rect x="20" y="10" width="20" height="4" fill="#a8946a"/>' },
+  { name: '다보탑', svg: '<rect x="12" y="44" width="36" height="6" fill="#a8a29e"/><rect x="18" y="34" width="24" height="10" fill="#d6d3d1"/><rect x="21" y="36" width="3" height="8" fill="#a8a29e"/><rect x="36" y="36" width="3" height="8" fill="#a8a29e"/><rect x="14" y="31" width="32" height="3" fill="#a8a29e"/><path d="M20 31 L24 22 H36 L40 31Z" fill="#d6d3d1"/><path d="M22 22 L26 15 H34 L38 22Z" fill="#c4c0bb"/><rect x="25" y="11" width="10" height="4" fill="#a8a29e"/><rect x="29" y="3" width="2" height="8" fill="#78716c"/>' },
+  { name: '대웅전', svg: '<rect x="4" y="44" width="52" height="6" fill="#a8a29e"/><rect x="8" y="28" width="44" height="16" fill="#e7d4b5"/><g fill="#b45309"><rect x="10" y="28" width="3" height="16"/><rect x="21" y="28" width="3" height="16"/><rect x="36" y="28" width="3" height="16"/><rect x="47" y="28" width="3" height="16"/></g><rect x="26" y="32" width="8" height="12" fill="#7c2d12"/><path d="M1 29 Q30 8 59 29 Q30 22 1 29Z" fill="#475569"/><rect x="26" y="20" width="8" height="4" fill="#fbbf24"/>' },
+  { name: '청와대', svg: '<rect x="4" y="46" width="52" height="4" fill="#9ca3af"/><rect x="8" y="30" width="44" height="16" fill="#f5f5f4"/><g fill="#d6d3d1"><rect x="12" y="32" width="3" height="14"/><rect x="21" y="32" width="3" height="14"/><rect x="36" y="32" width="3" height="14"/><rect x="45" y="32" width="3" height="14"/></g><rect x="27" y="35" width="6" height="11" fill="#78716c"/><path d="M2 31 Q30 10 58 31 Q30 24 2 31Z" fill="#2563eb"/><path d="M12 22 Q30 12 48 22" stroke="#1d4ed8" stroke-width="2" fill="none"/>' },
+  { name: '석가탑', svg: '<rect x="14" y="44" width="32" height="6" fill="#a8a29e"/><rect x="18" y="36" width="24" height="8" fill="#d6d3d1"/><rect x="15" y="33" width="30" height="3" fill="#a8a29e"/><rect x="21" y="27" width="18" height="6" fill="#d6d3d1"/><rect x="18" y="24" width="24" height="3" fill="#a8a29e"/><rect x="23" y="19" width="14" height="5" fill="#d6d3d1"/><rect x="20" y="16" width="20" height="3" fill="#a8a29e"/><rect x="25" y="12" width="10" height="4" fill="#d6d3d1"/><rect x="29" y="4" width="2" height="8" fill="#78716c"/>' },
+  { name: '화성 팔달문', svg: '<rect x="2" y="34" width="56" height="16" fill="#b8a98f"/><g fill="#9c8b70"><rect x="2" y="30" width="6" height="4"/><rect x="12" y="30" width="6" height="4"/><rect x="42" y="30" width="6" height="4"/><rect x="52" y="30" width="6" height="4"/></g><path d="M24 50 V42 Q30 35 36 42 V50Z" fill="#1f2937"/><rect x="18" y="22" width="24" height="12" fill="#b91c1c"/><path d="M12 23 Q30 10 48 23 Q30 18 12 23Z" fill="#475569"/>' },
+];
+let ybRunning = null;   // 진행 중인 판의 정리 함수(다른 화면으로 나가면 멈춤)
+function startYeoubi(el) {
+  if (ybRunning) { ybRunning(); ybRunning = null; }
+  document.body.classList.remove('yb-playing');
+  document.getElementById('gameBack').onclick = () => showView('hub');
+  let mode = 'ko'; try { mode = localStorage.getItem('gw-yb-mode') || 'ko'; } catch {}
+  const draw = () => {
+    const md = YB_MODES.find(m => m.id === mode) || YB_MODES[0];
+    el.innerHTML = `<div class="mg omok-pick yb-pick">
+      <div class="mg-msg">🦊 여우비 — 떨어지는 낱말을 쳐서 문화재를 지켜요</div>
+      <div class="yb-modes">${YB_MODES.map(m => `<button class="chip-btn${m.id === mode ? ' on' : ''}" data-m="${m.id}">${m.label}<small>${m.desc}</small></button>`).join('')}</div>
+      <div class="sd-help">${escapeHtml(md.label)} 최고 기록: ${escapeHtml(ybFmt(getStat(md.key)))}</div>
+      <div class="omok-levels">
+        ${YB_STAGE.map((s, i) => `<button data-lv="${i}">${i + 1}단계부터<small>${(mode === 'en' ? YB_STAGE_DESC.en : YB_STAGE_DESC.ko)[i]} · ${s.desc}</small></button>`).join('')}
+      </div>
+      <div class="sd-help">낱말을 치고 <b>엔터</b>(또는 스페이스)를 누르면 사라져요. 노란 낱말은 행운 또는 장난이 숨어 있어요.<br>폰보다 <b>PC·노트북 키보드</b>로 하면 더 좋아요.</div>
+    </div>`;
+    el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { mode = b.dataset.m; try { localStorage.setItem('gw-yb-mode', mode); } catch {} draw(); });
+    el.querySelectorAll('[data-lv]').forEach(b => b.onclick = () => runYeoubi(el, mode, +b.dataset.lv));
+  };
+  draw();
+}
+function runYeoubi(el, mode, startLv) {
+  const md = YB_MODES.find(m => m.id === mode);
+  const S = { lv: startLv, cleared: 0, score: 0, strokes: 0, tries: 0, hits: 0, t: 0, nextSpawn: 0.6, words: [], hp: YB_SITES.map(() => 2),
+              slowT: 0, fastT: 0, freezeT: 0, hideT: 0, over: false, paused: false, extra: 1, seq: 0 };
+  document.body.classList.add('yb-playing');
+  el.innerHTML = `<div class="mg yeoubi">
+    <div class="yb-hud">
+      <button class="yb-quit" id="ybQuit">‹ 그만</button>
+      <span>🦊 <b id="ybLv"></b></span><span>★ <b id="ybScore">0</b></span><span>⌨ <b id="ybSpm">0</b>타</span>
+      <span class="yb-fx" id="ybFx"></span>
+    </div>
+    <div class="yb-stage" id="ybStage">
+      <div class="yb-sun">☀️</div>
+      <div class="yb-sites" id="ybSites">${YB_SITES.map((s, i) => `<div class="yb-site" data-i="${i}" title="${s.name}"><svg viewBox="0 0 60 50">${s.svg}</svg><small>${s.name}</small></div>`).join('')}</div>
+      <div class="yb-water"></div>
+      <div class="yb-msg" id="ybMsg"></div>
+    </div>
+    <form class="yb-input" id="ybForm" autocomplete="off">
+      <input id="ybIn" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" placeholder="${mode === 'en' ? 'type here' : '여기에 입력'}">
+      <button type="submit">⏎</button>
+    </form>
+  </div>`;
+  const stage = el.querySelector('#ybStage'), sitesEl = el.querySelector('#ybSites'), inp = el.querySelector('#ybIn');
+  const $ = id => el.querySelector('#' + id);
+  // 폰 화면 키보드가 올라오면 보이는 영역(visualViewport)에 맞춰 게임판 크기를 다시 잡는다
+  const fit = () => {
+    const vv = window.visualViewport;
+    document.body.style.setProperty('--yb-top', (vv ? vv.offsetTop : 0) + 'px');
+    document.body.style.setProperty('--yb-h', (vv ? vv.height : innerHeight) + 'px');
+  };
+  fit();
+  window.visualViewport && visualViewport.addEventListener('resize', fit);
+  window.visualViewport && visualViewport.addEventListener('scroll', fit);
+  const pickWord = () => {
+    const lang = mode === 'mix' ? (S.seq++ % 2 ? 'en' : 'ko') : mode;
+    const list = YB_WORDS[lang][Math.min(S.lv, 4)];
+    let w; for (let k = 0; k < 8; k++) { w = list[Math.floor(Math.random() * list.length)]; if (!S.words.some(x => x.text === w)) break; }
+    return w;
+  };
+  const spawn = (special) => {
+    const text = pickWord(); const W = stage.clientWidth;
+    const lane = Math.floor(Math.random() * YB_SITES.length);
+    const span = document.createElement('div');
+    span.className = 'yb-word' + (special ? ' special' : '');
+    span.textContent = text;
+    stage.appendChild(span);
+    const w = span.offsetWidth;
+    let x = (lane + 0.5) * W / YB_SITES.length - w / 2; x = Math.max(4, Math.min(W - w - 4, x));
+    S.words.push({ text, lane, x, y: -28, el: span, special: !!special, w });
+  };
+  const siteTop = () => sitesEl.offsetTop + 8;
+  const drawSites = () => sitesEl.querySelectorAll('.yb-site').forEach((d, i) => { d.classList.toggle('cracked', S.hp[i] === 1); d.classList.toggle('ruin', S.hp[i] <= 0); });
+  const flash = (t, cls) => { const m = $('ybMsg'); m.textContent = t; m.className = 'yb-msg show ' + (cls || ''); clearTimeout(flash.t); flash.t = setTimeout(() => { m.className = 'yb-msg'; }, 1400); };
+  const beep = (f, d, type) => { try { if (!sfxEnabled()) return; const c = sfxCtx(); if (!c) return; const o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
+    o.type = type || 'square'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 1.6, t + d);
+    g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g).connect(sfx.master); o.start(t); o.stop(t + d + 0.02); } catch {} };
+  const hud = () => {
+    $('ybLv').textContent = `${Math.min(S.lv, 4) + 1}단계${S.lv > 4 ? '+' + (S.lv - 4) : ''}`;
+    $('ybScore').textContent = S.score.toLocaleString('ko-KR');
+    $('ybSpm').textContent = S.t > 3 ? Math.round(S.strokes / (S.t / 60)) : 0;
+    const fx = [S.freezeT > 0 && '❄️ 얼음', S.slowT > 0 && '🐢 거북이', S.fastT > 0 && '⚡ 번개', S.hideT > 0 && '🙈 숨바꼭질'].filter(Boolean);
+    $('ybFx').textContent = fx.join(' ');
+  };
+  const SPECIALS = [
+    ['🌊 싹쓸이! 낱말이 모두 씻겨 갔어요', () => { S.words.forEach(w => { S.score += 5; w.el.remove(); }); S.words = []; }],
+    ['❄️ 얼음! 5초 동안 멈춰요', () => { S.freezeT = 5; }],
+    ['🧱 재건! 문화재 하나를 고쳤어요', () => { const i = S.hp.findIndex(h => h < 2 && h >= 0); const j = S.hp.indexOf(0); const k = j >= 0 ? j : i; if (k >= 0) S.hp[k] = 2; drawSites(); }],
+    ['🐢 거북이! 6초 동안 느려져요', () => { S.slowT = 6; }],
+    ['⚡ 번개! 5초 동안 빨라져요', () => { S.fastT = 5; }],
+    ['🙈 숨바꼭질! 3초 동안 글자가 숨어요', () => { S.hideT = 3; }],
+    ['🐝 벌떼! 낱말이 한꺼번에 쏟아져요', () => { for (let k = 0; k < 4; k++) setTimeout(() => !S.over && spawn(false), k * 250); }],
+  ];
+  const submit = (raw) => {
+    if (S.over) return;
+    const t = raw.replace(/\s+/g, ' ').trim(); if (!t) return;
+    S.tries++;
+    const norm = s => s.toLowerCase();
+    const cands = S.words.filter(w => norm(w.text) === norm(t));
+    if (!cands.length) { inp.classList.remove('shake'); void inp.offsetWidth; inp.classList.add('shake'); beep(140, 0.12, 'sawtooth'); return; }
+    const w = cands.reduce((a, b) => (b.y > a.y ? b : a));
+    S.words.splice(S.words.indexOf(w), 1);
+    const H = stage.clientHeight, stk = ybStrokes(w.text);
+    const gain = stk * (Math.min(S.lv, 4) + 1) + Math.max(0, Math.round((1 - w.y / H) * 10 * (Math.min(S.lv, 4) + 1)));
+    S.score += gain; S.strokes += stk; S.hits++; S.cleared++;
+    w.el.classList.add('pop'); setTimeout(() => w.el.remove(), 250);
+    beep(520 + Math.min(stk, 20) * 20, 0.08);
+    if (w.special) { const sp = SPECIALS[Math.floor(Math.random() * SPECIALS.length)]; sp[1](); flash(sp[0], 'special'); }
+    if (S.cleared % 20 === 0) { S.lv++; flash(S.lv <= 4 ? `🌦️ ${S.lv + 1}단계!` : '🌦️ 더 빨라져요!', 'up'); }
+    hud();
+  };
+  el.querySelector('#ybForm').onsubmit = (e) => { e.preventDefault(); setTimeout(() => { submit(inp.value); inp.value = ''; }, 0); };
+  inp.addEventListener('input', (e) => {
+    if (e.isComposing) return;
+    const v = inp.value;
+    if (/\s$/.test(v) && S.words.some(w => w.text.toLowerCase() === v.trim().replace(/\s+/g, ' ').toLowerCase())) { submit(v); inp.value = ''; }
+  });
+  const gameOver = () => {
+    S.over = true;
+    const spm = S.t > 3 ? Math.round(S.strokes / (S.t / 60)) : 0, acc = S.tries ? Math.round(S.hits / S.tries * 100) : 0;
+    recordStat(md.key, { best: S.score });
+    const gb = document.getElementById('gameBest'); if (gb) gb.textContent = yeoubiAggFmt();
+    inp.blur();
+    const box = document.createElement('div'); box.className = 'yb-over';
+    box.innerHTML = `<b>문화재가 모두 무너졌어요 🌧️</b>
+      <div>점수 <b>${S.score.toLocaleString('ko-KR')}</b> · ${Math.min(S.lv, 4) + 1}단계${S.lv > 4 ? '+' + (S.lv - 4) : ''}까지</div>
+      <div>분당 <b>${spm}</b>타 · 정확도 <b>${acc}%</b> · 없앤 낱말 ${S.hits}개</div>
+      <div class="yb-over-btns"><button class="btn primary" id="ybAgain">다시 하기</button><button class="btn ghost" id="ybBack">단계 선택</button></div>`;
+    stage.appendChild(box);
+    box.querySelector('#ybAgain').onclick = () => { cleanup(); runYeoubi(el, mode, startLv); };
+    box.querySelector('#ybBack').onclick = () => startYeoubi(el);
+  };
+  let raf = 0, last = performance.now();
+  const loop = (now) => {
+    raf = requestAnimationFrame(loop);
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (S.over || document.hidden || !el.querySelector('.yeoubi')) return;
+    S.t += dt;
+    ['slowT', 'fastT', 'freezeT', 'hideT'].forEach(k => { if (S[k] > 0) S[k] = Math.max(0, S[k] - dt); });
+    stage.classList.toggle('hidewords', S.hideT > 0);
+    const H = stage.clientHeight, cfg = YB_STAGE[Math.min(S.lv, 4)], boost = 1 + Math.max(0, S.lv - 4) * 0.1;
+    const mul = (S.freezeT > 0 ? 0 : 1) * (S.slowT > 0 ? 0.5 : 1) * (S.fastT > 0 ? 1.6 : 1) * boost;
+    S.nextSpawn -= dt * (S.freezeT > 0 ? 0 : 1);
+    if (S.nextSpawn <= 0) { spawn(Math.random() < 0.1); S.nextSpawn = cfg.gap / boost * (0.8 + Math.random() * 0.4); }
+    const top = siteTop();
+    for (const w of [...S.words]) {
+      w.y += cfg.fall * H * mul * dt;
+      w.el.style.transform = `translate(${w.x}px, ${w.y}px)`;
+      if (w.y + 22 >= top) {
+        S.words.splice(S.words.indexOf(w), 1); w.el.classList.add('splash'); setTimeout(() => w.el.remove(), 300);
+        if (!w.special && S.hp[w.lane] > 0) { S.hp[w.lane]--; drawSites(); beep(90, 0.2, 'triangle'); if (S.hp[w.lane] === 0) flash(`💥 ${YB_SITES[w.lane].name}이(가) 무너졌어요`, 'bad'); }
+        if (S.hp.every(h => h <= 0)) { gameOver(); return; }
+      }
+    }
+    if (Math.floor(S.t * 4) !== Math.floor((S.t - dt) * 4)) hud();
+  };
+  const cleanup = () => {
+    cancelAnimationFrame(raf); S.over = true;
+    window.visualViewport && visualViewport.removeEventListener('resize', fit);
+    window.visualViewport && visualViewport.removeEventListener('scroll', fit);
+    document.body.classList.remove('yb-playing');
+  };
+  ybRunning = cleanup;
+  const quit = () => { if (!S.over && S.score > 0) recordStat(md.key, { best: S.score }); cleanup(); startYeoubi(el); };
+  $('ybQuit').onclick = quit;
+  document.getElementById('gameBack').onclick = quit;
+  hud(); drawSites();
+  raf = requestAnimationFrame((t) => { last = t; loop(t); });
+  inp.focus();
 }
 
 // ── 미니게임: 틱택토 ──────────────────────────────────
