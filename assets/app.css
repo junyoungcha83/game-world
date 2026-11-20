@@ -789,3 +789,4 @@ body.yb-playing { overflow: hidden; }
 .gp-pad button.on { filter: brightness(1.35); transform: scale(.96); }
 .gp-over { position: absolute; inset: 24% 8% auto; padding: 16px; border-radius: 16px; background: rgba(15,23,42,.92); color: #fff; text-align: center;
   display: flex; flex-direction: column; gap: 8px; z-index: 5; }
+.gp-podium { display: flex; flex-direction: column; gap: 2px; font-size: .9rem; }

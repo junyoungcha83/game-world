@@ -1280,7 +1280,48 @@ const GP_MODES = [
   { key: 'gp_normal', label: '보통', desc: '가속·브레이크 직접', auto: false, amp: 1.0, steer: 74, ai: [0.86, 0.98] },
 ];
 const GP_LAPS = 4, GP_LEN = 7200, GP_VMAX = 300, GP_HALF = 46;   // 한 바퀴 길이·최고 속도(km/h로 표시)·도로 반폭(세계 단위)
-const GP_TEAMS = ['#e11d48', '#2563eb', '#f59e0b', '#10b981', '#8b5cf6', '#f97316', '#0ea5e9', '#84cc16', '#ec4899', '#64748b', '#facc15'];
+// 출전국 — 내 차는 태극기, AI 11대는 아래 14개국 중 매 경기 무작위. color = 차체 색
+const GP_ME = { code: 'kr', name: '대한민국', flag: '🇰🇷', color: '#f8fafc' };
+const GP_NATIONS = [
+  { code: 'jp', name: '일본', flag: '🇯🇵', color: '#dc2626' }, { code: 'us', name: '미국', flag: '🇺🇸', color: '#1e3a8a' },
+  { code: 'gb', name: '영국', flag: '🇬🇧', color: '#0f766e' }, { code: 'fr', name: '프랑스', flag: '🇫🇷', color: '#2563eb' },
+  { code: 'es', name: '스페인', flag: '🇪🇸', color: '#f59e0b' }, { code: 'cn', name: '중국', flag: '🇨🇳', color: '#b91c1c' },
+  { code: 'au', name: '호주', flag: '🇦🇺', color: '#eab308' }, { code: 'vn', name: '베트남', flag: '🇻🇳', color: '#f97316' },
+  { code: 'ng', name: '나이지리아', flag: '🇳🇬', color: '#15803d' }, { code: 'in', name: '인도', flag: '🇮🇳', color: '#0ea5e9' },
+  { code: 'th', name: '태국', flag: '🇹🇭', color: '#7c3aed' }, { code: 'eg', name: '이집트', flag: '🇪🇬', color: '#334155' },
+  { code: 'il', name: '이스라엘', flag: '🇮🇱', color: '#60a5fa' }, { code: 'tr', name: '튀르키예', flag: '🇹🇷', color: '#e11d48' },
+];
+// 차 위에 얹는 작은 국기(가로 w × 세로 h 픽셀) — 작은 크기에서도 알아보게 단순화
+function gpFlag(g, code, x, y, w, h) {
+  const F = (c, a, b, ww, hh) => { g.fillStyle = c; g.fillRect(x + a * w, y + b * h, ww * w, hh * h); };
+  const circ = (c, cx, cy, r) => { g.fillStyle = c; g.beginPath(); g.arc(x + cx * w, y + cy * h, r * h, 0, Math.PI * 2); g.fill(); };
+  const star = (c, cx, cy, r) => { g.fillStyle = c; g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; g.lineTo(x + cx * w + Math.cos(a) * rr * h, y + cy * h + Math.sin(a) * rr * h); } g.closePath(); g.fill(); };
+  switch (code) {
+    case 'kr': F('#fff', 0, 0, 1, 1);
+      g.fillStyle = '#cd2e3a'; g.beginPath(); g.arc(x + .5 * w, y + .5 * h, .26 * h, Math.PI, 0); g.fill();
+      g.fillStyle = '#0047a0'; g.beginPath(); g.arc(x + .5 * w, y + .5 * h, .26 * h, 0, Math.PI); g.fill();
+      [[.14, .16], [.78, .16], [.14, .72], [.78, .72]].forEach(([a, b]) => F('#111', a, b, .1, .14)); break;
+    case 'jp': F('#fff', 0, 0, 1, 1); circ('#bc002d', .5, .5, .3); break;
+    case 'us': for (let i = 0; i < 7; i++) F(i % 2 ? '#fff' : '#b22234', 0, i / 7, 1, 1 / 7); F('#3c3b6e', 0, 0, .45, 4 / 7); break;
+    case 'gb': F('#012169', 0, 0, 1, 1);
+      g.strokeStyle = '#fff'; g.lineWidth = h * .22; g.beginPath(); g.moveTo(x, y); g.lineTo(x + w, y + h); g.moveTo(x + w, y); g.lineTo(x, y + h); g.stroke();
+      g.strokeStyle = '#c8102e'; g.lineWidth = h * .08; g.stroke();
+      F('#fff', .4, 0, .2, 1); F('#fff', 0, .36, 1, .28); F('#c8102e', .45, 0, .1, 1); F('#c8102e', 0, .42, 1, .16); break;
+    case 'fr': F('#0055a4', 0, 0, 1 / 3, 1); F('#fff', 1 / 3, 0, 1 / 3, 1); F('#ef4135', 2 / 3, 0, 1 / 3, 1); break;
+    case 'es': F('#aa151b', 0, 0, 1, 1); F('#f1bf00', 0, .25, 1, .5); break;
+    case 'cn': F('#de2910', 0, 0, 1, 1); star('#ffde00', .2, .3, .22); break;
+    case 'au': F('#012169', 0, 0, 1, 1); F('#fff', 0, .2, .45, .1); F('#fff', .18, 0, .1, .45); F('#c8102e', 0, .22, .45, .05); F('#c8102e', .2, 0, .05, .45); star('#fff', .72, .55, .16); star('#fff', .25, .75, .18); break;
+    case 'vn': F('#da251d', 0, 0, 1, 1); star('#ffff00', .5, .52, .34); break;
+    case 'ng': F('#008751', 0, 0, 1 / 3, 1); F('#fff', 1 / 3, 0, 1 / 3, 1); F('#008751', 2 / 3, 0, 1 / 3, 1); break;
+    case 'in': F('#ff9933', 0, 0, 1, 1 / 3); F('#fff', 0, 1 / 3, 1, 1 / 3); F('#138808', 0, 2 / 3, 1, 1 / 3); circ('#000080', .5, .5, .11); break;
+    case 'th': F('#a51931', 0, 0, 1, 1); F('#f4f5f8', 0, 1 / 6, 1, 4 / 6); F('#2d2a4a', 0, 2 / 6, 1, 2 / 6); break;
+    case 'eg': F('#ce1126', 0, 0, 1, 1 / 3); F('#fff', 0, 1 / 3, 1, 1 / 3); F('#000', 0, 2 / 3, 1, 1 / 3); circ('#c09300', .5, .5, .1); break;
+    case 'il': F('#fff', 0, 0, 1, 1); F('#0038b8', 0, .1, 1, .14); F('#0038b8', 0, .76, 1, .14);
+      g.strokeStyle = '#0038b8'; g.lineWidth = Math.max(1, h * .06); [[-1], [1]].forEach(([sg]) => { g.beginPath(); for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 * sg + i * Math.PI * 2 / 3; g.lineTo(x + .5 * w + Math.cos(a) * .2 * h, y + .5 * h + Math.sin(a) * .2 * h * sg); } g.closePath(); g.stroke(); }); break;
+    case 'tr': F('#e30a17', 0, 0, 1, 1); circ('#fff', .38, .5, .26); circ('#e30a17', .44, .5, .21); star('#fff', .62, .5, .14); break;
+  }
+  g.strokeStyle = 'rgba(0,0,0,.45)'; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, w - 1, h - 1);
+}
 const GP_ADS = ['한빛타이어', '거북오일', '무궁화모터스', '소나기음료', '다보은행', '첨성텔레콤', '백두라면', '한라전자'];
 const gpTime = ms => { const s = ms / 1000; return `${Math.floor(s / 60)}:${(s % 60).toFixed(2).padStart(5, '0')}`; };
 const gpFmt = s => s ? `${s.plays}경기 · 최고 ${s.best != null ? s.best + '위' : '-'}${s.lap ? ' · 랩 ' + gpTime(s.lap) : ''}` : '아직 기록 없음';
@@ -1292,8 +1333,8 @@ function gpAggFmt() {
 // 도로 중심(세계 x, 0~200) — 한 바퀴(GP_LEN)마다 같은 모양이 되도록 주기를 바퀴 길이의 약수로
 const gpCenter = (d, amp) => { const u = d / GP_LEN * Math.PI * 2; return 100 + amp * (34 * Math.sin(3 * u) + 18 * Math.sin(7 * u + 1)); };
 // 도트 F1 한 대(세계 12×22) — 팀 색으로 몸체·날개, 검은 타이어, 헬멧
-function gpCarSprite(color, scale) {
-  const c = document.createElement('canvas'), w = 14, h = 24, s = Math.max(1, Math.round(scale * 1.0));
+function gpCarSprite(color, scale, code) {
+  const c = document.createElement('canvas'), w = 14, h = 24, s = Math.max(2, Math.round(scale * 2));
   c.width = w * s; c.height = h * s; const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
   const R = (x, y, ww, hh, col) => { g.fillStyle = col; g.fillRect(x * s, y * s, ww * s, hh * s); };
   R(1, 1, 12, 2, color);                 // 앞날개
@@ -1305,13 +1346,14 @@ function gpCarSprite(color, scale) {
   R(5, 14, 4, 1, '#111');
   R(0, 15, 3, 6, '#111'); R(11, 15, 3, 6, '#111');   // 뒷바퀴
   R(1, 21, 12, 3, '#1f2937'); R(2, 21, 10, 1, color); // 뒷날개
+  if (code) gpFlag(g, code, 3 * s, 14.5 * s, 8 * s, 5.5 * s);   // 엔진 덮개 위 국기
   return c;
 }
 function startGrandprix(el) {
   if (gpRunning) { gpRunning(); gpRunning = null; }
   document.getElementById('gameBack').onclick = () => showView('hub');
   el.innerHTML = `<div class="mg omok-pick">
-    <div class="mg-msg">🏎️ 그랑프리 — 12대 중 꼴찌에서 출발! 4바퀴 동안 추월하세요</div>
+    <div class="mg-msg">🏎️ 그랑프리 — 🇰🇷 태극기를 단 내 차로 12대 중 꼴찌에서 출발! 4바퀴 동안 추월하세요</div>
     <div class="omok-levels">
       ${GP_MODES.map((m, i) => `<button data-i="${i}">${m.label}<small>${m.desc} · ${escapeHtml(gpFmt(getStat(m.key)))}</small></button>`).join('')}
     </div>
@@ -1336,17 +1378,18 @@ function runGrandprix(el, M) {
     W = r.width; H = r.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.imageSmoothingEnabled = false;
     SC = W / 200;
-    sprites = {}; [...GP_TEAMS, '#ffffff'].forEach(c => { sprites[c] = gpCarSprite(c, SC); });
+    sprites = {}; [GP_ME, ...GP_NATIONS].forEach(n => { sprites[n.code] = gpCarSprite(n.color, SC, n.code); });
   };
   resize(); addEventListener('resize', resize);
   // 출발: 2열 그리드, 플레이어가 맨 뒤(12위)
   const cars = [];
   const [lo, hi] = M.ai;
+  const field = GP_NATIONS.slice().sort(() => Math.random() - 0.5).slice(0, 11);   // 이번 경기 출전국
   for (let i = 0; i < 11; i++) {
     const f = hi - (hi - lo) * (i / 10) + (Math.random() - 0.5) * 0.02;
-    cars.push({ ai: true, color: GP_TEAMS[i], d: 300 - i * 26, lane: (i % 2 ? 1 : -1) * 16, x: 0, v: 0, vmax: GP_VMAX * f, done: 0, name: `${i + 1}` });
+    cars.push({ ai: true, nat: field[i], d: 300 - i * 26, lane: (i % 2 ? 1 : -1) * 16, x: 0, v: 0, vmax: GP_VMAX * f, done: 0 });
   }
-  const P = { ai: false, color: '#ffffff', d: 300 - 11 * 26, lane: 16, x: 0, v: 0, vmax: GP_VMAX, done: 0, name: '나' };
+  const P = { ai: false, nat: GP_ME, d: 300 - 11 * 26, lane: 16, x: 0, v: 0, vmax: GP_VMAX, done: 0 };
   cars.push(P);
   cars.forEach(c => { c.x = gpCenter(c.d, M.amp) + c.lane; });
   const keys = { L: false, R: false, A: false, B: false };
@@ -1425,6 +1468,7 @@ function runGrandprix(el, M) {
     const box = document.createElement('div'); box.className = 'gp-over';
     box.innerHTML = `<b>${pos === 1 ? '🏆 우승!' : pos <= 3 ? `🥈 ${pos}위 시상대!` : `🏁 ${pos}위로 완주`}</b>
       <div>총 시간 ${gpTime(st.t * 1000)} · 최고 랩 ${st.best ? gpTime(st.best) : '-'}</div>
+      <div class="gp-podium">${cars.slice().sort((a, b) => b.d - a.d).slice(0, 3).map((c, i) => `<span>${['🥇', '🥈', '🥉'][i]} ${c.nat.flag} ${escapeHtml(c === P ? '나 (대한민국)' : c.nat.name)}</span>`).join('')}</div>
       <div class="yb-over-btns"><button class="btn primary" id="gpAgain">다시 달리기</button><button class="btn ghost" id="gpBack">모드 선택</button></div>`;
     wrap.appendChild(box);
     box.querySelector('#gpAgain').onclick = () => { cleanup(); runGrandprix(el, M); };
@@ -1467,7 +1511,7 @@ function runGrandprix(el, M) {
     // 차
     for (const c of cars) {
       const y = toY(c.d); if (y < -40 || y > H + 40) continue;
-      const sp = sprites[c.color]; const w = 14 * SC, h = 24 * SC;
+      const sp = sprites[c.nat.code]; const w = 14 * SC, h = 24 * SC;
       g.drawImage(sp, toX(c.x) - w / 2, y - h / 2, w, h);
     }
     // 내 차 표시
