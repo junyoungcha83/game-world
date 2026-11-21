@@ -1,7 +1,7 @@
 // 낱말퍼즐 판 만들기 — 수준별 단어 목록(words-<수준>.json)으로 단계마다 고정된 판을 만들어
 // assets/crossword-data.js 로 내보낸다. 씨앗값이 고정이라 다시 돌려도 같은 판이 나온다.
 //   node tools/crossword/build.mjs
-// 단어 목록 형식: [["낱말", "이모지", "열쇠 문장"], ...]  (한 칸 = 한 음절)
+// 단어 목록 형식: [["낱말", "이모지", "열쇠 문장"], ...] 또는 이모지 없이 [["낱말", "열쇠 문장"], ...]  (한 칸 = 한 음절)
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,8 +15,12 @@ const TIERS = [
   { id: 'k1', label: '초등저학년', desc: '2~3글자 · 그림 열쇠', minLen: 2, maxLen: 3,
     levels: [lv(5, 4, .40), lv(5, 4, .35), lv(5, 5, .30), lv(5, 5, .25), lv(6, 6, .22),
              lv(6, 6, .18), lv(6, 7, .14), lv(6, 7, .10), lv(7, 8, .06), lv(7, 8, 0)] },
-  { id: 'k2', label: '초등고학년', desc: '교과 낱말 · 쉬운 속담' },
-  { id: 'm',  label: '중학생',     desc: '한자어 · 사자성어' },
+  { id: 'k2', label: '초등고학년', desc: '교과 낱말 · 속담', minLen: 2, maxLen: 4,
+    levels: [lv(6, 5, .25), lv(6, 5, .20), lv(6, 6, .18), lv(6, 6, .15), lv(7, 7, .12),
+             lv(7, 7, .10), lv(7, 8, .08), lv(7, 8, .05), lv(8, 9, .03), lv(8, 9, 0)] },
+  { id: 'm',  label: '중학생',     desc: '교과 개념 · 사자성어 · 반대말', minLen: 2, maxLen: 4,
+    levels: [lv(7, 6, .15), lv(7, 6, .12), lv(7, 7, .10), lv(7, 7, .08), lv(8, 8, .06),
+             lv(8, 8, .05), lv(8, 9, .04), lv(8, 9, .02), lv(9, 10, 0), lv(9, 10, 0)] },
   { id: 'h',  label: '고등학생',   desc: '문학 · 역사 용어' },
   { id: 'a',  label: '성인',       desc: '시사 · 관용구 · 순우리말' },
 ];
@@ -104,7 +108,7 @@ function finish(best, spec, R) {
   const starts = new Map();
   for (const p of placed) starts.set(p.r * n + p.c, true);
   const num = new Map(); let k = 0;
-  for (let i = 0; i < n * n; i++) if (starts.has(i)) num.set(i, ++k);
+  for (let i = 0; i < w * h; i++) if (starts.has(i)) num.set(i, ++k);
   const words = placed.map(p => ({ num: num.get(p.r * n + p.c), d: p.d, r: p.r, c: p.c, w: p.w, e: p.e, clue: p.clue }))
     .sort((a, b) => (a.d === b.d ? a.num - b.num : a.d === 'a' ? -1 : 1));
   const cellsOf = w => syl(w.w).map((_, j) => (w.r + (w.d === 'd' ? j : 0)) * n + w.c + (w.d === 'a' ? j : 0));
@@ -133,8 +137,11 @@ for (const T of TIERS) {
   if (!existsSync(file) || !T.levels) continue;
   const raw = JSON.parse(readFileSync(file, 'utf8'));
   const seen = new Set();
-  const pool = raw.map(([w, e, clue]) => ({ w, e, clue, s: syl(w) }))
-    .filter(x => { if (seen.has(x.w)) throw new Error(`중복 낱말: ${x.w}`); seen.add(x.w); return x.s.length >= T.minLen && x.s.length <= T.maxLen; });
+  const pool = raw.map(a => a.length === 2 ? { w: a[0], e: '', clue: a[1] } : { w: a[0], e: a[1], clue: a[2] }).map(x => ({ ...x, s: syl(x.w) }))
+    .filter(x => { if (seen.has(x.w)) throw new Error(`중복 낱말: ${x.w}`); seen.add(x.w);
+      if (x.clue.includes(x.w)) throw new Error(`열쇠에 답이 들어 있음: ${x.w} — ${x.clue}`);
+      if (!/^[가-힣]+$/.test(x.w)) throw new Error(`한글 음절만 쓸 수 있음: ${x.w}`);
+      return x.s.length >= T.minLen && x.s.length <= T.maxLen; });
   const usedBefore = new Set();
   T.levels.forEach((spec, i) => {
     const R = rng(1000 * (TIERS.indexOf(T) + 1) + i + 1);

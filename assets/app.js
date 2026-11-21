@@ -1085,8 +1085,9 @@ function cwStarsOf(tid, u) { const s = getStat(cwKey(tid), u), a = s && Array.is
 const cwFmt = s => s && Array.isArray(s.stars) && cwSum(s.stars) ? `${s.stars.filter(x => x > 0).length}/10단계 · ★${cwSum(s.stars)}` : '아직 기록 없음';
 function cwAggFmt() {
   const u = getCurrentUser(); if (!u || typeof CW_DATA === 'undefined') return '아직 기록 없음';
-  const parts = CW_DATA.tiers.map(T => { const a = cwStarsOf(T.id, u), c = a.filter(x => x > 0).length; return c ? `${T.label} ${c}단계` : null; }).filter(Boolean);
-  return parts.length ? parts.join(' · ') : '아직 기록 없음';
+  // 머리글 자리가 좁아 수준별로 늘어놓지 않고 합계만 — 수준별 기록은 수준 고르기 화면에
+  let c = 0, st = 0; for (const T of CW_DATA.tiers) { const a = cwStarsOf(T.id, u); c += a.filter(x => x > 0).length; st += cwSum(a); }
+  return c ? `${c}단계 · ★${st}` : '아직 기록 없음';
 }
 const cwStarStr = k => '★'.repeat(k) + '☆'.repeat(3 - k);
 function cwSaved() {
@@ -1145,7 +1146,7 @@ function runCrossword(el, T, li, saved) {
       <button class="btn" type="submit">확인</button>
     </form>
     <div class="mg-msg cw-msg" id="cwMsg">칸이나 아래 열쇠를 누르고 낱말을 써요</div>
-    <div class="cw-grid" id="cwGrid" style="grid-template-columns:repeat(${P.w},1fr);grid-template-rows:repeat(${P.h},1fr);aspect-ratio:${P.w}/${P.h};width:min(100%, ${P.w * 76}px);--n:${P.w}"></div>
+    <div class="cw-grid" id="cwGrid" style="grid-template-columns:repeat(${P.w},1fr);grid-template-rows:repeat(${P.h},1fr);aspect-ratio:${P.w}/${P.h};width:min(100%, ${P.w * 76}px, ${(50 * P.w / P.h).toFixed(1)}vh);--n:${P.w}"></div>
     <div class="omok-btns sd-btns">
       <button class="btn ghost small" id="cwHint1">💡 글자 열기</button>
       <button class="btn ghost small" id="cwHint2">🔑 낱말 열기</button>
