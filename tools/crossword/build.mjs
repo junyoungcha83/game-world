@@ -21,8 +21,12 @@ const TIERS = [
   { id: 'm',  label: '중학생',     desc: '교과 개념 · 사자성어 · 반대말', minLen: 2, maxLen: 4,
     levels: [lv(7, 6, .15), lv(7, 6, .12), lv(7, 7, .10), lv(7, 7, .08), lv(8, 8, .06),
              lv(8, 8, .05), lv(8, 9, .04), lv(8, 9, .02), lv(9, 10, 0), lv(9, 10, 0)] },
-  { id: 'h',  label: '고등학생',   desc: '문학 · 역사 용어' },
-  { id: 'a',  label: '성인',       desc: '시사 · 관용구 · 순우리말' },
+  { id: 'h',  label: '고등학생',   desc: '문학 · 역사 용어', minLen: 2, maxLen: 5,
+    levels: [lv(8, 7, .12), lv(8, 7, .10), lv(8, 8, .08), lv(8, 8, .06), lv(9, 9, .05),
+             lv(9, 9, .04), lv(9, 10, .03), lv(9, 10, .02), lv(10, 11, 0), lv(10, 11, 0)] },
+  { id: 'a',  label: '성인',       desc: '시사 · 관용구 · 순우리말', minLen: 2, maxLen: 5,
+    levels: [lv(8, 7, .10), lv(8, 7, .08), lv(8, 8, .06), lv(8, 8, .05), lv(9, 9, .04),
+             lv(9, 9, .03), lv(9, 10, .02), lv(9, 10, 0), lv(10, 11, 0), lv(10, 10, 0)] },
 ];
 
 function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
