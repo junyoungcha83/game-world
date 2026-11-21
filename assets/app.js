@@ -1648,6 +1648,103 @@ function gpScene(g, type, x, y, SC, seed) {
     default: C('#166534', x, y, 7 * SC); C('#1f7a3f', x + 2 * SC, y - 2 * SC, 3.5 * SC);
   }
 }
+// 잔디 아트 — 나라별 대표 그림을 잔디에 깎아 새긴 것처럼(밝은 결 + 옅은 그림자). 100×100 칸에 흰 실루엣, 구멍은 지워서 표현
+function gpEmblemDraw(g, code) {
+  const poly = (pts) => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fill(); };
+  const circ = (x, y, r) => { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); };
+  const ell = (x, y, rx, ry, a = 0) => { g.beginPath(); g.ellipse(x, y, rx, ry, a, 0, Math.PI * 2); g.fill(); };
+  const rect = (x, y, w, h) => g.fillRect(x, y, w, h);
+  const cut = (f) => { g.save(); g.globalCompositeOperation = 'destination-out'; g.fillStyle = g.strokeStyle = '#000'; f(); g.restore(); };
+  const line = (pts, w) => { g.lineWidth = w; g.lineCap = g.lineJoin = 'round'; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); };
+  g.fillStyle = g.strokeStyle = '#fff';
+  switch (code) {
+    case 'kr':   // 무궁화
+      for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * Math.PI * 2 / 5; ell(50 + Math.cos(a) * 22, 50 + Math.sin(a) * 22, 22, 15, a); }
+      cut(() => { circ(50, 50, 11); for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + (i + .5) * Math.PI * 2 / 5; line([[50 + Math.cos(a) * 14, 50 + Math.sin(a) * 14], [50 + Math.cos(a) * 46, 50 + Math.sin(a) * 46]], 2.5); } });
+      circ(50, 50, 5); break;
+    case 'ng':   // 독수리(국장)
+      circ(50, 22, 8); poly([[56, 20], [64, 24], [56, 26]]);
+      ell(50, 48, 11, 22);
+      poly([[44, 36], [6, 16], [12, 30], [4, 36], [14, 44], [6, 52], [44, 58]]);
+      poly([[56, 36], [94, 16], [88, 30], [96, 36], [86, 44], [94, 52], [56, 58]]);
+      poly([[42, 66], [58, 66], [66, 90], [50, 84], [34, 90]]);
+      cut(() => { circ(52, 20, 2); }); break;
+    case 'us':   // 국회의사당
+      rect(6, 74, 88, 14); rect(14, 64, 72, 10); rect(32, 48, 36, 16);
+      g.beginPath(); g.ellipse(50, 48, 20, 22, 0, Math.PI, 0); g.fill();
+      rect(46, 16, 8, 12); circ(50, 14, 4);
+      cut(() => { for (let x = 36; x < 66; x += 6) rect(x, 52, 2.5, 10); for (let x = 12; x < 90; x += 6) rect(x, 77, 2.5, 9); }); break;
+    case 'vn':   // 논라(삿갓)
+      g.beginPath(); g.moveTo(50, 12); g.lineTo(94, 66); g.quadraticCurveTo(50, 80, 6, 66); g.closePath(); g.fill();
+      cut(() => { [.4, .62, .82].forEach(t => { const y = 12 + 54 * t, hw = 44 * t; g.lineWidth = 2.5; g.beginPath(); g.moveTo(50 - hw, y); g.quadraticCurveTo(50, y + 10 * t, 50 + hw, y); g.stroke(); }); });
+      g.lineWidth = 2.5; g.beginPath(); g.moveTo(30, 72); g.quadraticCurveTo(50, 96, 70, 72); g.stroke(); break;
+    case 'es':   // 황소(양쪽 뿔)
+      poly([[18, 30], [30, 28], [44, 30], [62, 34], [82, 34], [88, 38], [94, 62], [90, 63], [85, 44], [83, 48],
+        [84, 66], [82, 88], [75, 88], [74, 68], [68, 66], [66, 86], [60, 86], [58, 64], [44, 64], [42, 86], [36, 86], [34, 64], [30, 86], [24, 86], [24, 60], [14, 54], [9, 46], [12, 36]]);
+      line([[16, 31], [8, 24], [8, 13]], 3.6); line([[24, 29], [26, 20], [33, 13]], 3.6);
+      cut(() => circ(17, 39, 2)); break;
+    case 'gb':   // 빅벤
+      poly([[36, 30], [50, 4], [64, 30]]); rect(37, 30, 26, 64); rect(33, 88, 34, 8); rect(34, 32, 32, 24);
+      cut(() => { circ(50, 44, 9); for (let y = 62; y < 86; y += 8) { rect(42, y, 3, 5); rect(48.5, y, 3, 5); rect(55, y, 3, 5); } });
+      circ(50, 44, 2.5); line([[50, 44], [50, 38]], 1.6); line([[50, 44], [55, 46]], 1.6); break;
+    case 'il':   // 메노라(일곱 가지 촛대)
+      g.lineWidth = 5; g.lineCap = 'round';
+      [12, 24, 36].forEach(r => { g.beginPath(); g.arc(50, 34, r, 0, Math.PI); g.stroke(); line([[50 - r, 34], [50 - r, 22]], 5); line([[50 + r, 34], [50 + r, 22]], 5); });
+      line([[50, 18], [50, 82]], 6); poly([[38, 92], [62, 92], [56, 80], [44, 80]]);
+      [-36, -24, -12, 0, 12, 24, 36].forEach(dx => ell(50 + dx, dx ? 15 : 11, 2.6, 4.2)); break;
+    case 'eg':   // 피라미드 + 태양
+      poly([[6, 86], [38, 26], [70, 86]]); poly([[52, 86], [74, 46], [96, 86]]);
+      circ(80, 18, 9);
+      cut(() => { line([[38, 26], [46, 86]], 2.5); line([[74, 46], [78, 86]], 2.2); [50, 62, 74].forEach(y => line([[38 - (y - 26) * .53, y], [38 + (y - 26) * .53, y]], 1.4)); }); break;
+    case 'in':   // 타지마할
+      rect(4, 82, 92, 8); rect(24, 50, 52, 32);
+      g.beginPath(); g.moveTo(32, 50); g.bezierCurveTo(22, 34, 44, 28, 50, 14); g.bezierCurveTo(56, 28, 78, 34, 68, 50); g.closePath(); g.fill();
+      rect(49, 6, 2, 10); circ(30, 48, 6); circ(70, 48, 6);
+      [9, 87].forEach(x => { rect(x - 2.5, 34, 5, 48); circ(x, 32, 4); });
+      cut(() => { g.beginPath(); g.moveTo(43, 82); g.lineTo(43, 66); g.arc(50, 66, 7, Math.PI, 0); g.lineTo(57, 82); g.fill(); rect(29, 60, 6, 10); rect(65, 60, 6, 10); }); break;
+    case 'jp':   // 후지산 + 해
+      poly([[4, 88], [38, 30], [62, 30], [96, 88]]); circ(80, 16, 10);
+      cut(() => line([[31, 42], [38, 48], [44, 42], [50, 49], [56, 42], [62, 48], [69, 42]], 2.6)); break;
+    case 'cn':   // 판다
+      circ(24, 24, 12); circ(76, 24, 12); ell(50, 54, 36, 32);
+      cut(() => { ell(35, 50, 8, 11, .5); ell(65, 50, 8, 11, -.5); ell(50, 66, 5, 3.5); line([[42, 74], [50, 78], [58, 74]], 2.4); });
+      circ(36, 48, 3); circ(64, 48, 3); break;
+    case 'th':   // 코끼리
+      ell(56, 48, 30, 20); circ(26, 40, 17);
+      line([[14, 46], [10, 62], [10, 76], [16, 82]], 7);
+      [[34, 58], [46, 60], [62, 60], [74, 58]].forEach(([x, y]) => rect(x, y, 10, 30 - (y - 58)));
+      line([[86, 44], [92, 58]], 2.4);
+      cut(() => { g.lineWidth = 2.4; g.beginPath(); g.ellipse(34, 40, 9, 13, 0, -Math.PI / 2, Math.PI / 2); g.stroke(); circ(20, 36, 2.2); line([[16, 52], [24, 56]], 2.4); }); break;
+    case 'tr':   // 튤립
+      line([[50, 92], [50, 54]], 4);
+      ell(38, 74, 6, 18, -.6); ell(62, 76, 6, 16, .6);
+      g.beginPath(); g.moveTo(28, 16); g.lineTo(40, 30); g.lineTo(50, 10); g.lineTo(60, 30); g.lineTo(72, 16); g.quadraticCurveTo(74, 58, 50, 58); g.quadraticCurveTo(26, 58, 28, 16); g.fill();
+      cut(() => { line([[40, 32], [42, 54]], 2.2); line([[60, 32], [58, 54]], 2.2); }); break;
+    case 'fr':   // 에펠탑
+      g.beginPath(); g.moveTo(12, 94); g.lineTo(40, 48); g.lineTo(45, 20); g.lineTo(48.5, 8); g.lineTo(51.5, 8); g.lineTo(55, 20); g.lineTo(60, 48); g.lineTo(88, 94);
+      g.lineTo(72, 94); g.quadraticCurveTo(50, 64, 28, 94); g.closePath(); g.fill();
+      rect(30, 62, 40, 5); rect(37, 44, 26, 4); rect(49, 0, 2, 9);
+      cut(() => { line([[44, 50], [48, 60]], 1.6); line([[56, 50], [52, 60]], 1.6); line([[47, 24], [50, 40], [53, 24]], 1.4); }); break;
+    case 'au':   // 캥거루
+      g.lineCap = 'round'; g.lineJoin = 'round';
+      g.lineWidth = 9; g.beginPath(); g.moveTo(46, 74); g.quadraticCurveTo(26, 86, 4, 90); g.stroke();   // 꼬리
+      ell(56, 58, 15, 23, -.35); ell(52, 76, 14, 12);                                                     // 몸·허벅지
+      g.beginPath(); g.moveTo(44, 84); g.lineTo(74, 86); g.lineTo(74, 92); g.lineTo(44, 92); g.fill();       // 발
+      line([[62, 40], [66, 30]], 9);                                                                     // 목
+      ell(70, 24, 10, 7, -.25); poly([[76, 20], [90, 24], [88, 30], [74, 30]]);                         // 머리·주둥이
+      ell(64, 12, 3, 8, -.3); ell(70, 11, 3, 8, .1);                                                     // 귀
+      line([[66, 46], [76, 52], [80, 50]], 3.5);                                                         // 앞발
+      cut(() => circ(72, 22, 1.8)); break;
+  }
+}
+// 그 나라 엠블럼 한 쌍(밝은 결 · 어두운 그림자) — 코스마다 한 번 만들어 둔다
+const GP_EMB = {};
+function gpEmblem(code) {
+  if (GP_EMB[code]) return GP_EMB[code];
+  const mk = (col) => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); g.scale(2.56, 2.56); gpEmblemDraw(g, code);
+    if (col) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, 256, 256); } return c; };
+  return (GP_EMB[code] = { lite: mk(null), dark: mk('#000') });
+}
 // 시상식 — 1~3위 선수가 걸어 나와 시상대에 올라 금·은·동 트로피를 들고 환호. 시상대 앞면에 국기
 function gpPodiumAnim(cv, top3) {
   const g = cv.getContext('2d'); let raf = 0, t0 = performance.now(), dead = false;
@@ -1873,6 +1970,22 @@ function runGrandprix(el, M, T, mi) {
       const m = ((d - startD) % GP_LEN + GP_LEN) % GP_LEN;
       if (m < 10) { const cs = 6 * SC; for (let x = l, i = 0; x < r; x += cs, i++) { g.fillStyle = (i + Math.floor(m / 5)) % 2 ? '#111' : '#fff'; g.fillRect(x, y, cs, 6); } }
     }
+    // 잔디 아트 — 480마다 한 칸, 좌우 번갈아(자리가 모자라면 반대편). 도로·연석에서 8 이상 띄우고 들어갈 크기만
+    { const EM = gpEmblem(T.code), k0 = Math.floor((dAt(H) - 120) / 480) - 1, k1 = Math.ceil((dAt(0) - 120) / 480) + 1;
+      g.save(); g.imageSmoothingEnabled = true;
+      for (let k = k0; k <= k1; k++) {
+        const d = 120 + k * 480; let lo = 200, hi = 0;   // 엠블럼 높이만큼 도로가 차지하는 가장 왼쪽·오른쪽
+        for (let s = -36; s <= 36; s += 12) { const c = cen(d + s), h = half(d + s); lo = Math.min(lo, c - h); hi = Math.max(hi, c + h); }
+        const zones = [[2, lo - 8], [hi + 8, 198]], pick = (k & 1) ? [1, 0] : [0, 1];
+        for (const z of pick) {
+          const [a, b] = zones[z], E = Math.min(58, (b - a) * 0.86); if (E < 26) continue;
+          const x = toX((a + b) / 2 - E / 2), y = toY(d) - E * SC / 2, sz = E * SC;
+          g.globalAlpha = 0.13; g.drawImage(EM.dark, x + 1.2 * SC, y + 1.2 * SC, sz, sz);
+          g.globalAlpha = 0.22; g.drawImage(EM.lite, x, y, sz, sz);
+          break;
+        }
+      }
+      g.restore(); }
     // 길가 광고판·관중석·나무 — 거리마다 같은 자리에 고정
     const d0 = Math.floor(dAt(H) / 240) * 240, d1 = dAt(0);
     for (let d = d0; d < d1; d += 240) {
