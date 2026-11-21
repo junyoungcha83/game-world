@@ -67,6 +67,11 @@ function mergeStat(a, b, gid) {
   if (ls.length) out.lap = Math.min(...ls);
   const ms = [a.moves, b.moves].filter(v => v != null);      // 슬라이딩퍼즐 최소 이동 수
   if (ms.length) out.moves = Math.min(...ms);
+  if (Array.isArray(a.stars) || Array.isArray(b.stars)) {   // 낱말퍼즐 단계별 별 — 칸마다 큰 값, 최고 기록은 별 합계
+    const sa = a.stars || [], sb = b.stars || [];
+    out.stars = Array.from({ length: Math.max(sa.length, sb.length) }, (_, i) => Math.max(sa[i] || 0, sb[i] || 0));
+    out.best = Math.max(out.best || 0, out.stars.reduce((t, x) => t + x, 0));
+  }
   return out;
 }
 // 로컬·원격 상태를 '이름' 기준으로 정규화 병합 → { state, remap(oldId→canonId) }.
@@ -523,6 +528,8 @@ const GAMES = [
   { id: 'sudoku', name: '스도쿠', emoji: '🔲', color: '#14b8a6', best: 'low',
     svg: '<svg viewBox="0 0 100 100" width="100%" height="100%"><rect x="14" y="14" width="72" height="72" rx="6" fill="#f8fafc"/><g stroke="#94a3b8" stroke-width="1.5"><line x1="38" y1="14" x2="38" y2="86"/><line x1="62" y1="14" x2="62" y2="86"/><line x1="14" y1="38" x2="86" y2="38"/><line x1="14" y1="62" x2="86" y2="62"/></g><rect x="14" y="14" width="72" height="72" rx="6" fill="none" stroke="#0f766e" stroke-width="4"/><g font-family="system-ui,sans-serif" font-weight="800" font-size="17" text-anchor="middle" fill="#0f766e"><text x="26" y="32">5</text><text x="74" y="32">3</text><text x="50" y="56">7</text><text x="26" y="80">1</text><text x="74" y="80">9</text></g><text x="50" y="80" font-family="system-ui,sans-serif" font-weight="800" font-size="17" text-anchor="middle" fill="#f97316">4</text></svg>',
     fmtStat: () => sudokuAggFmt(), start: startSudoku },
+  { id: 'crossword', name: '낱말퍼즐', emoji: '📝', color: '#10b981', best: 'high',
+    fmtStat: () => cwAggFmt(), start: startCrossword },
   { id: 'yeoubi', name: '소나기', emoji: '🌧️', color: '#f59e0b', best: 'high',
     svg: '<svg viewBox="0 0 100 100" width="100%" height="100%"><g fill="#e2e8f0"><circle cx="36" cy="40" r="16"/><circle cx="56" cy="32" r="20"/><circle cx="72" cy="44" r="13"/><rect x="24" y="40" width="58" height="17" rx="8"/></g><g stroke="#e0f2fe" stroke-width="5" stroke-linecap="round"><line x1="32" y1="66" x2="26" y2="84"/><line x1="50" y1="66" x2="44" y2="84"/><line x1="68" y1="66" x2="62" y2="84"/></g></svg>',
     fmtStat: () => yeoubiAggFmt(), start: startYeoubi },
@@ -596,6 +603,7 @@ function boardGames() {
     else if (g.id === 'slide') for (const k of SLIDE_SIZES) out.push({ id: 'slide_' + k, emoji: '🧩', name: `슬라이딩퍼즐 ${k}×${k}`, best: 'low', fmtStat: slideFmt });
     else if (g.id === 'grandprix') for (const m of GP_MODES) out.push({ id: m.key, emoji: '🏎️', name: `그랑프리 ${m.label}`, best: 'low', fmtStat: gpFmt });
     else if (g.id === 'yeoubi') for (const m of YB_MODES) out.push({ id: m.key, emoji: '🌧️', name: `소나기 ${m.label}`, best: 'high', fmtStat: ybFmt });
+    else if (g.id === 'crossword') { for (const T of CW_DATA.tiers) if (T.puzzles.length) out.push({ id: cwKey(T.id), emoji: '📝', name: `낱말퍼즐 ${T.label}`, best: 'high', fmtStat: cwFmt }); }
     else if (g.id === 'sudoku') for (const l of SUDOKU_LEVELS) out.push({ id: l.key, emoji: '🔲', name: `스도쿠 ${l.label}`, best: 'low', fmtStat: sudokuFmt });
     else if (g.id === 'fourball') for (const m of FOUR_MODES) out.push({ id: m.key, emoji: '🔴', name: m.name, best: 'high', fmtStat: m.fmt });
     else out.push(g);
@@ -610,7 +618,7 @@ const HUB_CATEGORIES = [
   { label: '🎨 자유',  bgm: 'bright', ids: ['color', 'brush', 'draw', 'roulette'] },
   { label: '♟️ 보드',  bgm: 'calm',   ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot', 'slide'] },
   { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball', 'grandprix'] },
-  { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess', 'sudoku', 'yeoubi'] },
+  { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess', 'sudoku', 'crossword', 'yeoubi'] },
   { label: '🧠 퀴즈',  bgm: 'bright', ids: ['quizworld', 'flags', 'capital', 'mapq'] },
 ];
 // 게임이 아니라 다른 앱으로 가는 카드 — GAMES 에 넣지 않아 기록·순위판에는 안 나온다.
@@ -1064,6 +1072,180 @@ function runSudoku(el, L, saved) {
     if (time % 5 === 0) persist();
   }, 1000);
   draw(); persist();
+}
+
+// ── 미니게임: 낱말퍼즐 (가로세로) ──────────────────────
+// 판은 tools/crossword/build.mjs 가 미리 만든 고정 판(assets/crossword-data.js 의 CW_DATA).
+// 한 칸 = 한 음절. 폰에서 칸마다 한글을 치면 조합 중에 칸이 넘어가 버리므로, 낱말을 고르고 입력창에 통째로 쓴다.
+// 맞힌 낱말만 칸에 채워진다. 기록은 수준별 키(cw_k1 …)에 단계별 별(stars[0..9])로 — 앞 단계 별이 있어야 다음 단계가 열린다.
+const CW_SAVE = 'gw-cw-cur';
+const cwKey = tid => 'cw_' + tid;
+const cwSum = a => (a || []).reduce((t, x) => t + (x || 0), 0);
+function cwStarsOf(tid, u) { const s = getStat(cwKey(tid), u), a = s && Array.isArray(s.stars) ? s.stars : []; return Array.from({ length: 10 }, (_, i) => a[i] || 0); }
+const cwFmt = s => s && Array.isArray(s.stars) && cwSum(s.stars) ? `${s.stars.filter(x => x > 0).length}/10단계 · ★${cwSum(s.stars)}` : '아직 기록 없음';
+function cwAggFmt() {
+  const u = getCurrentUser(); if (!u || typeof CW_DATA === 'undefined') return '아직 기록 없음';
+  const parts = CW_DATA.tiers.map(T => { const a = cwStarsOf(T.id, u), c = a.filter(x => x > 0).length; return c ? `${T.label} ${c}단계` : null; }).filter(Boolean);
+  return parts.length ? parts.join(' · ') : '아직 기록 없음';
+}
+const cwStarStr = k => '★'.repeat(k) + '☆'.repeat(3 - k);
+function cwSaved() {
+  try { const s = JSON.parse(localStorage.getItem(CW_SAVE) || 'null'), u = getCurrentUser();
+    const T = s && CW_DATA.tiers.find(t => t.id === s.t);
+    return s && u && s.uid === u.id && T && T.puzzles[s.i] ? s : null; } catch { return null; }
+}
+function startCrossword(el) {
+  document.getElementById('gameBack').onclick = () => showView('hub');
+  const saved = cwSaved(), sT = saved && CW_DATA.tiers.find(t => t.id === saved.t);
+  el.innerHTML = `<div class="mg omok-pick">
+    <div class="mg-msg">수준을 골라요 📝</div>
+    <div class="omok-levels">
+      ${saved ? `<button data-resume="1" class="sd-resume">이어 하기<small>${sT.label} ${saved.i + 1}단계 · ${sudokuTime(saved.time || 0)}</small></button>` : ''}
+      ${CW_DATA.tiers.map(T => T.puzzles.length
+        ? `<button data-t="${T.id}">${T.label}<small>${T.desc} · ${escapeHtml(cwFmt(getStat(cwKey(T.id))))}</small></button>`
+        : `<button disabled class="cw-soon">${T.label}<small>준비 중이에요</small></button>`).join('')}
+    </div>
+    <div class="sd-help">열쇠를 보고 낱말을 맞혀 칸을 채워요. 가로 낱말과 세로 낱말이 만나는 칸은 같은 글자예요.</div>
+  </div>`;
+  el.querySelectorAll('.omok-levels button[data-t], .omok-levels button[data-resume]').forEach(b => b.onclick = () => {
+    if (b.dataset.resume) runCrossword(el, sT, saved.i, saved);
+    else cwPickLevel(el, CW_DATA.tiers.find(t => t.id === b.dataset.t));
+  });
+}
+function cwPickLevel(el, T) {
+  document.getElementById('gameBack').onclick = () => startCrossword(el);
+  const st = cwStarsOf(T.id);
+  el.innerHTML = `<div class="mg omok-pick">
+    <div class="mg-msg">${T.label} — 단계를 골라요</div>
+    <div class="cw-levels">
+      ${T.puzzles.map((p, i) => { const open = i === 0 || st[i - 1] > 0;
+        return `<button data-i="${i}"${open ? '' : ' disabled'} class="${st[i] ? 'clear' : ''}"><b>${open ? i + 1 : '🔒'}</b><small>${open ? cwStarStr(st[i]) : `${i + 1}단계`}</small></button>`; }).join('')}
+    </div>
+    <div class="sd-help">앞 단계를 깨면 다음 단계가 열려요.<br>힌트 없이 풀면 ★3, 힌트 1~2번 ★2, 그보다 많으면 ★1</div>
+  </div>`;
+  el.querySelectorAll('.cw-levels button:not([disabled])').forEach(b => b.onclick = () => runCrossword(el, T, +b.dataset.i, null));
+}
+function runCrossword(el, T, li, saved) {
+  const P = T.puzzles[li], n = P.w, sol = [...P.grid], u = getCurrentUser();   // n = 가로 칸 수(판은 w×h)
+  const words = P.words.map(w => ({ ...w, cells: [...w.w].map((_, j) => (w.r + (w.d === 'd' ? j : 0)) * n + w.c + (w.d === 'a' ? j : 0)) }));
+  const given = new Set(P.given);
+  let solved = new Set(saved ? saved.solved : []), revealed = new Set(saved ? saved.revealed : []);
+  let hints = saved ? saved.hints || 0 : 0, time = saved ? saved.time || 0 : 0, done = false, timer = null;
+  const shown = i => given.has(i) || revealed.has(i) || words.some((w, k) => solved.has(k) && w.cells.includes(i));
+  const nextUnsolved = from => { for (let s = 1; s <= words.length; s++) { const k = ((from < 0 ? -1 : from) + s) % words.length; if (!solved.has(k)) return k; } return -1; };
+  let sel = nextUnsolved(-1);
+  const starsNow = () => hints === 0 ? 3 : hints <= 2 ? 2 : 1;
+  const persist = () => { try { if (done) localStorage.removeItem(CW_SAVE);
+    else localStorage.setItem(CW_SAVE, JSON.stringify({ uid: u && u.id, t: T.id, i: li, solved: [...solved], revealed: [...revealed], hints, time })); } catch {} };
+  el.innerHTML = `<div class="mg cw">
+    <div class="sd-top"><span>${T.label} <small>${li + 1}단계</small></span><span>⏱ <b id="cwTime">${sudokuTime(time)}</b></span></div>
+    <div class="cw-clue" id="cwClue"></div>
+    <form class="cw-form" id="cwForm" autocomplete="off">
+      <input id="cwIn" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" />
+      <button class="btn" type="submit">확인</button>
+    </form>
+    <div class="mg-msg cw-msg" id="cwMsg">칸이나 아래 열쇠를 누르고 낱말을 써요</div>
+    <div class="cw-grid" id="cwGrid" style="grid-template-columns:repeat(${P.w},1fr);grid-template-rows:repeat(${P.h},1fr);aspect-ratio:${P.w}/${P.h};width:min(100%, ${P.w * 76}px);--n:${P.w}"></div>
+    <div class="omok-btns sd-btns">
+      <button class="btn ghost small" id="cwHint1">💡 글자 열기</button>
+      <button class="btn ghost small" id="cwHint2">🔑 낱말 열기</button>
+    </div>
+    <div class="sd-stat" id="cwStat"></div>
+    <div class="cw-lists" id="cwLists"></div>
+  </div>`;
+  const grid = el.querySelector('#cwGrid'), msg = el.querySelector('#cwMsg'), inp = el.querySelector('#cwIn'), form = el.querySelector('#cwForm');
+  const alive = () => !!el.querySelector('.cw');
+  const dirName = d => d === 'a' ? '가로' : '세로';
+  const draw = () => {
+    const W = words[sel];
+    const starts = new Map(); for (const w of words) starts.set(w.cells[0], w.num);
+    grid.innerHTML = sol.map((ch, i) => {
+      if (ch === '.') return '<div class="cw-c blk"></div>';
+      const cls = ['cw-c'], show = shown(i);
+      if (given.has(i)) cls.push('given'); else if (revealed.has(i) && !words.some((w, k) => solved.has(k) && w.cells.includes(i))) cls.push('hint');
+      else if (show) cls.push('ok');
+      if (W && W.cells.includes(i)) cls.push('inw');
+      return `<button class="${cls.join(' ')}" data-i="${i}">${starts.has(i) ? `<i>${starts.get(i)}</i>` : ''}${show ? ch : ''}</button>`;
+    }).join('');
+    const clue = el.querySelector('#cwClue');
+    if (W && !done) {
+      const pat = W.cells.map(i => shown(i) ? sol[i] : '○').join('');
+      clue.innerHTML = `<span class="cw-tag">${dirName(W.d)} ${W.num}</span>${W.e ? `<span class="cw-emo">${W.e}</span>` : ''}<span class="cw-txt">${escapeHtml(W.clue)}</span><span class="cw-pat">${pat}</span>`;
+      inp.placeholder = `${W.cells.length}글자`;
+    }
+    const li2 = d => words.map((w, k) => w.d !== d ? '' : `<li data-k="${k}" class="${solved.has(k) ? 'done' : ''}${k === sel ? ' on' : ''}"><b>${w.num}</b>${w.e ? `<span>${w.e}</span>` : ''}${escapeHtml(w.clue)}${solved.has(k) ? ` <em>${w.w}</em>` : ''}</li>`).join('');
+    el.querySelector('#cwLists').innerHTML = `<div><h4>가로 →</h4><ul>${li2('a')}</ul></div><div><h4>세로 ↓</h4><ul>${li2('d')}</ul></div>`;
+    el.querySelector('#cwStat').textContent = `${solved.size}/${words.length} 낱말 · 힌트 ${hints}번 · 지금이면 ${cwStarStr(starsNow())}`;
+  };
+  // 힌트·교차로 낱말의 모든 칸이 드러나면 맞힌 것으로 친다
+  const autoSolve = () => { words.forEach((w, k) => { if (!solved.has(k) && w.cells.every(shown)) solved.add(k); }); };
+  const finish = () => {
+    done = true; clearInterval(timer); persist(); sel = -1;
+    const stars = starsNow(), key = cwKey(T.id);
+    if (u) {
+      const a = cwStarsOf(T.id, u); a[li] = Math.max(a[li], stars);
+      state.scores[u.id] = state.scores[u.id] || {};
+      state.scores[u.id][key] = normStat(state.scores[u.id][key]); state.scores[u.id][key].stars = a;
+      recordStat(key, { result: 'win', best: cwSum(a) });
+    }
+    const gb = document.getElementById('gameBest'); if (gb) gb.textContent = cwAggFmt();
+    grid.classList.add('solved');
+    el.querySelector('#cwClue').innerHTML = `<span class="cw-win">완성! 🎉 <b>${cwStarStr(stars)}</b> · ${sudokuTime(time)}</span>`;
+    form.innerHTML = `${li < T.puzzles.length - 1 ? '<button class="btn" type="button" id="cwNext">다음 단계 ▶</button>' : ''}<button class="btn ghost" type="button" id="cwLv">단계 고르기</button>`;
+    msg.textContent = li < T.puzzles.length - 1 ? `${li + 2}단계가 열렸어요` : `${T.label} 10단계를 모두 깼어요! 👏`;
+    const nx = el.querySelector('#cwNext'); if (nx) nx.onclick = () => runCrossword(el, T, li + 1, null);
+    el.querySelector('#cwLv').onclick = () => cwPickLevel(el, T);
+    draw();
+  };
+  const afterChange = () => {
+    autoSolve(); persist();
+    if (solved.size === words.length) { finish(); return; }
+    if (solved.has(sel)) sel = nextUnsolved(sel);
+    draw();
+  };
+  const check = () => {
+    if (done || sel < 0) return;
+    const W = words[sel], v = inp.value.normalize('NFC').replace(/\s+/g, '');
+    if (!v) return;
+    if ([...v].length !== W.cells.length) { msg.textContent = `${W.cells.length}글자로 써 주세요`; return; }
+    if (v === W.w) { solved.add(sel); inp.value = ''; msg.textContent = '딩동댕! ⭕'; afterChange(); return; }
+    msg.textContent = '아쉬워요, 다시 생각해 봐요 🤔';
+    try { navigator.vibrate && navigator.vibrate(60); } catch {}
+    grid.classList.remove('shake'); void grid.offsetWidth; grid.classList.add('shake');
+    setTimeout(() => grid.classList.remove('shake'), 450);
+    inp.select();
+  };
+  // 한글 조합 중에 엔터를 누르면 마지막 글자가 아직 안 들어와 있을 수 있어 한 박자 늦게 읽는다
+  form.onsubmit = e => { e.preventDefault(); setTimeout(check, 0); };
+  const choose = k => { if (done) return; sel = k; inp.value = ''; draw(); inp.focus(); };
+  grid.onclick = e => {
+    const b = e.target.closest('.cw-c[data-i]'); if (!b) return; const i = +b.dataset.i;
+    const ks = words.map((w, k) => w.cells.includes(i) ? k : -1).filter(k => k >= 0);
+    if (!ks.length) return;
+    // 같은 칸을 다시 누르면 가로↔세로를 바꾼다. 아니면 아직 못 푼 낱말 먼저
+    const k = ks.includes(sel) && ks.length > 1 ? ks.find(x => x !== sel) : (ks.find(x => !solved.has(x)) ?? ks[0]);
+    choose(k);
+  };
+  el.querySelector('#cwLists').onclick = e => { const li3 = e.target.closest('li[data-k]'); if (li3) choose(+li3.dataset.k); };
+  el.querySelector('#cwHint1').onclick = () => {
+    if (done || sel < 0) return;
+    const i = words[sel].cells.find(x => !shown(x)); if (i == null) return;
+    revealed.add(i); hints++; msg.textContent = '💡 한 글자를 열었어요'; afterChange();
+  };
+  el.querySelector('#cwHint2').onclick = () => {
+    if (done || sel < 0) return;
+    const hid = words[sel].cells.filter(x => !shown(x)); if (!hid.length) return;
+    hid.forEach(i => revealed.add(i)); hints += 2; msg.textContent = `🔑 '${words[sel].w}' — 낱말 열기는 힌트 2번이에요`; afterChange();
+  };
+  // ‹ 뒤로 = 단계 고르기. 하던 판은 저장돼 '이어 하기'로 돌아온다
+  document.getElementById('gameBack').onclick = () => { clearInterval(timer); persist(); cwPickLevel(el, T); };
+  timer = setInterval(() => {
+    if (!alive()) { clearInterval(timer); return; }
+    if (document.hidden || done) return;
+    time++; const t = el.querySelector('#cwTime'); if (t) t.textContent = sudokuTime(time);
+    if (time % 5 === 0) persist();
+  }, 1000);
+  autoSolve(); draw(); persist();
 }
 
 // ── 미니게임: 소나기 (타자 연습) ── (내부 id·기록 키는 처음 이름 yeoubi 그대로)─────────────────────

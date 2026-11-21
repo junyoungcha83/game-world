@@ -845,3 +845,46 @@ body.yb-playing { overflow: hidden; }
 .sl-board.solved::after { content: ''; position: absolute; inset: 0; background: var(--img) center / cover; z-index: 3; animation: slWin .8s ease-out both; }
 @keyframes slWin { from { opacity: 0; } to { opacity: 1; } }
 #slNum.on { border-color: var(--gc, #0ea5e9); color: var(--gc, #0ea5e9); }
+
+/* ── 낱말퍼즐 ── */
+.cw-levels { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; width: 100%; max-width: 380px; }
+.cw-levels button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 0; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--bg2); color: var(--text); cursor: pointer; }
+.cw-levels button b { font-size: 1.3rem; }
+.cw-levels button small { font-size: .62rem; color: #fbbf24; letter-spacing: -1px; }
+.cw-levels button.clear { border-color: var(--gc, #10b981); }
+.cw-levels button[disabled] { opacity: .45; cursor: default; }
+.cw-levels button[disabled] small { color: var(--muted); letter-spacing: 0; }
+.omok-levels button.cw-soon { opacity: .45; cursor: default; }
+.cw { gap: 8px; width: 100%; max-width: 480px; box-sizing: border-box; padding: 16px 12px; }
+.cw-clue { width: 100%; max-width: 420px; box-sizing: border-box; min-height: 3.2em; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; font-weight: 700; line-height: 1.35; }
+.cw-tag { font-size: .75rem; background: var(--gc, #10b981); color: #fff; border-radius: 6px; padding: 2px 6px; white-space: nowrap; }
+.cw-emo { font-size: 1.7rem; line-height: 1; }
+.cw-txt { flex: 1 1 10em; }
+.cw-pat { font-size: 1.05rem; letter-spacing: 3px; color: #fde68a; white-space: nowrap; }
+.cw-win { font-size: 1.15rem; width: 100%; text-align: center; } .cw-win b { color: #fbbf24; }
+.cw-form { display: flex; gap: 6px; width: 100%; max-width: 420px; justify-content: center; }
+.cw-form input { flex: 1; min-width: 0; font-size: 1.25rem; font-weight: 700; padding: 8px 12px; border-radius: 12px;
+  border: 2px solid var(--gc, #10b981); background: #f8fafc; color: #0f172a; }
+.cw-msg { font-size: .95rem; min-height: 1.3em; }
+.cw-grid { display: grid; max-width: 420px; container-type: inline-size; gap: 2px; padding: 2px; background: #0f172a; border-radius: 8px; }
+.cw-c { position: relative; border: 0; border-radius: 3px; background: #f8fafc; color: #1e3a8a; padding: 0; cursor: pointer;
+  font-weight: 800; font-family: inherit; font-size: calc(100cqw / var(--n) * .46); display: flex; align-items: center; justify-content: center; }
+.cw-c.blk { background: transparent; cursor: default; }
+.cw-c i { position: absolute; top: 1px; left: 3px; font-style: normal; font-size: clamp(.5rem, calc(100cqw / var(--n) * .18), .8rem); color: #64748b; font-weight: 700; }
+.cw-c.given { color: #0f172a; background: #e2e8f0; }
+.cw-c.ok { color: #047857; }
+.cw-c.hint { color: #c2410c; }
+.cw-c.inw { background: #fde68a; } .cw-c.given.inw { background: #fcd34d; }
+.cw-grid.solved .cw-c:not(.blk) { background: #dcfce7; transition: background .4s; }
+.cw-grid.shake .cw-c.inw { animation: cwShake .35s; background: #fecaca; }
+@keyframes cwShake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+.cw-lists { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 420px; font-size: .85rem; }
+.cw-lists h4 { margin: 0 0 4px; font-size: .85rem; color: var(--muted); }
+.cw-lists ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cw-lists li { padding: 5px 6px; border-radius: 8px; background: var(--bg2); cursor: pointer; line-height: 1.35; }
+.cw-lists li b { color: var(--gc, #10b981); margin-right: 4px; } .cw-lists li span { margin-right: 3px; }
+.cw-lists li.on { outline: 2px solid #fbbf24; }
+.cw-lists li.done { opacity: .55; } .cw-lists li em { font-style: normal; font-weight: 800; color: #34d399; }
+@media (max-width: 360px) { .cw-lists { grid-template-columns: 1fr; } }
