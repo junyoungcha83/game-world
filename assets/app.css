@@ -889,3 +889,111 @@ body.yb-playing { overflow: hidden; }
 .cw-lists li.on { outline: 2px solid #fbbf24; }
 .cw-lists li.done { opacity: .55; } .cw-lists li em { font-style: normal; font-weight: 800; color: #34d399; }
 @media (max-width: 360px) { .cw-lists { grid-template-columns: 1fr; } }
+
+/* ── 화투 ─────────────────────────────────────────────
+   초록 담요 배경. 카드는 코드로 그린다(월별 색 --mc + 이모지 그림 + 광/띠/고도리 표시) */
+body[data-game="hwatu"] {
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 6px),
+    radial-gradient(120% 90% at 50% 30%, #1f7a43 0%, #135c30 55%, #0b3d1f 100%);
+  background-attachment: fixed;
+}
+.hw { --cw: min(15.5vw, 58px); color: #f0fdf4; display: flex; flex-direction: column; gap: 8px;
+  background: rgba(10,60,30,.55); border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 10px 8px; }
+.hw-home { align-items: center; gap: 16px; padding: 22px 14px; }
+.hw-title { font-size: 1.5rem; font-weight: 800; }
+.hw-home .omok-levels button { background: rgba(6,40,20,.7); border-color: rgba(255,255,255,.18); color: #f0fdf4; }
+.hw-home .omok-levels button small { color: #bbf7d0; }
+.hw-home-cards { display: flex; gap: 8px; }
+.hw-lvbox { text-align: center; display: flex; flex-direction: column; gap: 4px; }
+.hw-lvbox small { color: #bbf7d0; }
+.hw-lvbar { display: flex; gap: 4px; justify-content: center; }
+.hw-lvbar i { width: 18px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.18); }
+.hw-lvbar i.on { background: #facc15; }
+
+/* 카드 한 장 */
+.hw-card { position: relative; width: var(--cw); height: calc(var(--cw) * 1.55); border-radius: calc(var(--cw) * .1);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--mc) 70%, #fff) 0%, var(--mc) 70%);
+  background-color: var(--mc); border: 2px solid #fff7ed; box-shadow: 0 2px 4px rgba(0,0,0,.35);
+  flex: 0 0 auto; overflow: hidden; user-select: none; font-size: calc(var(--cw) * .2); }
+.hw-card .hw-mo { position: absolute; top: 2px; left: 4px; font-size: 1em; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.hw-card .hw-art { position: absolute; inset: 18% 0 22% 0; display: flex; align-items: center; justify-content: center; font-size: 2.3em; line-height: 1; }
+.hw-card.tP .hw-art { opacity: .75; font-size: 1.7em; }
+.hw-card .hw-lb { position: absolute; bottom: 2px; left: 0; right: 0; text-align: center; font-size: .82em; font-weight: 800;
+  color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.7); white-space: nowrap; }
+.hw-card.tG .hw-lb { color: #fde68a; }
+.hw-card.ssang .hw-lb { color: #fecaca; }
+.hw-gw { position: absolute; top: 3px; right: 3px; width: 1.35em; height: 1.35em; border-radius: 50%; background: #dc2626;
+  color: #fff; font-style: normal; font-weight: 900; font-size: .95em; display: flex; align-items: center; justify-content: center; border: 1px solid #fff; }
+.hw-tti { position: absolute; top: 14%; left: 18%; width: 26%; height: 58%; border-radius: 2px; font-style: normal;
+  writing-mode: vertical-rl; font-size: .7em; font-weight: 800; color: #111; display: flex; align-items: center; justify-content: center;
+  z-index: 1; box-shadow: 0 1px 2px rgba(0,0,0,.4); letter-spacing: -1px; }
+.hw-tti.hong { background: #ef4444; color: #fff7ed; }
+.hw-tti.cho { background: #dc2626; }
+.hw-tti.cheong { background: #2563eb; color: #fff; }
+.hw-tti.rain { background: repeating-linear-gradient(180deg, #dc2626 0 5px, #111 5px 7px); }
+.hw-god { position: absolute; top: 3px; right: 2px; font-style: normal; font-size: .6em; font-weight: 800; background: #fde047; color: #713f12; padding: 1px 2px; border-radius: 3px; }
+.hw-card.back { background: #b91c1c; background-image: radial-gradient(circle at 50% 50%, #7f1d1d 0 25%, transparent 26%), repeating-linear-gradient(45deg, rgba(0,0,0,.15) 0 3px, transparent 3px 7px); }
+.hw-card.small { --cw: min(15vw, 52px); width: var(--cw); height: calc(var(--cw) * 1.55); font-size: calc(var(--cw) * .2); }
+.hw-card.mini { --cw: 26px; width: var(--cw); height: calc(var(--cw) * 1.55); font-size: 6px; border-width: 1px; border-radius: 3px; }
+.hw-card.mini .hw-lb, .hw-card.mini .hw-mo, .hw-card.mini .hw-god { display: none; }
+.hw-card.mini .hw-art { inset: 10% 0; font-size: 13px; }
+.hw-card.mini .hw-gw { width: 8px; height: 8px; font-size: 0; top: 1px; right: 1px; }
+.hw-card.tiny { --cw: 16px; width: 16px; height: 25px; border-width: 1px; border-radius: 2px; font-size: 5px; }
+.hw-card.tiny > * { display: none; }
+
+/* 판 */
+.hw-play { gap: 6px; }
+.hw-side { display: flex; flex-direction: column; gap: 4px; }
+.hw-who { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: .9rem; }
+.hw-sc { font-weight: 800; color: #fde047; }
+.hw-chip { font-size: .72rem; padding: 1px 6px; border-radius: 8px; background: rgba(0,0,0,.35); }
+.hw-chip.go { background: #dc2626; color: #fff; font-weight: 800; }
+.hw-parts { font-size: .72rem; color: #bbf7d0; }
+.hw-opp-hand { display: flex; margin-left: auto; }
+.hw-opp-hand .hw-card { margin-left: -6px; }
+.hw-caps { display: grid; grid-template-columns: auto auto auto 1fr; gap: 4px; min-height: 44px; background: rgba(0,0,0,.18); border-radius: 8px; padding: 4px; }
+.hw-cap { display: flex; flex-direction: column; gap: 2px; min-width: 30px; }
+.hw-cap-n { font-size: .68rem; color: #bbf7d0; font-weight: 700; }
+.hw-cap-cards { display: flex; flex-wrap: wrap; }
+.hw-cap-cards .hw-card { margin-right: -14px; }
+.hw-cap:last-child .hw-cap-cards .hw-card { margin-right: -18px; }
+.hw-floor { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 10px; min-height: calc(min(15.5vw, 58px) * 1.7);
+  padding: 8px 4px; border-radius: 12px; background: rgba(0,0,0,.12); }
+.hw-fgrp { display: flex; }
+.hw-fgrp .hw-card + .hw-card { margin-left: calc(var(--cw) * -.55); }
+.hw-pile { position: relative; display: flex; align-items: center; justify-content: center; width: var(--cw); height: calc(var(--cw) * 1.55); }
+.hw-pile .hw-card { box-shadow: 2px 2px 0 #7f1d1d, 4px 4px 0 #450a0a; }
+.hw-pile span { position: absolute; font-weight: 900; color: #fff; text-shadow: 0 1px 3px #000; }
+.hw-card.fresh { outline: 3px solid #fde047; outline-offset: -1px; }
+.hw-card.pick { outline: 3px solid #22d3ee; cursor: pointer; animation: hwPulse 1s infinite; z-index: 2; }
+@keyframes hwPulse { 50% { transform: translateY(-4px); } }
+.hw-msg { text-align: center; font-weight: 700; font-size: .9rem; min-height: 1.3em; }
+.hw-ev { display: inline-block; margin-left: 4px; color: #fde047; }
+.hw-hand { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; padding: 6px 0 2px; }
+.hw-hand.active .hw-card { cursor: pointer; }
+.hw-hand .hw-card.match { box-shadow: 0 0 0 3px #fde047, 0 0 12px #fde047; transform: translateY(-3px); }
+.hw-hand:not(.active) .hw-card { filter: brightness(.8); }
+.hw-play { position: relative; }
+.hw-over { position: absolute; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; border-radius: 16px; z-index: 5; }
+.hw-dlg { background: #14532d; border: 2px solid #fde047; border-radius: 16px; padding: 18px 16px; width: min(86%, 320px); text-align: center; }
+.hw-dlg-t { font-size: 1.3rem; font-weight: 900; margin-bottom: 6px; }
+.hw-dlg p { font-size: .85rem; color: #dcfce7; line-height: 1.5; }
+.hw-dlg-b { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+.hw-lvnote { font-weight: 800; color: #fde047; margin: 6px 0; }
+.hw-lvnote.up { color: #86efac; font-size: 1.05rem; }
+.hw-lvnote.down { color: #fca5a5; }
+
+/* 공부하기 */
+.hw-tabs { display: flex; gap: 6px; }
+.hw-tabs button { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.2); background: rgba(0,0,0,.2); color: #f0fdf4; font-weight: 700; font-size: .95rem; }
+.hw-tabs button.on { background: #15803d; border-color: #fde047; }
+.hw-study-body { display: flex; flex-direction: column; gap: 10px; }
+.hw-mrow, .hw-rule { background: rgba(0,0,0,.2); border-radius: 12px; padding: 10px; }
+.hw-mhead { display: flex; align-items: baseline; gap: 8px; }
+.hw-mhead small { color: #bbf7d0; }
+.hw-mcards { display: flex; gap: 6px; margin: 8px 0; }
+.hw-mrow p, .hw-rule p { margin: 4px 0; font-size: .88rem; line-height: 1.5; color: #dcfce7; }
+.hw-rule h4 { margin: 0 0 6px; }
+.hw-ex { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
+.hw-ex .hw-card { --cw: min(11vw, 40px); }

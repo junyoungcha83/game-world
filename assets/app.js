@@ -67,6 +67,10 @@ function mergeStat(a, b, gid) {
   if (ls.length) out.lap = Math.min(...ls);
   const ms = [a.moves, b.moves].filter(v => v != null);      // 슬라이딩퍼즐 최소 이동 수
   if (ms.length) out.moves = Math.min(...ms);
+  if (a.lv != null || b.lv != null) {                       // 화투 레벨·연승·연패 — 판을 더 많이 한 쪽(최신 기기) 값을 따른다
+    const src = (a.lv != null && (b.lv == null || (a.plays || 0) >= (b.plays || 0))) ? a : b;
+    out.lv = src.lv; out.ws = src.ws || 0; out.lz = src.lz || 0;
+  }
   if (Array.isArray(a.stars) || Array.isArray(b.stars)) {   // 낱말퍼즐 단계별 별 — 칸마다 큰 값, 최고 기록은 별 합계
     const sa = a.stars || [], sb = b.stars || [];
     out.stars = Array.from({ length: Math.max(sa.length, sb.length) }, (_, i) => Math.max(sa[i] || 0, sb[i] || 0));
@@ -538,6 +542,8 @@ const GAMES = [
   { id: 'slide', name: '슬라이딩퍼즐', emoji: '🧩', color: '#0ea5e9', best: 'low',
     svg: '<svg viewBox="0 0 100 100" width="100%" height="100%"><g stroke="#0c4a6e" stroke-width="2"><rect x="18" y="18" width="20" height="20" rx="3" fill="#fde047"/><rect x="40" y="18" width="20" height="20" rx="3" fill="#f97316"/><rect x="62" y="18" width="20" height="20" rx="3" fill="#ef4444"/><rect x="18" y="40" width="20" height="20" rx="3" fill="#a3e635"/><rect x="40" y="40" width="20" height="20" rx="3" fill="#22d3ee"/><rect x="18" y="62" width="20" height="20" rx="3" fill="#c084fc"/><rect x="62" y="62" width="20" height="20" rx="3" fill="#f9a8d4"/><rect x="40" y="62" width="20" height="20" rx="3" fill="#fff" opacity=".35"/></g><path d="M62 50 h12 m-5 -5 l5 5 -5 5" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round"/></svg>',
     fmtStat: () => slideAggFmt(), start: startSlide },
+  { id: 'hwatu', name: '화투', emoji: '🎴', color: '#15803d', best: 'high',
+    fmtStat: () => hwAggFmt(), start: startHwatu },
   { id: 'tetris', name: '테트리스', emoji: '🟦', color: '#0ea5e9', best: 'high',
     fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startTetris },
 ];
@@ -605,6 +611,7 @@ function boardGames() {
     else if (g.id === 'yeoubi') for (const m of YB_MODES) out.push({ id: m.key, emoji: '🌧️', name: `소나기 ${m.label}`, best: 'high', fmtStat: ybFmt });
     else if (g.id === 'crossword') { for (const T of CW_DATA.tiers) if (T.puzzles.length) out.push({ id: cwKey(T.id), emoji: '📝', name: `낱말퍼즐 ${T.label}`, best: 'high', fmtStat: cwFmt }); }
     else if (g.id === 'sudoku') for (const l of SUDOKU_LEVELS) out.push({ id: l.key, emoji: '🔲', name: `스도쿠 ${l.label}`, best: 'low', fmtStat: sudokuFmt });
+    else if (g.id === 'hwatu') { out.push({ id: HW_LV_KEY, emoji: '🎴', name: '화투 컴퓨터전', best: 'high', fmtStat: hwFmt }); out.push({ id: HW_VS_KEY, emoji: '🎴', name: '화투 친구전', best: 'high', fmtStat: hwVsFmt }); }
     else if (g.id === 'fourball') for (const m of FOUR_MODES) out.push({ id: m.key, emoji: '🔴', name: m.name, best: 'high', fmtStat: m.fmt });
     else out.push(g);
   }
@@ -617,7 +624,7 @@ function boardGames() {
 const HUB_CATEGORIES = [
   { label: '🎨 자유',  bgm: 'bright', ids: ['color', 'brush', 'draw', 'roulette'] },
   { label: '♟️ 보드',  bgm: 'calm',   ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot', 'slide'] },
-  { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball', 'grandprix'] },
+  { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball', 'grandprix', 'hwatu'] },
   { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess', 'sudoku', 'crossword', 'yeoubi'] },
   { label: '🧠 퀴즈',  bgm: 'bright', ids: ['quizworld', 'flags', 'capital', 'mapq'] },
 ];
@@ -681,7 +688,8 @@ function showView(name) {
   currentView = name;
   // 게임을 나가면 배경화면·배경음악을 원래대로 (뒤로가기·하단 탭 어느 쪽으로 나가도 여기를 지난다)
   if (name !== 'game' && ybRunning) { ybRunning(); ybRunning = null; }
-  if (name !== 'game' && gpRunning) { gpRunning(); gpRunning = null; }   // 소나기 판 정리(전체화면·키보드 감지 해제)
+  if (name !== 'game' && gpRunning) { gpRunning(); gpRunning = null; }
+  if (name !== 'game' && typeof hwLeave === 'function') hwLeave();   // 화투 친구전 폴링 중단   // 소나기 판 정리(전체화면·키보드 감지 해제)
   if (name !== 'game') {
     delete document.body.dataset.game; document.body.style.removeProperty('--gc');
     currentGameId = null; bgmStop();
