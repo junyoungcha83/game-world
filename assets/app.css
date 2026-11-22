@@ -990,3 +990,37 @@ body[data-game="hwatu"] {
 .hw-rule h4 { margin: 0 0 6px; }
 .hw-ex { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
 .hw-ex .hw-card { --cw: min(12vw, 44px); }
+
+/* ── 자유투 ── */
+.ft-setup { gap: 12px; }
+.ft-row { display: flex; align-items: center; gap: 10px; width: min(92vw, 340px); }
+.ft-lab { flex: 0 0 34px; font-size: .8rem; font-weight: 800; color: var(--muted); }
+.ft-seg { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; }
+.ft-seg button { flex: 1 1 0; min-width: 64px; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 9px 6px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--text, #e5e7eb);
+  font-weight: 800; font-size: .92rem; cursor: pointer; }
+.ft-seg button small { font-size: .66rem; font-weight: 600; color: var(--muted); }
+.ft-seg button.on { background: #ea580c; border-color: #fdba74; color: #fff; }
+.ft-seg button.on small { color: #ffedd5; }
+.ft-desc { font-size: .8rem; color: #fdba74; font-weight: 700; }
+.ft-best { font-size: .85rem; color: var(--muted); }
+.ft-best b { color: #fde047; }
+.ft-go { min-width: 180px; font-size: 1.05rem; padding: 12px 20px; }
+.ft-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.ft-top { display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 480px; font-weight: 800; font-size: .9rem; }
+.ft-tag { font-size: .75rem; color: #fdba74; }
+.ft-stage { position: relative; width: 100%; display: flex; justify-content: center; }
+.ft-cv { display: block; border-radius: 12px; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.ft-ov { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.45); border-radius: 12px; }
+.ft-ov.hidden { display: none; }
+.ft-ov-card { background: rgba(17,24,39,.94); border: 1px solid #f97316; border-radius: 16px; padding: 20px 22px; text-align: center;
+  display: flex; flex-direction: column; gap: 10px; align-items: center; min-width: 220px; color: #f8fafc; }
+.ft-ov-t { font-size: 1.3rem; font-weight: 900; }
+.ft-ov-t b { color: #fde047; }
+.ft-ov-s { font-size: .85rem; color: #cbd5e1; }
+.ft-ov-n { font-size: 1rem; font-weight: 800; color: #fdba74; }
+.ft-ov-vs { display: flex; align-items: center; gap: 14px; font-weight: 800; }
+.ft-ov-vs div { display: flex; flex-direction: column; align-items: center; }
+.ft-ov-vs small { color: #94a3b8; font-size: .7rem; }
+.ft-ov-vs b { font-size: 2rem; color: #fde047; }
+.ft-ov-btns { display: flex; gap: 8px; }

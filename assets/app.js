@@ -544,6 +544,8 @@ const GAMES = [
     fmtStat: () => slideAggFmt(), start: startSlide },
   { id: 'hwatu', name: '화투', emoji: '🎴', color: '#15803d', best: 'high',
     fmtStat: () => hwAggFmt(), start: startHwatu },
+  { id: 'freethrow', name: '자유투', emoji: '🏀', color: '#ea580c', best: 'high',
+    fmtStat: () => ftAggFmt(), start: startFreethrow },
   { id: 'tetris', name: '테트리스', emoji: '🟦', color: '#0ea5e9', best: 'high',
     fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startTetris },
 ];
@@ -612,6 +614,7 @@ function boardGames() {
     else if (g.id === 'crossword') { for (const T of CW_DATA.tiers) if (T.puzzles.length) out.push({ id: cwKey(T.id), emoji: '📝', name: `낱말퍼즐 ${T.label}`, best: 'high', fmtStat: cwFmt }); }
     else if (g.id === 'sudoku') for (const l of SUDOKU_LEVELS) out.push({ id: l.key, emoji: '🔲', name: `스도쿠 ${l.label}`, best: 'low', fmtStat: sudokuFmt });
     else if (g.id === 'hwatu') { out.push({ id: HW_LV_KEY, emoji: '🎴', name: '화투 컴퓨터전', best: 'high', fmtStat: hwFmt }); out.push({ id: HW_VS_KEY, emoji: '🎴', name: '화투 친구전', best: 'high', fmtStat: hwVsFmt }); }
+    else if (g.id === 'freethrow') out.push(...ftBoardEntries());
     else if (g.id === 'fourball') for (const m of FOUR_MODES) out.push({ id: m.key, emoji: '🔴', name: m.name, best: 'high', fmtStat: m.fmt });
     else out.push(g);
   }
@@ -624,7 +627,7 @@ function boardGames() {
 const HUB_CATEGORIES = [
   { label: '🎨 자유',  bgm: 'bright', ids: ['color', 'brush', 'draw', 'roulette'] },
   { label: '♟️ 보드',  bgm: 'calm',   ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot', 'slide'] },
-  { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball', 'grandprix', 'hwatu'] },
+  { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball', 'grandprix', 'hwatu', 'freethrow'] },
   { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess', 'sudoku', 'crossword', 'yeoubi'] },
   { label: '🧠 퀴즈',  bgm: 'bright', ids: ['quizworld', 'flags', 'capital', 'mapq'] },
 ];
@@ -689,6 +692,7 @@ function showView(name) {
   // 게임을 나가면 배경화면·배경음악을 원래대로 (뒤로가기·하단 탭 어느 쪽으로 나가도 여기를 지난다)
   if (name !== 'game' && ybRunning) { ybRunning(); ybRunning = null; }
   if (name !== 'game' && gpRunning) { gpRunning(); gpRunning = null; }
+  if (name !== 'game' && typeof ftLeave === 'function') ftLeave();   // 자유투 애니메이션 정지
   if (name !== 'game' && typeof hwLeave === 'function') hwLeave();   // 화투 친구전 폴링 중단   // 소나기 판 정리(전체화면·키보드 감지 해제)
   if (name !== 'game') {
     delete document.body.dataset.game; document.body.style.removeProperty('--gc');
@@ -791,6 +795,7 @@ function openGame(id) {
   const g = GAMES.find(x => x.id === id); if (!g) return;
   if (ybRunning) { ybRunning(); ybRunning = null; }
   if (gpRunning) { gpRunning(); gpRunning = null; }
+  if (typeof ftLeave === 'function') ftLeave();
   if (!getCurrentUser()) { showReg(); return; }   // 사용자 없으면 기록이 안 쌓이므로 먼저 선택
   document.getElementById('gameTitle').textContent = g.emoji + ' ' + g.name;
   document.getElementById('gameBest').textContent = g.fmtStat(getStat(id));
