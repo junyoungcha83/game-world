@@ -914,8 +914,9 @@ body[data-game="hwatu"] {
 /* 카드 한 장 — 실제 화투 그림(assets/hwatu/*.webp)을 배경으로 깐다. 비율은 원본 103.2:168.2 */
 .hw-card { position: relative; width: var(--cw); height: calc(var(--cw) * 1.63); border-radius: calc(var(--cw) * .08);
   background: #fff center/100% 100% no-repeat; box-shadow: 0 2px 4px rgba(0,0,0,.4);
-  flex: 0 0 auto; overflow: hidden; user-select: none; }
-.hw-card.back { background: #b91c1c; border: 2px solid #7f1d1d;
+  flex: 0 0 auto; overflow: hidden; user-select: none;
+  filter: brightness(1.12) saturate(1.18) contrast(1.04); }
+.hw-card.back { filter: none; background: #b91c1c; border: 2px solid #7f1d1d;
   background-image: radial-gradient(circle at 50% 50%, #7f1d1d 0 25%, transparent 26%), repeating-linear-gradient(45deg, rgba(0,0,0,.15) 0 3px, transparent 3px 7px); }
 .hw-card.small { --cw: min(17vw, 62px); }
 .hw-card.mini { --cw: 26px; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,.5); }
@@ -956,7 +957,7 @@ body[data-game="hwatu"] {
 .hw-hand { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; padding: 6px 0 2px; }
 .hw-hand.active .hw-card { cursor: pointer; }
 .hw-hand .hw-card.match { box-shadow: 0 0 0 3px #fde047, 0 0 12px #fde047; transform: translateY(-3px); }
-.hw-hand:not(.active) .hw-card { filter: brightness(.8); }
+/* 내 차례가 아닐 때도 패는 밝게 — 어둡게 하지 않는다 */
 .hw-play { position: relative; }
 .hw-over { position: absolute; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; border-radius: 16px; z-index: 5; }
 .hw-dlg { background: #14532d; border: 2px solid #fde047; border-radius: 16px; padding: 18px 16px; width: min(86%, 320px); text-align: center; }
