@@ -626,9 +626,9 @@ function boardGames() {
 // bgm: 이 분류의 게임에 깔릴 배경음악(BGM_SONGS 의 키)
 const HUB_CATEGORIES = [
   { label: '🎨 자유',  bgm: 'bright', ids: ['color', 'brush', 'draw', 'roulette'] },
-  { label: '♟️ 보드',  bgm: 'calm',   ids: ['omok', 'janggi', 'chess', 'tetris', 'ttt', 'baseball', 'spot', 'slide'] },
-  { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball', 'grandprix', 'hwatu', 'freethrow'] },
-  { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess', 'sudoku', 'crossword', 'yeoubi'] },
+  { label: '♟️ 보드',  bgm: 'calm',   ids: ['omok', 'janggi', 'chess', 'hwatu', 'ttt', 'spot', 'slide', 'sudoku', 'crossword'] },
+  { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball', 'grandprix', 'freethrow'] },
+  { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess', 'yeoubi', 'baseball', 'tetris'] },
   { label: '🧠 퀴즈',  bgm: 'bright', ids: ['quizworld', 'flags', 'capital', 'mapq'] },
 ];
 // 게임이 아니라 다른 앱으로 가는 카드 — GAMES 에 넣지 않아 기록·순위판에는 안 나온다.
