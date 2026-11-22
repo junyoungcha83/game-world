@@ -1145,21 +1145,24 @@ function runCrossword(el, T, li, saved) {
   const given = new Set(P.given);
   let solved = new Set(saved ? saved.solved : []), revealed = new Set(saved ? saved.revealed : []);
   let hints = saved ? saved.hints || 0 : 0, time = saved ? saved.time || 0 : 0, done = false, timer = null;
+  // 내가 칸에 써 넣은 글자(아직 낱말을 다 맞히기 전). 칸번호 → 글자
+  let entry = new Map(saved && Array.isArray(saved.entry) ? saved.entry : []);
+  let bad = new Set();   // 틀렸다고 알려 준 칸(빨간 글자) — 다시 쓰면 지워진다
   const shown = i => given.has(i) || revealed.has(i) || words.some((w, k) => solved.has(k) && w.cells.includes(i));
   const nextUnsolved = from => { for (let s = 1; s <= words.length; s++) { const k = ((from < 0 ? -1 : from) + s) % words.length; if (!solved.has(k)) return k; } return -1; };
   let sel = nextUnsolved(-1);
   const starsNow = () => hints === 0 ? 3 : hints <= 2 ? 2 : 1;
   const persist = () => { try { if (done) localStorage.removeItem(CW_SAVE);
-    else localStorage.setItem(CW_SAVE, JSON.stringify({ uid: u && u.id, t: T.id, i: li, solved: [...solved], revealed: [...revealed], hints, time })); } catch {} };
+    else localStorage.setItem(CW_SAVE, JSON.stringify({ uid: u && u.id, t: T.id, i: li, solved: [...solved], revealed: [...revealed], entry: [...entry], hints, time })); } catch {} };
   el.innerHTML = `<div class="mg cw">
     <div class="sd-top"><span>${T.label} <small>${li + 1}단계</small></span><span>⏱ <b id="cwTime">${sudokuTime(time)}</b></span></div>
     <div class="cw-clue" id="cwClue"></div>
-    <form class="cw-form" id="cwForm" autocomplete="off">
-      <input id="cwIn" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" />
-      <button class="btn" type="submit">확인</button>
-    </form>
-    <div class="mg-msg cw-msg" id="cwMsg">칸이나 아래 열쇠를 누르고 낱말을 써요</div>
-    <div class="cw-grid" id="cwGrid" style="grid-template-columns:repeat(${P.w},1fr);grid-template-rows:repeat(${P.h},1fr);aspect-ratio:${P.w}/${P.h};width:min(100%, ${P.w * 76}px, ${(50 * P.w / P.h).toFixed(1)}vh);--n:${P.w}"></div>
+    <div class="cw-form" id="cwForm"></div>
+    <div class="mg-msg cw-msg" id="cwMsg">칸을 누르고 한 글자씩 써요 ✏️</div>
+    <div class="cw-gridwrap">
+      <input id="cwIn" class="cw-hidden-in" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" aria-label="글자 입력" />
+      <div class="cw-grid" id="cwGrid" style="grid-template-columns:repeat(${P.w},1fr);grid-template-rows:repeat(${P.h},1fr);aspect-ratio:${P.w}/${P.h};width:min(100%, ${P.w * 76}px, ${(50 * P.w / P.h).toFixed(1)}vh);--n:${P.w}"></div>
+    </div>
     <div class="omok-btns sd-btns">
       <button class="btn ghost small" id="cwHint1">💡 글자 열기</button>
       <button class="btn ghost small" id="cwHint2">🔑 낱말 열기</button>
@@ -1170,6 +1173,58 @@ function runCrossword(el, T, li, saved) {
   const grid = el.querySelector('#cwGrid'), msg = el.querySelector('#cwMsg'), inp = el.querySelector('#cwIn'), form = el.querySelector('#cwForm');
   const alive = () => !!el.querySelector('.cw');
   const dirName = d => d === 'a' ? '가로' : '세로';
+  // 입력 한 번(칸을 누른 뒤 치는 동안): 시작 위치 pos 와 그때의 칸 글자(base).
+  // 숨은 입력창의 글자를 매번 처음부터 칸에 나눠 놓는다 — 한글 조합(거→검→거미) 중에도 칸이 자연스럽게 바뀐다.
+  let pos = 0, base = new Map(entry), cur = -1, composing = false, badTimer = null, skip = 0;
+  const typed = () => [...inp.value.normalize('NFC').replace(/\s+/g, '')];
+  const firstEmpty = W => { const j = W.cells.findIndex(i => !shown(i) && !entry.has(i)); return j < 0 ? 0 : j; };
+  // 한글 조합 중에 입력창을 비우면 마지막 글자가 엉뚱한 칸에 다시 들어가는 키보드가 있어, 조합 중이면 비우지 않고 앞 글자 수(skip)만 건너뛴다
+  const startSession = (p) => { pos = p; base = new Map(entry); if (composing) skip = typed().length; else { inp.value = ''; skip = 0; } };
+  const applyInput = () => {
+    if (done || sel < 0) return;
+    const W = words[sel], L = W.cells.length; let v = typed(); if (v.length < skip) skip = v.length; v = v.slice(skip);
+    entry = new Map(base);
+    let p = pos;
+    for (const c of v) {
+      // 이미 보이는 글자 칸: 같은 글자를 치면 그 칸을 지나가고, 다른 글자면 건너뛰어 다음 빈칸에 쓴다
+      while (p < L && shown(W.cells[p]) && sol[W.cells[p]] !== c) p++;
+      if (p >= L) break;
+      const i = W.cells[p];
+      if (!shown(i)) { entry.set(i, c); bad.delete(i); }
+      p++;
+    }
+    while (p < L && shown(W.cells[p])) p++;
+    cur = p < L ? W.cells[p] : -1;
+    if (!bad.size && msg.textContent.startsWith('아쉬워요')) msg.textContent = '칸을 누르고 한 글자씩 써요 ✏️';
+    evaluate(false);
+  };
+  const filled = W => W.cells.every(i => shown(i) || entry.has(i));
+  const right = W => W.cells.every(i => shown(i) || entry.get(i) === sol[i]);
+  // 다 채워진 낱말을 맞춰 본다. 맞으면 바로 풀림. 틀린 건 조합이 끝나거나 잠깐 멈추면(또는 엔터) 알려 준다
+  const evaluate = (now) => {
+    clearTimeout(badTimer);
+    let got = 0;
+    words.forEach((w, k) => { if (!solved.has(k) && filled(w) && right(w)) { solved.add(k); got++; } });
+    if (got) {
+      msg.textContent = '딩동댕! ⭕';
+      afterChange(true);
+      return;
+    }
+    persist(); draw();
+    const W = words[sel];
+    if (W && filled(W) && !right(W)) {
+      if (now) showBad(); else badTimer = setTimeout(() => { if (alive() && !composing) showBad(); }, 1100);
+    }
+  };
+  const showBad = () => {
+    const W = words[sel]; if (!W || !filled(W) || right(W)) return;
+    W.cells.forEach(i => { if (!shown(i) && entry.get(i) !== sol[i]) bad.add(i); });
+    msg.textContent = '아쉬워요, 빨간 글자를 다시 생각해 봐요 🤔';
+    try { navigator.vibrate && navigator.vibrate(60); } catch {}
+    grid.classList.remove('shake'); void grid.offsetWidth; grid.classList.add('shake');
+    setTimeout(() => grid.classList.remove('shake'), 450);
+    draw();
+  };
   const draw = () => {
     const W = words[sel];
     const starts = new Map(); for (const w of words) starts.set(w.cells[0], w.num);
@@ -1178,14 +1233,15 @@ function runCrossword(el, T, li, saved) {
       const cls = ['cw-c'], show = shown(i);
       if (given.has(i)) cls.push('given'); else if (revealed.has(i) && !words.some((w, k) => solved.has(k) && w.cells.includes(i))) cls.push('hint');
       else if (show) cls.push('ok');
+      else if (entry.has(i)) cls.push(bad.has(i) ? 'bad' : 'ent');
       if (W && W.cells.includes(i)) cls.push('inw');
-      return `<button class="${cls.join(' ')}" data-i="${i}">${starts.has(i) ? `<i>${starts.get(i)}</i>` : ''}${show ? ch : ''}</button>`;
+      if (!done && i === cur) cls.push('cur');
+      return `<button class="${cls.join(' ')}" data-i="${i}">${starts.has(i) ? `<i>${starts.get(i)}</i>` : ''}${show ? ch : escapeHtml(entry.get(i) || '')}</button>`;
     }).join('');
     const clue = el.querySelector('#cwClue');
     if (W && !done) {
-      const pat = W.cells.map(i => shown(i) ? sol[i] : '○').join('');
-      clue.innerHTML = `<span class="cw-tag">${dirName(W.d)} ${W.num}</span>${W.e ? `<span class="cw-emo">${W.e}</span>` : ''}<span class="cw-txt">${escapeHtml(W.clue)}</span><span class="cw-pat">${pat}</span>`;
-      inp.placeholder = `${W.cells.length}글자`;
+      const pat = W.cells.map(i => shown(i) ? sol[i] : entry.get(i) || '○').join('');
+      clue.innerHTML = `<span class="cw-tag">${dirName(W.d)} ${W.num}</span>${W.e ? `<span class="cw-emo">${W.e}</span>` : ''}<span class="cw-txt">${escapeHtml(W.clue)}</span><span class="cw-pat">${escapeHtml(pat)}</span>`;
     }
     const li2 = d => words.map((w, k) => w.d !== d ? '' : `<li data-k="${k}" class="${solved.has(k) ? 'done' : ''}${k === sel ? ' on' : ''}"><b>${w.num}</b>${w.e ? `<span>${w.e}</span>` : ''}${escapeHtml(w.clue)}${solved.has(k) ? ` <em>${w.w}</em>` : ''}</li>`).join('');
     el.querySelector('#cwLists').innerHTML = `<div><h4>가로 →</h4><ul>${li2('a')}</ul></div><div><h4>세로 ↓</h4><ul>${li2('d')}</ul></div>`;
@@ -1194,7 +1250,7 @@ function runCrossword(el, T, li, saved) {
   // 힌트·교차로 낱말의 모든 칸이 드러나면 맞힌 것으로 친다
   const autoSolve = () => { words.forEach((w, k) => { if (!solved.has(k) && w.cells.every(shown)) solved.add(k); }); };
   const finish = () => {
-    done = true; clearInterval(timer); persist(); sel = -1;
+    done = true; clearInterval(timer); clearTimeout(badTimer); persist(); sel = -1; cur = -1; inp.blur();
     const stars = starsNow(), key = cwKey(T.id);
     if (u) {
       const a = cwStarsOf(T.id, u); a[li] = Math.max(a[li], stars);
@@ -1211,55 +1267,102 @@ function runCrossword(el, T, li, saved) {
     el.querySelector('#cwLv').onclick = () => cwPickLevel(el, T);
     draw();
   };
-  const afterChange = () => {
-    autoSolve(); persist();
+  // 낱말이 풀렸거나 힌트로 글자가 열린 뒤: 드러난 칸의 내 글자는 지우고, 풀린 낱말이면 다음 낱말 빈칸으로
+  const afterChange = (fromTyping) => {
+    autoSolve();
+    for (const i of [...entry.keys()]) if (shown(i)) { entry.delete(i); bad.delete(i); }
     if (solved.size === words.length) { finish(); return; }
-    if (solved.has(sel)) sel = nextUnsolved(sel);
-    draw();
+    if (solved.has(sel)) { sel = nextUnsolved(sel); startSession(firstEmpty(words[sel])); cur = words[sel].cells[pos]; }
+    else if (fromTyping) { /* 같은 낱말 계속 */ }
+    else { startSession(firstEmpty(words[sel])); cur = words[sel].cells[pos]; }
+    persist(); draw();
   };
-  const check = () => {
-    if (done || sel < 0) return;
-    const W = words[sel], v = inp.value.normalize('NFC').replace(/\s+/g, '');
-    if (!v) return;
-    if ([...v].length !== W.cells.length) { msg.textContent = `${W.cells.length}글자로 써 주세요`; return; }
-    if (v === W.w) { solved.add(sel); inp.value = ''; msg.textContent = '딩동댕! ⭕'; afterChange(); return; }
-    msg.textContent = '아쉬워요, 다시 생각해 봐요 🤔';
-    try { navigator.vibrate && navigator.vibrate(60); } catch {}
-    grid.classList.remove('shake'); void grid.offsetWidth; grid.classList.add('shake');
-    setTimeout(() => grid.classList.remove('shake'), 450);
-    inp.select();
+  const choose = (k, p) => {
+    if (done) return;
+    sel = k; const W = words[k];
+    startSession(p == null ? firstEmpty(W) : p);
+    let q = pos; while (q < W.cells.length && shown(W.cells[q])) q++;
+    cur = q < W.cells.length ? W.cells[q] : -1;
+    draw(); inp.focus();
   };
-  // 한글 조합 중에 엔터를 누르면 마지막 글자가 아직 안 들어와 있을 수 있어 한 박자 늦게 읽는다
-  form.onsubmit = e => { e.preventDefault(); setTimeout(check, 0); };
-  const choose = k => { if (done) return; sel = k; inp.value = ''; draw(); inp.focus(); };
+  // 칸을 눌러도 숨은 입력창의 포커스(키보드)가 빠지지 않게
+  let lastTap = -1;   // 같은 칸을 두 번 눌러야 가로↔세로가 바뀐다
+  grid.addEventListener('mousedown', e => e.preventDefault());
   grid.onclick = e => {
-    const b = e.target.closest('.cw-c[data-i]'); if (!b) return; const i = +b.dataset.i;
+    const b = e.target.closest('.cw-c[data-i]'); if (!b || done) return; const i = +b.dataset.i;
     const ks = words.map((w, k) => w.cells.includes(i) ? k : -1).filter(k => k >= 0);
     if (!ks.length) return;
-    // 같은 칸을 다시 누르면 가로↔세로를 바꾼다. 아니면 아직 못 푼 낱말 먼저
-    const k = ks.includes(sel) && ks.length > 1 ? ks.find(x => x !== sel) : (ks.find(x => !solved.has(x)) ?? ks[0]);
-    choose(k);
+    // 방금 누른 칸을 또 누르면 가로↔세로를 바꾼다. 아니면 지금 낱말 → 아직 못 푼 낱말 순
+    const k = i === lastTap && ks.includes(sel) && ks.length > 1 ? ks.find(x => x !== sel)
+      : ks.includes(sel) && !solved.has(sel) ? sel : (ks.find(x => !solved.has(x)) ?? ks[0]);
+    lastTap = i; choose(k, words[k].cells.indexOf(i));
   };
-  el.querySelector('#cwLists').onclick = e => { const li3 = e.target.closest('li[data-k]'); if (li3) choose(+li3.dataset.k); };
+  el.querySelector('#cwLists').onclick = e => { const li3 = e.target.closest('li[data-k]'); if (li3) { lastTap = -1; choose(+li3.dataset.k); } };
+  inp.addEventListener('compositionstart', () => { composing = true; });
+  inp.addEventListener('compositionend', () => { composing = false; setTimeout(applyInput, 0); });
+  inp.addEventListener('input', applyInput);
+  inp.addEventListener('keydown', e => {
+    if (done || sel < 0 || e.isComposing) return;
+    const W = words[sel];
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      setTimeout(() => {   // 조합 중인 마지막 글자가 들어온 뒤에 본다
+        applyInput();
+        if (solved.has(sel) || done) return;
+        if (!filled(W)) { msg.textContent = '아직 빈칸이 있어요'; return; }
+        showBad();
+      }, 0);
+      return;
+    }
+    if (e.key === 'Backspace' && typed().length <= skip) {
+      // 친 글자가 없을 때 지우기: 지금 칸에 글자가 있으면 그것을, 없으면 앞 칸 글자를 지운다
+      e.preventDefault();
+      const here = W.cells[pos];
+      if (here != null && !shown(here) && entry.has(here)) entry.delete(here);
+      else {
+        let q = pos - 1; while (q >= 0 && shown(W.cells[q])) q--;
+        if (q < 0) return;
+        entry.delete(W.cells[q]); pos = q;
+      }
+      bad.delete(W.cells[pos]); startSession(pos); cur = W.cells[pos];
+      persist(); draw();
+      return;
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      if (typed().length > skip) return;
+      e.preventDefault();
+      const fwd = e.key === (W.d === 'a' ? 'ArrowRight' : 'ArrowDown'), back = e.key === (W.d === 'a' ? 'ArrowLeft' : 'ArrowUp');
+      if (!fwd && !back) return;
+      let q = pos + (fwd ? 1 : -1); while (q >= 0 && q < W.cells.length && shown(W.cells[q])) q += fwd ? 1 : -1;
+      if (q < 0 || q >= W.cells.length) return;
+      startSession(q); cur = W.cells[q]; draw();
+    }
+  });
   el.querySelector('#cwHint1').onclick = () => {
     if (done || sel < 0) return;
-    const i = words[sel].cells.find(x => !shown(x)); if (i == null) return;
-    revealed.add(i); hints++; msg.textContent = '💡 한 글자를 열었어요'; afterChange();
+    const W = words[sel];
+    // 지금 글자 칸부터 — 그 칸이 이미 맞았거나 보이면 낱말에서 아직 안 맞은 첫 칸
+    const i = (cur >= 0 && !shown(cur) && entry.get(cur) !== sol[cur]) ? cur : W.cells.find(x => !shown(x) && entry.get(x) !== sol[x]) ?? W.cells.find(x => !shown(x));
+    if (i == null) return;
+    revealed.add(i); hints++; msg.textContent = '💡 한 글자를 열었어요'; afterChange(false);
+    if (!done) inp.focus();
   };
   el.querySelector('#cwHint2').onclick = () => {
     if (done || sel < 0) return;
     const hid = words[sel].cells.filter(x => !shown(x)); if (!hid.length) return;
-    hid.forEach(i => revealed.add(i)); hints += 2; msg.textContent = `🔑 '${words[sel].w}' — 낱말 열기는 힌트 2번이에요`; afterChange();
+    hid.forEach(i => revealed.add(i)); hints += 2; msg.textContent = `🔑 '${words[sel].w}' — 낱말 열기는 힌트 2번이에요`; afterChange(false);
   };
-  // ‹ 뒤로 = 단계 고르기. 하던 판은 저장돼 '이어 하기'로 돌아온다
-  document.getElementById('gameBack').onclick = () => { clearInterval(timer); persist(); cwPickLevel(el, T); };
+  // ‹ 뒤로 = 단계 고르기. 하던 판(써 넣은 글자 포함)은 저장돼 '이어 하기'로 돌아온다
+  document.getElementById('gameBack').onclick = () => { clearInterval(timer); clearTimeout(badTimer); persist(); cwPickLevel(el, T); };
   timer = setInterval(() => {
     if (!alive()) { clearInterval(timer); return; }
     if (document.hidden || done) return;
     time++; const t = el.querySelector('#cwTime'); if (t) t.textContent = sudokuTime(time);
     if (time % 5 === 0) persist();
   }, 1000);
-  autoSolve(); draw(); persist();
+  autoSolve();
+  if (sel >= 0) { startSession(firstEmpty(words[sel])); cur = words[sel].cells[pos]; }
+  draw(); persist();
 }
 
 // ── 미니게임: 소나기 (타자 연습) ── (내부 id·기록 키는 처음 이름 yeoubi 그대로)─────────────────────

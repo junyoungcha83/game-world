@@ -884,6 +884,13 @@ body.yb-playing { overflow: hidden; }
 .cw-c.ok { color: #047857; }
 .cw-c.hint { color: #c2410c; }
 .cw-c.inw { background: #fde68a; } .cw-c.given.inw { background: #fcd34d; }
+.cw-gridwrap { position: relative; display: flex; justify-content: center; width: 100%; }
+/* 칸마다 글자를 받는 숨은 입력창 — 화면엔 안 보이지만 키보드를 띄운다(16px 이상이라 iOS 확대 안 됨) */
+.cw-hidden-in { position: absolute; top: 0; left: 50%; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; font-size: 16px; pointer-events: none; }
+.cw-c.ent { color: #1d4ed8; }
+.cw-c.bad { color: #dc2626; }
+.cw-c.cur { box-shadow: inset 0 0 0 3px #f59e0b; background: #fff7ed; }
+.cw-form:empty { display: none; }
 .cw-grid.solved .cw-c:not(.blk) { background: #dcfce7; transition: background .4s; }
 .cw-grid.shake .cw-c.inw { animation: cwShake .35s; background: #fecaca; }
 @keyframes cwShake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
