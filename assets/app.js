@@ -548,6 +548,8 @@ const GAMES = [
     fmtStat: () => ftAggFmt(), start: startFreethrow },
   { id: 'tetris', name: '테트리스', emoji: '🟦', color: '#0ea5e9', best: 'high',
     fmtStat: s => s ? `${s.plays}판 · 최고 ${(s.best || 0).toLocaleString('ko-KR')}점` : '아직 기록 없음', start: startTetris },
+  { id: 'ddong', name: '똥벼락', emoji: '💩', color: '#92400e', best: 'high',
+    fmtStat: () => ddAggFmt(), start: startDdong },
 ];
 // 오목 난이도(급수) — 기록은 급수별로 따로 누적/순위
 const OMOK_LEVELS = [
@@ -615,6 +617,7 @@ function boardGames() {
     else if (g.id === 'sudoku') for (const l of SUDOKU_LEVELS) out.push({ id: l.key, emoji: '🔲', name: `스도쿠 ${l.label}`, best: 'low', fmtStat: sudokuFmt });
     else if (g.id === 'hwatu') { out.push({ id: HW_LV_KEY, emoji: '🎴', name: '화투 컴퓨터전', best: 'high', fmtStat: hwFmt }); out.push({ id: HW_VS_KEY, emoji: '🎴', name: '화투 친구전', best: 'high', fmtStat: hwVsFmt }); }
     else if (g.id === 'freethrow') out.push(...ftBoardEntries());
+    else if (g.id === 'ddong') out.push(...ddBoardEntries());
     else if (g.id === 'fourball') for (const m of FOUR_MODES) out.push({ id: m.key, emoji: '🔴', name: m.name, best: 'high', fmtStat: m.fmt });
     else out.push(g);
   }
@@ -628,7 +631,7 @@ const HUB_CATEGORIES = [
   { label: '🎨 자유',  bgm: 'bright', ids: ['color', 'brush', 'draw', 'roulette'] },
   { label: '♟️ 보드',  bgm: 'calm',   ids: ['omok', 'janggi', 'chess', 'hwatu', 'ttt', 'spot', 'slide', 'sudoku', 'crossword'] },
   { label: '⚾ 스포츠', bgm: 'march',  ids: ['kbo', 'archery', 'pocket', 'fourball', 'grandprix', 'freethrow'] },
-  { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess', 'yeoubi', 'baseball', 'tetris'] },
+  { label: '🕹️ 레트로', bgm: 'chip',   ids: ['timer10', 'rps', 'guess', 'yeoubi', 'baseball', 'tetris', 'ddong'] },
   { label: '🧠 퀴즈',  bgm: 'bright', ids: ['quizworld', 'flags', 'capital', 'mapq'] },
 ];
 // 게임이 아니라 다른 앱으로 가는 카드 — GAMES 에 넣지 않아 기록·순위판에는 안 나온다.
@@ -692,7 +695,8 @@ function showView(name) {
   // 게임을 나가면 배경화면·배경음악을 원래대로 (뒤로가기·하단 탭 어느 쪽으로 나가도 여기를 지난다)
   if (name !== 'game' && ybRunning) { ybRunning(); ybRunning = null; }
   if (name !== 'game' && gpRunning) { gpRunning(); gpRunning = null; }
-  if (name !== 'game' && typeof ftLeave === 'function') ftLeave();   // 자유투 애니메이션 정지
+  if (name !== 'game' && typeof ftLeave === 'function') ftLeave();
+  if (name !== 'game' && typeof ddLeave === 'function') ddLeave();   // 똥벼락 애니메이션·키 정리   // 자유투 애니메이션 정지
   if (name !== 'game' && typeof hwLeave === 'function') hwLeave();   // 화투 친구전 폴링 중단   // 소나기 판 정리(전체화면·키보드 감지 해제)
   if (name !== 'game') {
     delete document.body.dataset.game; document.body.style.removeProperty('--gc');
@@ -796,6 +800,7 @@ function openGame(id) {
   if (ybRunning) { ybRunning(); ybRunning = null; }
   if (gpRunning) { gpRunning(); gpRunning = null; }
   if (typeof ftLeave === 'function') ftLeave();
+  if (typeof ddLeave === 'function') ddLeave();
   if (!getCurrentUser()) { showReg(); return; }   // 사용자 없으면 기록이 안 쌓이므로 먼저 선택
   document.getElementById('gameTitle').textContent = g.emoji + ' ' + g.name;
   document.getElementById('gameBest').textContent = g.fmtStat(getStat(id));

@@ -1,8 +1,8 @@
 // 앱 셸 오프라인 캐시. 캐시 이름 바꾸면 옛 캐시 자동 폐기.
-const CACHE = 'game-world-v145';
+const CACHE = 'game-world-v146';
 self.addEventListener('message', (e) => { if (e.data === 'skip-waiting') self.skipWaiting(); });
 // app.css/app.js 는 버전 쿼리(?v=)로 참조 — 배포마다 URL 이 바뀌어 옛 캐시가 절대 재사용되지 않는다.
-const ASSETS = ['./', './index.html', './assets/app.css?v=145', './assets/app.js?v=145', './assets/yeoubi-words.js?v=145', './assets/crossword-data.js?v=145', './assets/hwatu.js?v=145', './assets/freethrow.js?v=145', './manifest.webmanifest?v=145', './assets/icon.svg', './assets/icon-192.png', './assets/icon-512.png',
+const ASSETS = ['./', './index.html', './assets/app.css?v=146', './assets/app.js?v=146', './assets/yeoubi-words.js?v=146', './assets/crossword-data.js?v=146', './assets/hwatu.js?v=146', './assets/freethrow.js?v=146', './assets/ddong.js?v=146', './manifest.webmanifest?v=146', './assets/icon.svg', './assets/icon-192.png', './assets/icon-512.png',
   './assets/kbo-bg.jpg', './assets/bg/janggi.svg'];   // 게임 배경화면
 // 지도 맞히기용 국가 실루엣 — 완전 오프라인 위해 프리캐시
 // 화투 카드 그림 48장

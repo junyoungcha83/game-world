@@ -1037,3 +1037,8 @@ body[data-game="hwatu"] {
 .ft-ov-vs small { color: #94a3b8; font-size: .7rem; }
 .ft-ov-vs b { font-size: 2rem; color: #fde047; }
 .ft-ov-btns { display: flex; gap: 8px; }
+
+/* 똥벼락 */
+.dd-logo { font-size: 1.8rem; font-weight: 900; color: #fbbf24; text-shadow: 0 3px 0 #78350f; }
+.dd-setup .ft-seg button.on { background: #92400e; border-color: #fbbf24; }
+.dd-cv { background: #7dd3fc; }
