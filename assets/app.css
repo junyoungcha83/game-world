@@ -943,6 +943,14 @@ body[data-game="hwatu"] {
 .hw-cap-cards { display: flex; flex-wrap: wrap; row-gap: 3px; padding-right: 10px; }
 .hw-cap-cards .hw-card { margin-right: -10px; }
 .hw-cap:last-child .hw-cap-cards .hw-card { margin-right: -14px; }
+/* 상대가 먹은 패는 작게 한 줄(광·열끗·띠·피 4칸) — 한 화면에 판 전체가 들어오도록 */
+.hw-side.op .hw-caps { grid-template-columns: 1fr 1fr 1fr 1.6fr; gap: 4px; }
+.hw-side.op .hw-cap { min-height: 0; padding: 2px 4px; gap: 1px; border-radius: 6px; }
+.hw-side.op .hw-cap-n { font-size: .62rem; }
+.hw-side.op .hw-card.mini { --cw: 16px; box-shadow: 0 1px 1px rgba(0,0,0,.5); }
+.hw-side.op .hw-cap-cards { row-gap: 2px; padding-right: 6px; }
+.hw-side.op .hw-cap-cards .hw-card { margin-right: -6px; }
+.hw-side.op .hw-cap:last-child .hw-cap-cards .hw-card { margin-right: -8px; }
 .hw-floor { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 10px; min-height: calc(min(15.5vw, 58px) * 1.7);
   padding: 8px 4px; border-radius: 12px; background: rgba(0,0,0,.12); }
 .hw-fgrp { display: flex; }
