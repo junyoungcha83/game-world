@@ -276,13 +276,16 @@ function hwAggFmt() {
 }
 
 // ── 그리기 ──────────────────────────────────────────────
+// 실제 화투 그림 — assets/hwatu/MM-K.webp (Wikimedia Commons 'Hwatu' SVG, CC BY-SA 4.0 → WebP 변환)
+const hwImg = id => `assets/hwatu/${String(HW_CARDS[id].m).padStart(2, '0')}-${id % 4}.webp?v=1`;
 function hwCard(id, cls) {
-  const c = HW_CARDS[id], M = HW_MONTHS[c.m - 1];
-  const badge = c.t === 'G' ? '<i class="hw-gw">光</i>'
-    : c.t === 'T' ? `<i class="hw-tti ${c.tti}">${c.tti === 'rain' || c.tti === 'cho' ? '' : HW_TTI_LB[c.tti]}</i>`
-    : c.god ? '<i class="hw-god">고도리</i>' : '';
-  return `<div class="hw-card t${c.t} ${c.pi === 2 ? 'ssang' : ''} ${cls || ''}" data-id="${id}" style="--mc:${M.color}">
-    <b class="hw-mo">${c.m}</b>${badge}<span class="hw-art">${c.art}</span><span class="hw-lb">${c.lb}</span></div>`;
+  const c = HW_CARDS[id];
+  return `<div class="hw-card ${cls || ''}" data-id="${id}" style="background-image:url('${hwImg(id)}')" title="${c.m}월 ${c.lb}"></div>`;
+}
+// 공부하기용 — 카드 아래에 이름표
+function hwCardCap(id, cls) {
+  const c = HW_CARDS[id];
+  return `<figure class="hw-fig">${hwCard(id, cls)}<figcaption>${c.lb}</figcaption></figure>`;
 }
 const hwBack = (cls) => `<div class="hw-card back ${cls || ''}"></div>`;
 // 먹은 패 — 광/열끗/띠/피 네 묶음
@@ -570,10 +573,10 @@ function hwStudy(el, tab) {
   hwLeave();
   document.getElementById('gameBack').onclick = () => startHwatu(el);
   tab = tab || 'cards';
-  const ex = (ids) => `<span class="hw-ex">${ids.map(i => hwCard(i, 'small')).join('')}</span>`;
+  const ex = (ids) => `<span class="hw-ex">${ids.map(i => hwCardCap(i, 'small')).join('')}</span>`;
   const cards = HW_MONTHS.map(M => `<div class="hw-mrow">
       <div class="hw-mhead"><b>${M.m}월 · ${M.name}</b><small>${M.hanja} · ${M.flower}</small></div>
-      <div class="hw-mcards">${[0, 1, 2, 3].map(k => hwCard((M.m - 1) * 4 + k, 'small')).join('')}</div>
+      <div class="hw-mcards">${[0, 1, 2, 3].map(k => hwCardCap((M.m - 1) * 4 + k, 'small')).join('')}</div>
       <p>${M.desc}</p></div>`).join('');
   const rules = `
     <section class="hw-rule"><h4>🃏 어떻게 하나요?</h4>
@@ -611,6 +614,7 @@ function hwStudy(el, tab) {
   el.innerHTML = `<div class="hw hw-study">
     <div class="hw-tabs"><button data-t="cards" class="${tab === 'cards' ? 'on' : ''}">🎴 1~12월 패</button><button data-t="rules" class="${tab === 'rules' ? 'on' : ''}">🧮 점수 내는 법</button></div>
     <div class="hw-study-body">${tab === 'cards' ? cards : rules}</div>
+    <p class="hw-credit">카드 그림: Wikimedia Commons <a href="https://commons.wikimedia.org/wiki/Category:SVG_Hwatu" target="_blank" rel="noopener">SVG Hwatu</a> (Marcus Richert, Louie Mantia Jr. 원작 바탕) · <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.ko" target="_blank" rel="noopener">CC BY-SA 4.0</a> · 작은 그림 파일로 변환해 사용</p>
   </div>`;
   el.querySelectorAll('.hw-tabs button').forEach(b => b.onclick = () => hwStudy(el, b.dataset.t));
 }

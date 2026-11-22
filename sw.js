@@ -1,10 +1,12 @@
 // 앱 셸 오프라인 캐시. 캐시 이름 바꾸면 옛 캐시 자동 폐기.
-const CACHE = 'game-world-v136';
+const CACHE = 'game-world-v137';
 self.addEventListener('message', (e) => { if (e.data === 'skip-waiting') self.skipWaiting(); });
 // app.css/app.js 는 버전 쿼리(?v=)로 참조 — 배포마다 URL 이 바뀌어 옛 캐시가 절대 재사용되지 않는다.
-const ASSETS = ['./', './index.html', './assets/app.css?v=136', './assets/app.js?v=136', './assets/yeoubi-words.js?v=136', './assets/crossword-data.js?v=136', './assets/hwatu.js?v=136', './manifest.webmanifest?v=136', './assets/icon.svg', './assets/icon-192.png', './assets/icon-512.png',
+const ASSETS = ['./', './index.html', './assets/app.css?v=137', './assets/app.js?v=137', './assets/yeoubi-words.js?v=137', './assets/crossword-data.js?v=137', './assets/hwatu.js?v=137', './manifest.webmanifest?v=137', './assets/icon.svg', './assets/icon-192.png', './assets/icon-512.png',
   './assets/kbo-bg.jpg', './assets/bg/janggi.svg'];   // 게임 배경화면
 // 지도 맞히기용 국가 실루엣 — 완전 오프라인 위해 프리캐시
+// 화투 카드 그림 48장
+const HW_ASSETS = Array.from({ length: 48 }, (_, i) => `./assets/hwatu/${String((i >> 2) + 1).padStart(2, '0')}-${i % 4}.webp?v=1`);
 const MAP_CODES = ['kr','jp','cn','us','gb','fr','de','it','es','pt','ca','br','ar','mx','au','in','ru','th','vn','id','ph','tr','eg','za','nl','se','no','ch','gr',
   'cl','nz','ie','is','sa','ir','pk','my','mn','ua','pl','pe','co','ng','ma','fi','kz','ve','cu','ke','dk','at','ae','sg','lk','kh','np','il','be','cz','ro','hu'];
 const MAP_ASSETS = MAP_CODES.map(c => `./assets/maps/${c}.svg`);
@@ -14,7 +16,7 @@ self.addEventListener('install', (e) => {
     // cache:'reload' — 프리캐시할 때 HTTP 캐시를 우회해 항상 최신 파일을 담는다(옛 버전 굳는 것 방지)
     await Promise.all(ASSETS.map(u => c.add(new Request(u, { cache: 'reload' })).catch(() => {})));
     // 지도는 개별 캐시(일부 실패해도 설치는 진행)
-    await Promise.all(MAP_ASSETS.map(u => c.add(u).catch(() => {})));
+    await Promise.all(MAP_ASSETS.concat(HW_ASSETS).map(u => c.add(u).catch(() => {})));
   }));
   // skipWaiting() 안 함 — 새 버전은 '대기'만 하고, 페이지 새로고침(메인화면 진입) 때만 적용.
   // 사용 중(게임 플레이 중)에 자동으로 버전이 바뀌지 않게 한다.

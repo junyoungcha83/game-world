@@ -911,36 +911,19 @@ body[data-game="hwatu"] {
 .hw-lvbar i { width: 18px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.18); }
 .hw-lvbar i.on { background: #facc15; }
 
-/* 카드 한 장 */
-.hw-card { position: relative; width: var(--cw); height: calc(var(--cw) * 1.55); border-radius: calc(var(--cw) * .1);
-  background: linear-gradient(160deg, color-mix(in srgb, var(--mc) 70%, #fff) 0%, var(--mc) 70%);
-  background-color: var(--mc); border: 2px solid #fff7ed; box-shadow: 0 2px 4px rgba(0,0,0,.35);
-  flex: 0 0 auto; overflow: hidden; user-select: none; font-size: calc(var(--cw) * .2); }
-.hw-card .hw-mo { position: absolute; top: 2px; left: 4px; font-size: 1em; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
-.hw-card .hw-art { position: absolute; inset: 18% 0 22% 0; display: flex; align-items: center; justify-content: center; font-size: 2.3em; line-height: 1; }
-.hw-card.tP .hw-art { opacity: .75; font-size: 1.7em; }
-.hw-card .hw-lb { position: absolute; bottom: 2px; left: 0; right: 0; text-align: center; font-size: .82em; font-weight: 800;
-  color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.7); white-space: nowrap; }
-.hw-card.tG .hw-lb { color: #fde68a; }
-.hw-card.ssang .hw-lb { color: #fecaca; }
-.hw-gw { position: absolute; top: 3px; right: 3px; width: 1.35em; height: 1.35em; border-radius: 50%; background: #dc2626;
-  color: #fff; font-style: normal; font-weight: 900; font-size: .95em; display: flex; align-items: center; justify-content: center; border: 1px solid #fff; }
-.hw-tti { position: absolute; top: 14%; left: 18%; width: 26%; height: 58%; border-radius: 2px; font-style: normal;
-  writing-mode: vertical-rl; font-size: .7em; font-weight: 800; color: #111; display: flex; align-items: center; justify-content: center;
-  z-index: 1; box-shadow: 0 1px 2px rgba(0,0,0,.4); letter-spacing: -1px; }
-.hw-tti.hong { background: #ef4444; color: #fff7ed; }
-.hw-tti.cho { background: #dc2626; }
-.hw-tti.cheong { background: #2563eb; color: #fff; }
-.hw-tti.rain { background: repeating-linear-gradient(180deg, #dc2626 0 5px, #111 5px 7px); }
-.hw-god { position: absolute; top: 3px; right: 2px; font-style: normal; font-size: .6em; font-weight: 800; background: #fde047; color: #713f12; padding: 1px 2px; border-radius: 3px; }
-.hw-card.back { background: #b91c1c; background-image: radial-gradient(circle at 50% 50%, #7f1d1d 0 25%, transparent 26%), repeating-linear-gradient(45deg, rgba(0,0,0,.15) 0 3px, transparent 3px 7px); }
-.hw-card.small { --cw: min(15vw, 52px); width: var(--cw); height: calc(var(--cw) * 1.55); font-size: calc(var(--cw) * .2); }
-.hw-card.mini { --cw: 26px; width: var(--cw); height: calc(var(--cw) * 1.55); font-size: 6px; border-width: 1px; border-radius: 3px; }
-.hw-card.mini .hw-lb, .hw-card.mini .hw-mo, .hw-card.mini .hw-god { display: none; }
-.hw-card.mini .hw-art { inset: 10% 0; font-size: 13px; }
-.hw-card.mini .hw-gw { width: 8px; height: 8px; font-size: 0; top: 1px; right: 1px; }
-.hw-card.tiny { --cw: 16px; width: 16px; height: 25px; border-width: 1px; border-radius: 2px; font-size: 5px; }
-.hw-card.tiny > * { display: none; }
+/* 카드 한 장 — 실제 화투 그림(assets/hwatu/*.webp)을 배경으로 깐다. 비율은 원본 103.2:168.2 */
+.hw-card { position: relative; width: var(--cw); height: calc(var(--cw) * 1.63); border-radius: calc(var(--cw) * .08);
+  background: #fff center/100% 100% no-repeat; box-shadow: 0 2px 4px rgba(0,0,0,.4);
+  flex: 0 0 auto; overflow: hidden; user-select: none; }
+.hw-card.back { background: #b91c1c; border: 2px solid #7f1d1d;
+  background-image: radial-gradient(circle at 50% 50%, #7f1d1d 0 25%, transparent 26%), repeating-linear-gradient(45deg, rgba(0,0,0,.15) 0 3px, transparent 3px 7px); }
+.hw-card.small { --cw: min(17vw, 62px); }
+.hw-card.mini { --cw: 26px; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,.5); }
+.hw-card.tiny { --cw: 16px; border-radius: 2px; border-width: 1px; }
+.hw-fig { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.hw-fig figcaption { font-size: .72rem; font-weight: 700; color: #dcfce7; white-space: nowrap; }
+.hw-credit { font-size: .7rem; color: #bbf7d0; opacity: .8; text-align: center; margin: 10px 4px 0; line-height: 1.5; }
+.hw-credit a { color: #fde047; }
 
 /* 판 */
 .hw-play { gap: 6px; }
@@ -961,8 +944,8 @@ body[data-game="hwatu"] {
 .hw-floor { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 10px; min-height: calc(min(15.5vw, 58px) * 1.7);
   padding: 8px 4px; border-radius: 12px; background: rgba(0,0,0,.12); }
 .hw-fgrp { display: flex; }
-.hw-fgrp .hw-card + .hw-card { margin-left: calc(var(--cw) * -.55); }
-.hw-pile { position: relative; display: flex; align-items: center; justify-content: center; width: var(--cw); height: calc(var(--cw) * 1.55); }
+.hw-fgrp .hw-card + .hw-card { margin-left: calc(var(--cw) * -.4); }
+.hw-pile { position: relative; display: flex; align-items: center; justify-content: center; width: var(--cw); height: calc(var(--cw) * 1.63); }
 .hw-pile .hw-card { box-shadow: 2px 2px 0 #7f1d1d, 4px 4px 0 #450a0a; }
 .hw-pile span { position: absolute; font-weight: 900; color: #fff; text-shadow: 0 1px 3px #000; }
 .hw-card.fresh { outline: 3px solid #fde047; outline-offset: -1px; }
@@ -996,4 +979,4 @@ body[data-game="hwatu"] {
 .hw-mrow p, .hw-rule p { margin: 4px 0; font-size: .88rem; line-height: 1.5; color: #dcfce7; }
 .hw-rule h4 { margin: 0 0 6px; }
 .hw-ex { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
-.hw-ex .hw-card { --cw: min(11vw, 40px); }
+.hw-ex .hw-card { --cw: min(12vw, 44px); }

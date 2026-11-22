@@ -1,0 +1,12 @@
+화투 카드 그림 (assets/hwatu/*.webp)
+
+출처: Wikimedia Commons — Category:SVG Hwatu
+  https://commons.wikimedia.org/wiki/Category:SVG_Hwatu
+  (예: https://commons.wikimedia.org/wiki/File:Hwatu_January_Hikari.svg)
+작성: Wikimedia Commons 사용자 Spenĉjo — Marcus Richert의 Hwatu 세트(Louie Mantia, Jr.의 Hanafuda 그림 바탕)를 기반으로 함
+라이선스: CC BY-SA 4.0  https://creativecommons.org/licenses/by-sa/4.0/
+변경: 250px PNG 썸네일을 가로 200px WebP로 변환하고 파일 이름을 MM-K(월-순서)로 바꿈.
+이 그림 파일들은 같은 CC BY-SA 4.0 조건으로 배포된다.
+
+파일 이름 MM-K 의 K 는 assets/hwatu.js HW_DEF 의 순서(0=광/열끗, 1=띠/쌍피 …)와 같다.
+11월: 0=Hikari, 1=Kasu 2(쌍피), 2=Kasu 1, 3=Kasu 3 / 12월: 0=Hikari, 1=Tane, 2=Tanzaku, 3=Kasu(쌍피)
