@@ -3298,10 +3298,16 @@ const DRAW_TOOLS = [
   { id: 'brush',  label: '🖌️ 붓',     sizes: [10, 20, 34] },
   { id: 'marker', label: '🖍️ 형광펜', sizes: [12, 22, 34] },
 ];
+// 그림판 크기 — 기본(폰, 지금과 같음) / 태블릿(크게·고해상도). 고른 값은 이 기기에 기억.
+const DRAW_SIZES = { phone: { label: '📱 기본', res: 600 }, tablet: { label: '📲 태블릿', res: 1200 } };
 function startDraw(el) {
-  const RES = 600, SCALE = RES / 200;
+  let padSize = 'phone';
+  try { if (localStorage.getItem('gw-draw-size') === 'tablet') padSize = 'tablet'; } catch {}
+  let RES = DRAW_SIZES[padSize].res, SCALE = RES / 200;
   let pic = -1, color = '#000000', tool = DRAW_TOOLS[0], sizeIdx = 1;   // pic -1 = 빈 종이
+  let keep = null;   // 크기 바꿀 때 지금까지 그린 그림을 옮겨 담는 임시 캔버스
   const render = () => {
+    RES = DRAW_SIZES[padSize].res; SCALE = RES / 200;
     const imgs = galleryGet();
     const total = COLOR_PICS.length + imgs.length;
     if (pic >= total) pic = -1;
@@ -3310,7 +3316,8 @@ function startDraw(el) {
     const overlay = blank ? '' : custom
       ? `<img class="brush-outline brush-img" src="${imgs[ci]}" alt="내 그림">`
       : `<svg class="brush-outline" viewBox="0 0 200 200">${COLOR_PICS[pic].svg}</svg>`;
-    el.innerHTML = `<div class="mg brush draw">
+    el.innerHTML = `<div class="mg brush draw${padSize === 'tablet' ? ' tablet' : ''}">
+      <div class="draw-padsize" id="drawPad">${Object.entries(DRAW_SIZES).map(([k, v]) => `<button data-s="${k}" class="${k === padSize ? 'sel' : ''}">${v.label}</button>`).join('')}</div>
       <div class="mg-msg">${name} — 자유롭게 그려요 ✏️</div>
       <div class="draw-tools" id="drawTools">${DRAW_TOOLS.map(t => `<button data-t="${t.id}">${t.label}</button>`).join('')}</div>
       <div class="brush-stage">
@@ -3335,6 +3342,13 @@ function startDraw(el) {
     const cv = el.querySelector('#drawCv');
     cv.width = RES; cv.height = RES;
     const ctx = cv.getContext('2d');
+    if (keep) { ctx.drawImage(keep, 0, 0, RES, RES); keep = null; }
+    el.querySelectorAll('#drawPad button').forEach(b => b.onclick = () => {
+      if (b.dataset.s === padSize) return;
+      keep = document.createElement('canvas'); keep.width = cv.width; keep.height = cv.height; keep.getContext('2d').drawImage(cv, 0, 0);
+      padSize = b.dataset.s; try { localStorage.setItem('gw-draw-size', padSize); } catch {}
+      render();
+    });
     let drawing = false, pts = [], base = null, lastT = 0, lastW = 0;
     const history = [], HMAX = 25;
     const pos = (e) => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * (cv.width / r.width), y: (e.clientY - r.top) * (cv.height / r.height), t: performance.now() }; };

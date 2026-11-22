@@ -818,6 +818,12 @@ body.yb-playing { overflow: hidden; }
 .draw-tools button { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; }
 .draw-tools button.sel { border-color: var(--primary2); box-shadow: 0 0 0 2px var(--primary2); }
 .mg.draw .brush-sizes .bsz span { border-radius: 50%; }
+.draw-padsize { display: flex; gap: 6px; justify-content: center; }
+.draw-padsize button { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg2); color: var(--muted); font: inherit; font-size: .85rem; cursor: pointer; }
+.draw-padsize button.sel { color: var(--text); font-weight: 700; border-color: var(--primary2); box-shadow: 0 0 0 2px var(--primary2); }
+.mg.draw.tablet .brush-stage { width: max(min(94vw, 480px), min(96vw, 1000px, calc(100dvh - 330px))); }
+.mg.draw.tablet .color-palette, .mg.draw.tablet .brush-sizes { max-width: min(96vw, 1000px); }
+.mg.draw.tablet .color-palette .sw { width: 40px; height: 40px; }
 
 /* ── 슬라이딩퍼즐 ── */
 .sl-sec { align-self: stretch; font-weight: 800; font-size: .9rem; } .sl-sec small { color: var(--muted); font-weight: 600; }
