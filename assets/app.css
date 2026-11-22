@@ -936,12 +936,13 @@ body[data-game="hwatu"] {
 .hw-parts { font-size: .72rem; color: #bbf7d0; }
 .hw-opp-hand { display: flex; margin-left: auto; }
 .hw-opp-hand .hw-card { margin-left: -6px; }
-.hw-caps { display: grid; grid-template-columns: auto auto auto 1fr; gap: 4px; min-height: 44px; background: rgba(0,0,0,.18); border-radius: 8px; padding: 4px; }
-.hw-cap { display: flex; flex-direction: column; gap: 2px; min-width: 30px; }
-.hw-cap-n { font-size: .68rem; color: #bbf7d0; font-weight: 700; }
-.hw-cap-cards { display: flex; flex-wrap: wrap; }
-.hw-cap-cards .hw-card { margin-right: -14px; }
-.hw-cap:last-child .hw-cap-cards .hw-card { margin-right: -18px; }
+.hw-caps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hw-cap { display: flex; flex-direction: column; gap: 3px; min-width: 0; min-height: 60px; padding: 4px 6px;
+  background: rgba(0,0,0,.22); border: 1px solid rgba(187,247,208,.18); border-radius: 8px; }
+.hw-cap-n { font-size: .7rem; color: #bbf7d0; font-weight: 700; }
+.hw-cap-cards { display: flex; flex-wrap: wrap; row-gap: 3px; padding-right: 10px; }
+.hw-cap-cards .hw-card { margin-right: -10px; }
+.hw-cap:last-child .hw-cap-cards .hw-card { margin-right: -14px; }
 .hw-floor { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 10px; min-height: calc(min(15.5vw, 58px) * 1.7);
   padding: 8px 4px; border-radius: 12px; background: rgba(0,0,0,.12); }
 .hw-fgrp { display: flex; }

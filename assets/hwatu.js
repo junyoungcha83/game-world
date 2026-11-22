@@ -420,18 +420,38 @@ function hwRender(el, S, ctx) {
 
 // 카드 이동 애니메이션(FLIP) — 다시 그리기 전/후 같은 카드(data-id)의 위치 차이만큼 되돌려 놓았다가 미끄러지게 한다.
 // 이전 화면에 없던 카드는 출발점을 추정: 이번 턴에 뒤집은 패 = 더미, 상대가 낸 패 = 상대 손패 자리.
+// 두 단계로 나눈다: ① 자리를 옮기는 패(손→바닥, 더미→바닥, 바닥→먹은 패)가 먼저 천천히 움직이고
+// ② 그게 끝난 뒤에 바닥에 남은 패와 더미가 새 자리로 정리된다 — 한꺼번에 움직이면 정신없어서.
+const HW_MOVE = 750, HW_SETTLE = 450;   // ms
+const hwZone = c => c.closest('.hw-floor') ? 'floor' : c.closest('.hw-caps') ? 'caps' : c.closest('.hw-hand') ? 'hand' : 'other';
 function hwSnap(el) {
-  const r = {}; if (!el.querySelector('.hw-play')) return r;
-  el.querySelectorAll('.hw-card[data-id]').forEach(c => { r[c.dataset.id] = c.getBoundingClientRect(); });
+  const r = { z: {} }; if (!el.querySelector('.hw-play')) return r;
+  el.querySelectorAll('.hw-card[data-id]').forEach(c => { r[c.dataset.id] = c.getBoundingClientRect(); r.z[c.dataset.id] = hwZone(c); });
   const pile = el.querySelector('.hw-pile'), oh = el.querySelector('.hw-opp-hand');
   if (pile) r.pile = pile.getBoundingClientRect();
   if (oh) r.opp = oh.getBoundingClientRect();
   return r;
 }
+function hwSlide(c, from, delay, dur) {
+  const to = c.getBoundingClientRect();
+  const dx = from.left - to.left, dy = from.top - to.top;
+  if (Math.abs(dx) + Math.abs(dy) < 3) return false;
+  const sc = to.width ? from.width / to.width : 1;
+  c.style.animation = 'none';                      // 깜빡임(hwPulse)이 transform을 덮지 않게 잠시 끔
+  c.style.transition = 'none'; c.style.transformOrigin = '0 0';
+  c.style.transform = `translate(${dx}px, ${dy}px) scale(${sc})`; c.style.zIndex = delay ? 5 : 20;
+  c.getBoundingClientRect();                       // 강제 reflow — 출발 위치를 먼저 확정
+  c.style.transition = `transform ${dur}ms cubic-bezier(.3,.7,.3,1) ${delay}ms`;
+  c.style.transform = '';
+  setTimeout(() => { c.style.zIndex = ''; c.style.transition = ''; c.style.transformOrigin = ''; c.style.animation = ''; }, delay + dur + 20);
+  return true;
+}
 function hwAnimate(el, prev, S, me) {
   if (!prev.pile) return;
   const T = S.t || null, L = S.last || {};
   const flipped = T ? T.d : L.d, played = T ? T.c : L.c, actor = T ? T.p : L.p;
+  const settle = [];                                // ② 단계: 바닥에 그대로 남아 자리만 바뀐 패
+  let moved = false;
   el.querySelectorAll('.hw-card[data-id]').forEach(c => {
     const id = c.dataset.id;
     let from = prev[id];
@@ -440,17 +460,13 @@ function hwAnimate(el, prev, S, me) {
       else if (+id === played && actor !== me) from = prev.opp;
       else return;
     }
-    const to = c.getBoundingClientRect();
-    const dx = from.left - to.left, dy = from.top - to.top;
-    if (Math.abs(dx) + Math.abs(dy) < 3) return;
-    const sc = to.width ? from.width / to.width : 1;
-    c.style.transition = 'none'; c.style.transformOrigin = '0 0';
-    c.style.transform = `translate(${dx}px, ${dy}px) scale(${sc})`; c.style.zIndex = 20;
-    c.getBoundingClientRect();                       // 강제 reflow — 출발 위치를 먼저 확정
-    c.style.transition = 'transform .42s cubic-bezier(.2,.8,.3,1)';
-    c.style.transform = '';
-    setTimeout(() => { c.style.zIndex = ''; c.style.transition = ''; c.style.transformOrigin = ''; }, 460);
+    if (prev.z[id] === 'floor' && hwZone(c) === 'floor') settle.push([c, from]);
+    else if (hwSlide(c, from, 0, HW_MOVE)) moved = true;
   });
+  const delay = moved ? HW_MOVE : 0;
+  settle.forEach(([c, from]) => hwSlide(c, from, delay, HW_SETTLE));
+  const pile = el.querySelector('.hw-pile');
+  if (pile) hwSlide(pile, prev.pile, delay, HW_SETTLE);
 }
 
 // ── 컴퓨터와 대결 ───────────────────────────────────────
@@ -482,15 +498,15 @@ function hwRunAi(el, first) {
     }
     hwRender(el, S, ctx);
     if (S.end) return;
-    if (S.need && S.need.k === 'flip') { setTimeout(() => { if (alive()) { hwFlip(S); step(); } }, 700); return; }
-    if (S.need && S.need.k === 'collect') { setTimeout(() => { if (alive()) { hwCollect(S); step(); } }, 750); return; }
+    if (S.need && S.need.k === 'flip') { setTimeout(() => { if (alive()) { hwFlip(S); step(); } }, 1300); return; }
+    if (S.need && S.need.k === 'collect') { setTimeout(() => { if (alive()) { hwCollect(S); step(); } }, 1400); return; }
     if (S.turn === 1 || (S.need && S.need.p === 1)) setTimeout(() => {
       if (!alive()) return;
       if (S.need && S.need.k === 'go') hwGo(S, hwAiGo(S, lv));
       else if (S.need && S.need.opts) hwPick(S, hwAiPick(S, lv));
       else if (!S.need) hwPlay(S, hwAiPlay(S, lv));
       step();
-    }, S.need ? 700 : 1100);
+    }, S.need ? 1100 : 1500);
   }
   step();
 }
@@ -546,8 +562,8 @@ async function hwHost(el) {
   }
   function after() {
     push(); draw();
-    if (S.need && S.need.k === 'flip') setTimeout(() => { if (live) { hwFlip(S); after(); } }, 700);
-    if (S.need && S.need.k === 'collect') setTimeout(() => { if (live) { hwCollect(S); after(); } }, 750);
+    if (S.need && S.need.k === 'flip') setTimeout(() => { if (live) { hwFlip(S); after(); } }, 1300);
+    if (S.need && S.need.k === 'collect') setTimeout(() => { if (live) { hwCollect(S); after(); } }, 1400);
   }
   newGame(0);
   // 상대 행동 받기
