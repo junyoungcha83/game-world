@@ -115,7 +115,7 @@ function hwPick(S, fid) {
     S.need = { k: 'flip', p: T.p };
   } else {
     hwRm(S.floor, fid); hwRm(S.floor, T.d); T.take.push(T.d, fid);
-    S.need = null; hwFinish(S);
+    S.need = { k: 'collect', p: T.p };
   }
   return true;
 }
@@ -135,8 +135,13 @@ function hwFlip(S) {
     else if (ms.length === 2) { S.floor.push(d); S.need = { k: 'pickFlip', p: T.p, opts: ms }; return true; }
     else { ms.forEach(i => hwRm(S.floor, i)); T.take.push(d, ...ms); T.steal++; T.ev.push('뻑 먹기'); }
   }
-  hwFinish(S);
+  // 가져갈 패가 있으면 바닥에 잠깐 보여준 뒤(collect) 먹은 패로 옮긴다 — 무엇을 먹는지 눈으로 확인
+  if (T.take.length) S.need = { k: 'collect', p: T.p }; else hwFinish(S);
   return true;
+}
+function hwCollect(S) {
+  if (!S.need || S.need.k !== 'collect') return false;
+  S.need = null; hwFinish(S); return true;
 }
 function hwStealPi(S, to) {
   const from = S.caps[1 - to];
@@ -349,9 +354,12 @@ function hwRender(el, S, ctx) {
   const myMonths = new Set(S.floor.map(hwM));
   const scMe = hwScore(S.caps[me]), scOp = hwScore(S.caps[op]);
   // 바닥: 월별로 묶어 보여준다
-  const groups = {};
-  S.floor.forEach(i => (groups[hwM(i)] = groups[hwM(i)] || []).push(i));
-  const lastIds = S.last ? [S.last.c, S.last.d] : [];
+  const prev = hwSnap(el);            // 다시 그리기 전 카드 위치 — 움직임 애니메이션의 출발점
+  const groups = {}, T = S.t;
+  const show = S.floor.slice();
+  if (T) { show.push(...T.take); if (S.need && S.need.k === 'pickHand') show.push(T.c); }
+  show.forEach(i => (groups[hwM(i)] = groups[hwM(i)] || []).push(i));
+  const lastIds = T ? [T.c, T.d] : S.last ? [S.last.c, S.last.d] : [];
   const floorHTML = Object.keys(groups).sort((a, b) => a - b).map(m => `<div class="hw-fgrp">${groups[m].map(i =>
     hwCard(i, (pickMine && S.need.opts.includes(i) ? 'pick ' : '') + (lastIds.includes(i) ? 'fresh' : ''))).join('')}</div>`).join('');
   let msg = '';
@@ -359,6 +367,7 @@ function hwRender(el, S, ctx) {
   else if (S.need && S.need.k === 'go') msg = S.need.p === me ? `${S.need.sc}점! 고 할까요, 스톱 할까요?` : `${ctx.names[op]} 고/스톱 고민 중…`;
   else if (pickMine) msg = '가져올 바닥 패를 골라요 👇';
   else if (S.need && S.need.k === 'flip') msg = '패를 뒤집는 중…';
+  else if (S.need && S.need.k === 'collect') msg = `${S.need.p === me ? '내가' : ctx.names[op] + '이(가)'} 패를 가져가요`;
   else if (myTurn) msg = '낼 패를 골라요 (빛나는 패는 바닥에 짝이 있어요)';
   else msg = ctx.waitMsg || `${ctx.names[op]} 차례…`;
   const evText = S.last && S.last.ev.length ? `<span class="hw-ev">${S.last.p === me ? '나' : escapeHtml(ctx.names[op])}: ${S.last.ev.join(' · ')}</span>` : '';
@@ -382,6 +391,7 @@ function hwRender(el, S, ctx) {
     <div class="hw-hand ${myTurn ? 'active' : ''}">${S.hands[me].map(i => hwCard(i, myTurn && myMonths.has(hwM(i)) ? 'match' : '')).join('')}</div>
     <div class="hw-over hidden"></div>
   </div>`;
+  hwAnimate(el, prev, S, me);
   if (myTurn) el.querySelectorAll('.hw-hand .hw-card').forEach(c => c.onclick = () => ctx.onPlay(+c.dataset.id));
   if (pickMine) el.querySelectorAll('.hw-floor .hw-card.pick').forEach(c => c.onclick = () => ctx.onPick(+c.dataset.id));
   const over = el.querySelector('.hw-over');
@@ -406,6 +416,41 @@ function hwRender(el, S, ctx) {
     over.querySelector('[data-x="see"]').onclick = () => { over.classList.add('hidden'); const m = el.querySelector('.hw-msg');
       if (m) { m.innerHTML = ''; const b = document.createElement('button'); b.className = 'btn small'; b.textContent = '결과 다시 보기'; b.onclick = () => over.classList.remove('hidden'); m.appendChild(b); } };
   }
+}
+
+// 카드 이동 애니메이션(FLIP) — 다시 그리기 전/후 같은 카드(data-id)의 위치 차이만큼 되돌려 놓았다가 미끄러지게 한다.
+// 이전 화면에 없던 카드는 출발점을 추정: 이번 턴에 뒤집은 패 = 더미, 상대가 낸 패 = 상대 손패 자리.
+function hwSnap(el) {
+  const r = {}; if (!el.querySelector('.hw-play')) return r;
+  el.querySelectorAll('.hw-card[data-id]').forEach(c => { r[c.dataset.id] = c.getBoundingClientRect(); });
+  const pile = el.querySelector('.hw-pile'), oh = el.querySelector('.hw-opp-hand');
+  if (pile) r.pile = pile.getBoundingClientRect();
+  if (oh) r.opp = oh.getBoundingClientRect();
+  return r;
+}
+function hwAnimate(el, prev, S, me) {
+  if (!prev.pile) return;
+  const T = S.t || null, L = S.last || {};
+  const flipped = T ? T.d : L.d, played = T ? T.c : L.c, actor = T ? T.p : L.p;
+  el.querySelectorAll('.hw-card[data-id]').forEach(c => {
+    const id = c.dataset.id;
+    let from = prev[id];
+    if (!from) {
+      if (+id === flipped) from = prev.pile;
+      else if (+id === played && actor !== me) from = prev.opp;
+      else return;
+    }
+    const to = c.getBoundingClientRect();
+    const dx = from.left - to.left, dy = from.top - to.top;
+    if (Math.abs(dx) + Math.abs(dy) < 3) return;
+    const sc = to.width ? from.width / to.width : 1;
+    c.style.transition = 'none'; c.style.transformOrigin = '0 0';
+    c.style.transform = `translate(${dx}px, ${dy}px) scale(${sc})`; c.style.zIndex = 20;
+    c.getBoundingClientRect();                       // 강제 reflow — 출발 위치를 먼저 확정
+    c.style.transition = 'transform .42s cubic-bezier(.2,.8,.3,1)';
+    c.style.transform = '';
+    setTimeout(() => { c.style.zIndex = ''; c.style.transition = ''; c.style.transformOrigin = ''; }, 460);
+  });
 }
 
 // ── 컴퓨터와 대결 ───────────────────────────────────────
@@ -437,14 +482,15 @@ function hwRunAi(el, first) {
     }
     hwRender(el, S, ctx);
     if (S.end) return;
-    if (S.need && S.need.k === 'flip') { setTimeout(() => { if (alive()) { hwFlip(S); step(); } }, 650); return; }
+    if (S.need && S.need.k === 'flip') { setTimeout(() => { if (alive()) { hwFlip(S); step(); } }, 700); return; }
+    if (S.need && S.need.k === 'collect') { setTimeout(() => { if (alive()) { hwCollect(S); step(); } }, 750); return; }
     if (S.turn === 1 || (S.need && S.need.p === 1)) setTimeout(() => {
       if (!alive()) return;
       if (S.need && S.need.k === 'go') hwGo(S, hwAiGo(S, lv));
       else if (S.need && S.need.opts) hwPick(S, hwAiPick(S, lv));
       else if (!S.need) hwPlay(S, hwAiPlay(S, lv));
       step();
-    }, S.need ? 700 : 900);
+    }, S.need ? 700 : 1100);
   }
   step();
 }
@@ -500,7 +546,8 @@ async function hwHost(el) {
   }
   function after() {
     push(); draw();
-    if (S.need && S.need.k === 'flip') setTimeout(() => { if (live) { hwFlip(S); after(); } }, 650);
+    if (S.need && S.need.k === 'flip') setTimeout(() => { if (live) { hwFlip(S); after(); } }, 700);
+    if (S.need && S.need.k === 'collect') setTimeout(() => { if (live) { hwCollect(S); after(); } }, 750);
   }
   newGame(0);
   // 상대 행동 받기
